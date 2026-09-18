@@ -45,7 +45,7 @@ func.func @test_fill(%arg0: f32) -> tensor<4x4xf32> {
 // CHECK-LABEL: gather
 func.func @test_gather(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> tensor<4x8xf32> {
   // CHECK: darwinn.gather
-  %0 = darwinn.gather %arg0, %arg1 : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
+  %0 = darwinn.gather %arg0, %arg1 {axis = 0 : si32} : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
   return %0 : tensor<4x8xf32>
 }
 
@@ -53,7 +53,7 @@ func.func @test_gather(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> tensor<
 // CHECK-LABEL: hib_gather
 func.func @test_hib_gather(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> tensor<4x8xf32> {
   // CHECK: darwinn.hib_gather
-  %0 = darwinn.hib_gather %arg0, %arg1 : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
+  %0 = darwinn.hib_gather %arg0, %arg1 {axis = 0 : si32} : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
   return %0 : tensor<4x8xf32>
 }
 
@@ -61,7 +61,7 @@ func.func @test_hib_gather(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> ten
 // CHECK-LABEL: gather_copy
 func.func @test_gather_copy(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> tensor<4x8xf32> {
   // CHECK: darwinn.gather_copy
-  %0 = darwinn.gather_copy %arg0, %arg1 : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
+  %0 = darwinn.gather_copy %arg0, %arg1 {axis = 0 : si32} : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
   return %0 : tensor<4x8xf32>
 }
 
@@ -69,7 +69,7 @@ func.func @test_gather_copy(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> te
 // CHECK-LABEL: top_k_lowering_target
 func.func @test_top_k_lowering_target(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> tensor<4x8xf32> {
   // CHECK: darwinn.gather
-  %0 = darwinn.gather %arg0, %arg1 : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
+  %0 = darwinn.gather %arg0, %arg1 {axis = 0 : si32} : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<4x8xf32>
   return %0 : tensor<4x8xf32>
 }
 

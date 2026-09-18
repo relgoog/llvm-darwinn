@@ -12,6 +12,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/TypeUtilities.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 
 using namespace mlir;
 using namespace mlir::dive_vm;

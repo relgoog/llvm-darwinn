@@ -1399,11 +1399,27 @@ def DwcWrapUpDiveProgramPass : Pass<"wrap-up-dive-program", "func::FuncOp"> {
   }];
 }
 
-def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
-  let summary = "DWC pass xla_cpu_use_new_xtile_lowering";
+def DwcLowerCopySlicePass : Pass<"lower-copy-slice", "func::FuncOp"> {
+  let summary = "Lower darwinn copy, slice and gather ops to dive_vm";
   let description = [{
-    Boilerplate for the `xla_cpu_use_new_xtile_lowering` pass name seen at 0xdded02 in
-    task3_passes.tsv. Empty body pending real lowering logic.
+    Lowers `darwinn.copy_op` to `dive_vm.copy` after checking the source
+    and destination element types agree and any static element counts match,
+    lowers the `darwinn.dynamic_slice` family to `dive_vm.address_of_activation`
+    feeding `dive_vm.extract_slice` or `dive_vm.insert_slice` with slice-offset
+    generator attributes (mirroring the SliceOffsetGenerator plus
+    GetContinuousSlice fast path in the InsertSlice and ExtractSlice kernels),
+    and lowers the `darwinn.gather` family to `dive_vm.gather` with
+    out-of-bounds zero-fill (mirroring the Gather kernel).
+  }];
+}
+
+def DwcLowerConvertPass : Pass<"lower-convert", "func::FuncOp"> {
+  let summary = "Lower darwinn convert and cast ops to dive_vm";
+  let description = [{
+    Lowers `darwinn.convert`, `darwinn.cast_in`, and `darwinn.cast_out` to
+    the `dive_vm` elementwise convert. float-to-int truncates toward zero,
+    int-to-float rounds to nearest even, and narrow stores keep the low
+    bits. Same-type converts fold away. Patterns live in LowerConvert.cpp.
   }];
 }
 

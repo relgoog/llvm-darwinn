@@ -76,10 +76,15 @@ def Darwinn_BroadcastSliceOp : Darwinn_Op<"broadcast_slice"> {
 def Darwinn_CastInOp : Darwinn_Op<"cast_in"> {
   let summary = "Darwinn cast_in operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.cast_in operation.
+    Casts `input` to the element type of `output`.
+    Float to integer truncates toward zero.
+    Integer to float rounds to nearest even and is exact where representable.
+    Narrowing stores keep the low bits with no clamping.
+    `input` and `output` have the same shape.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins AnyRankedTensor:$input);
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -87,10 +92,15 @@ def Darwinn_CastInOp : Darwinn_Op<"cast_in"> {
 def Darwinn_CastOutOp : Darwinn_Op<"cast_out"> {
   let summary = "Darwinn cast_out operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.cast_out operation.
+    Casts `input` to the element type of `output`.
+    Float to integer truncates toward zero.
+    Integer to float rounds to nearest even and is exact where representable.
+    Narrowing stores keep the low bits with no clamping.
+    `input` and `output` have the same shape.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins AnyRankedTensor:$input);
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -219,10 +229,15 @@ def Darwinn_ConstantGeneratorOp : Darwinn_Op<"constant_generator"> {
 def Darwinn_ConvertOp : Darwinn_Op<"convert"> {
   let summary = "Darwinn convert operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.convert operation.
+    Casts `input` to the element type of `output`.
+    Float to integer truncates toward zero.
+    Integer to float rounds to nearest even and is exact where representable.
+    Narrowing stores keep the low bits with no clamping.
+    `input` and `output` have the same shape.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins AnyRankedTensor:$input);
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -241,10 +256,12 @@ def Darwinn_ConvolutionOp : Darwinn_Op<"convolution"> {
 def Darwinn_CopyFromHostOp : Darwinn_Op<"copy_from_host"> {
   let summary = "Darwinn copy_from_host operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.copy_from_host operation.
+    Copies `input` to `output` unchanged.
+    `input` and `output` have the same shape and element type.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins AnyRankedTensor:$input);
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -252,10 +269,12 @@ def Darwinn_CopyFromHostOp : Darwinn_Op<"copy_from_host"> {
 def Darwinn_CopyOpOp : Darwinn_Op<"copy_op"> {
   let summary = "Darwinn copy_op operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.copy_op operation.
+    Copies `input` to `output` unchanged.
+    `input` and `output` have the same shape and element type.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins AnyRankedTensor:$input);
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -263,10 +282,12 @@ def Darwinn_CopyOpOp : Darwinn_Op<"copy_op"> {
 def Darwinn_CopyUsingWideOp : Darwinn_Op<"copy_using_wide"> {
   let summary = "Darwinn copy_using_wide operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.copy_using_wide operation.
+    Copies `input` to `output` unchanged through a wide datapath.
+    `input` and `output` have the same shape and element type.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins AnyRankedTensor:$input);
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -340,10 +361,24 @@ def Darwinn_DiveRefCwiseOp : Darwinn_Op<"dive_ref_cwise"> {
 def Darwinn_DiveRefReductionOp : Darwinn_Op<"dive_ref_reduction"> {
   let summary = "Darwinn dive_ref_reduction operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.dive_ref_reduction operation.
+    Reduces `input` along `axes` to `output`.
+    Each axis normalizes against the input rank and must lie in range.
+    Duplicate axes are rejected and the rank never exceeds ten.
+    `exclusive` starts the scan from the identity and `reverse` accumulates
+    from the end. The two flags combine freely and never change the output
+    shape. Integer inputs accumulate in a 64 bit lane while float32 and
+    float64 keep their own width. Bool, float16 and bfloat16 are rejected.
+    The output keeps the input shape with every reduced dim set to extent 1.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    DenseI64ArrayAttr:$axes,
+    BoolAttr:$exclusive,
+    BoolAttr:$reverse,
+    TypeAttr:$acc_type
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -362,32 +397,49 @@ def Darwinn_DtcInfoOp : Darwinn_Op<"dtc_info"> {
 def Darwinn_DynamicSliceOp : Darwinn_Op<"dynamic_slice"> {
   let summary = "Darwinn dynamic_slice operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.dynamic_slice operation.
+    Extracts a slice of `input` at `start_indices` with sizes `slice_sizes`.
+    A size entry of -1 takes the full extent of that dimension.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    RankedTensorOf<[AnyInteger]>:$start_indices,
+    DenseI64ArrayAttr:$slice_sizes
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: dynamic_slice_with_copy
 def Darwinn_DynamicSliceWithCopyOp : Darwinn_Op<"dynamic_slice_with_copy"> {
   let summary = "Darwinn dynamic_slice_with_copy operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.dynamic_slice_with_copy operation.
+    Extracts a slice of `input` at `start_indices` with sizes `slice_sizes`.
+    Semantically identical to dynamic_slice, the copy hint only affects lowering.
+    A size entry of -1 takes the full extent of that dimension.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    RankedTensorOf<[AnyInteger]>:$start_indices,
+    DenseI64ArrayAttr:$slice_sizes
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: dynamic_update_slice
 def Darwinn_DynamicUpdateSliceOp : Darwinn_Op<"dynamic_update_slice"> {
   let summary = "Darwinn dynamic_update_slice operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.dynamic_update_slice operation.
+    Inserts `update` into `input` at `start_indices`.
+    A start entry of -1 keeps the full extent along that dimension.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    AnyRankedTensor:$update,
+    RankedTensorOf<[AnyInteger]>:$start_indices
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -505,21 +557,36 @@ def Darwinn_FunctionSymmetryOp : Darwinn_Op<"function_symmetry"> {
 def Darwinn_GatherOp : Darwinn_Op<"gather"> {
   let summary = "Darwinn gather operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.gather operation.
+    Gathers slices of `params` along `axis` indexed by `indices`.
+    A negative `axis` normalizes against the rank of `params`.
+    An out-of-range index zero-fills the corresponding output slice.
+    The result rank is params rank plus indices rank minus one.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$params,
+    RankedTensorOf<[AnyInteger]>:$indices,
+    SI32Attr:$axis
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: gather_copy
 def Darwinn_GatherCopyOp : Darwinn_Op<"gather_copy"> {
   let summary = "Darwinn gather_copy operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.gather_copy operation.
+    Gathers slices of `params` along `axis` indexed by `indices` into `output`.
+    A negative `axis` normalizes against the rank of `params`.
+    An out-of-range index zero-fills the corresponding output slice.
+    The result rank is params rank plus indices rank minus one.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$params,
+    RankedTensorOf<[AnyInteger]>:$indices,
+    SI32Attr:$axis
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -560,10 +627,18 @@ def Darwinn_GetTensorOp : Darwinn_Op<"get_tensor"> {
 def Darwinn_HibGatherOp : Darwinn_Op<"hib_gather"> {
   let summary = "Darwinn hib_gather operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.hib_gather operation.
+    Gathers slices of `params` along `axis` indexed by `indices`.
+    A negative `axis` normalizes against the rank of `params`.
+    An out-of-range index zero-fills the corresponding output slice.
+    The result rank is params rank plus indices rank minus one.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$params,
+    RankedTensorOf<[AnyInteger]>:$indices,
+    SI32Attr:$axis
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -637,10 +712,23 @@ def Darwinn_ImageFormatOp : Darwinn_Op<"image_format"> {
 def Darwinn_IndexFilterOp : Darwinn_Op<"index_filter"> {
   let summary = "Darwinn index_filter operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.index_filter operation.
+    Selects the top `k` elements along the last dimension of `input`.
+    Output `values` holds the selected elements in descending order and
+    output `indices` holds their zero based source positions so each index
+    entry is the source position of the paired value entry. Ties keep source
+    order with the lower index first. `k` must be positive and no larger than
+    the depth. When `k` equals the depth the result is a full descending sort.
+    Both outputs share the input shape with the last dim set to `k`.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    SI32Attr:$k
+  );
+  let results = (outs
+    AnyRankedTensor:$values,
+    AnyRankedTensor:$indices
+  );
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -670,10 +758,20 @@ def Darwinn_InnerOpOp : Darwinn_Op<"inner_op"> {
 def Darwinn_InterpolateOp : Darwinn_Op<"interpolate"> {
   let summary = "Darwinn interpolate operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.interpolate operation.
+    Pools `input` to `output` with `kernel`, `stride` and `pad`.
+    Every kernel entry is at least 1 and every stride entry is at least 1.
+    Padding entries are non negative with each side below its kernel extent.
+    Static spatial dims must match the pooled size formula. Non spatial dims
+    carry over unchanged.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    DenseI64ArrayAttr:$kernel,
+    DenseI64ArrayAttr:$stride,
+    DenseI64ArrayAttr:$pad
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -681,10 +779,20 @@ def Darwinn_InterpolateOp : Darwinn_Op<"interpolate"> {
 def Darwinn_InterpolateHardwareOp : Darwinn_Op<"interpolate_hardware"> {
   let summary = "Darwinn interpolate_hardware operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.interpolate_hardware operation.
+    Hardware pooling of `input` to `output` with `kernel`, `stride` and `pad`.
+    Every kernel entry is at least 1 and every stride entry is at least 1.
+    Padding entries are non negative with each side below its kernel extent.
+    Static spatial dims must match the pooled size formula. Non spatial dims
+    carry over unchanged.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    DenseI64ArrayAttr:$kernel,
+    DenseI64ArrayAttr:$stride,
+    DenseI64ArrayAttr:$pad
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -835,10 +943,17 @@ def Darwinn_MappingOp : Darwinn_Op<"mapping"> {
 def Darwinn_MaskIndicesOp : Darwinn_Op<"mask_indices"> {
   let summary = "Darwinn mask_indices operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.mask_indices operation.
+    Returns the index of the largest element along `axis`.
+    A negative `axis` normalizes against the rank of `input` and must lie in
+    range. Ties return the first match along the search axis. The output
+    drops the reduced axis and has 32 bit integer elements.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    SI32Attr:$axis
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1110,10 +1225,20 @@ def Darwinn_ReluOp : Darwinn_Op<"relu"> {
 def Darwinn_ResamplerOp : Darwinn_Op<"resampler"> {
   let summary = "Darwinn resampler operation.";
   let description = [{
-    Boilerplate skeleton for the darwinn.resampler operation.
+    Resamples `input` to `output` with `kernel`, `stride` and `pad`.
+    Every kernel entry is at least 1 and every stride entry is at least 1.
+    Padding entries are non negative with each side below its kernel extent.
+    Static spatial dims must match the pooled size formula. Non spatial dims
+    carry over unchanged.
   }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    DenseI64ArrayAttr:$kernel,
+    DenseI64ArrayAttr:$stride,
+    DenseI64ArrayAttr:$pad
+  );
+  let results = (outs AnyRankedTensor:$output);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
