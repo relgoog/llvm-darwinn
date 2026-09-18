@@ -88,6 +88,8 @@
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/Transforms/RuntimeOpVerification.h"
 #include "mlir/Dialect/Tensor/Transforms/SubsetInsertionOpInterfaceImpl.h"
+#include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
+#include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Tosa/IR/ShardingInterfaceImpl.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Transform/IR/TransformDialect.h"
@@ -149,6 +151,9 @@ void mlir::registerAllDialects(DialectRegistry &registry) {
                   sparse_tensor::SparseTensorDialect,
                   spirv::SPIRVDialect,
                   tensor::TensorDialect,
+                  darwinn::DarwinnDialect,
+                  dive_vm::DiveVmDialect,
+                  edgetpu::EdgeTpuDialect,
                   tosa::TosaDialect,
                   transform::TransformDialect,
                   ub::UBDialect,
