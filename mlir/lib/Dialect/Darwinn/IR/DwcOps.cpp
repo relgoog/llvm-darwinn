@@ -276,6 +276,10 @@ LogicalResult dwc::DynamicSliceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.dynamic_slice' to have attribute 'read_location'");
   if (!(*this)->hasAttr("slice_size"))
     return (*this)->emitOpError("expected op 'dwc.dynamic_slice' to have attribute 'slice_size'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
+    return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("slice_size")))
+    return (*this)->emitOpError("attribute 'slice_size' expects IntegerAttr");
   return success();
 }
 
@@ -284,6 +288,8 @@ LogicalResult dwc::DynamicUpdateSliceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.dynamic_update_slice' to have attribute 'mode'");
   if (!(*this)->hasAttr("write_location"))
     return (*this)->emitOpError("expected op 'dwc.dynamic_update_slice' to have attribute 'write_location'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
+    return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
   return success();
 }
 
