@@ -1574,6 +1574,27 @@ def DwcCountingVariableCleanupPass : Pass<"counting-variable-cleanup", "func::Fu
   }];
 }
 
+def DwcCompositeSlicingSolverPass : Pass<"composite-slicing-solver", "func::FuncOp"> {
+  let summary = "DWC pass composite-slicing-solver";
+  let description = [{
+    Blob-evidenced lisa pass. Composite slicing solver. Solves composite op slicing assignments across producer consumer edges.
+  }];
+}
+
+def DwcCustomSlicingAssignmentPass : Pass<"custom-slicing-assignment", "func::FuncOp"> {
+  let summary = "DWC pass custom-slicing-assignment";
+  let description = [{
+    Blob-evidenced lisa pass. Custom slicing assignment. Assigns custom slicing strategies to ops annotated with tiling options.
+  }];
+}
+
+def DwcDefaultUnitSlicingPass : Pass<"default-unit-slicing", "func::FuncOp"> {
+  let summary = "DWC pass default-unit-slicing";
+  let description = [{
+    Blob-evidenced lisa pass. Default unit slicing. Applies unit slicing to ops left unassigned by earlier slicing passes.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
