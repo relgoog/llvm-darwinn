@@ -99,10 +99,10 @@ LogicalResult dwc::CeilOp::verify() {
   if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
     return success();
   if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
-    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16 || integer.getWidth() == 32))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, f16, bf16, or f32");
 }
 
 

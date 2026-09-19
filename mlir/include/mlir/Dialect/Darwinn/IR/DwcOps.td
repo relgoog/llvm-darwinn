@@ -83,7 +83,7 @@ def Dwc_CastOp : Dwc_Op<"cast"> {
 def Dwc_CeilOp : Dwc_Op<"ceil"> {
   let summary = "DWC ceil operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, i32, f16, bf16, or f32 operand per the blob constraints excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
