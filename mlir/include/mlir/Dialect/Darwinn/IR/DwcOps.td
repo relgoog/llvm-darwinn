@@ -1735,4 +1735,1468 @@ def Dwc_AnnotateMaterializePolicyOp : Dwc_Op<"annotate_materialize_policy"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+// Operator: activation_function
+def Dwc_ActivationFunctionOp : Dwc_Op<"activation_function"> {
+  let summary = "DWC activation_function operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: additional_input_output
+def Dwc_AdditionalInputOutputOp : Dwc_Op<"additional_input_output"> {
+  let summary = "DWC additional_input_output operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: af
+def Dwc_AfOp : Dwc_Op<"af"> {
+  let summary = "DWC af operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: algorithm
+def Dwc_AlgorithmOp : Dwc_Op<"algorithm"> {
+  let summary = "DWC algorithm operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: and
+def Dwc_AndOp : Dwc_Op<"and"> {
+  let summary = "DWC and operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: argument_copy
+def Dwc_ArgumentCopyOp : Dwc_Op<"argument_copy"> {
+  let summary = "DWC argument_copy operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: bias_parameter
+def Dwc_BiasParameterOp : Dwc_Op<"bias_parameter"> {
+  let summary = "DWC bias_parameter operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: bit_select_type
+def Dwc_BitSelectTypeOp : Dwc_Op<"bit_select_type"> {
+  let summary = "DWC bit_select_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: branch
+def Dwc_BranchOp : Dwc_Op<"branch"> {
+  let summary = "DWC branch operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: cell
+def Dwc_CellOp : Dwc_Op<"cell"> {
+  let summary = "DWC cell operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: classification_type
+def Dwc_ClassificationTypeOp : Dwc_Op<"classification_type"> {
+  let summary = "DWC classification_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: codegen
+def Dwc_CodegenOp : Dwc_Op<"codegen"> {
+  let summary = "DWC codegen operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: comparison_type
+def Dwc_ComparisonTypeOp : Dwc_Op<"comparison_type"> {
+  let summary = "DWC comparison_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: compilation_unit
+def Dwc_CompilationUnitOp : Dwc_Op<"compilation_unit"> {
+  let summary = "DWC compilation_unit operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: compilation_unit_wrapper
+def Dwc_CompilationUnitWrapperOp : Dwc_Op<"compilation_unit_wrapper"> {
+  let summary = "DWC compilation_unit_wrapper operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: compression_mode
+def Dwc_CompressionModeOp : Dwc_Op<"compression_mode"> {
+  let summary = "DWC compression_mode operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: convolution_3d
+def Dwc_Convolution3dOp : Dwc_Op<"convolution_3d"> {
+  let summary = "DWC convolution_3d operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: cumulative_type
+def Dwc_CumulativeTypeOp : Dwc_Op<"cumulative_type"> {
+  let summary = "DWC cumulative_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: custom_padding_value_type
+def Dwc_CustomPaddingValueTypeOp : Dwc_Op<"custom_padding_value_type"> {
+  let summary = "DWC custom_padding_value_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: cwise_type
+def Dwc_CwiseTypeOp : Dwc_Op<"cwise_type"> {
+  let summary = "DWC cwise_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: declare_tensor_static
+def Dwc_DeclareTensorStaticOp : Dwc_Op<"declare_tensor_static"> {
+  let summary = "DWC declare_tensor_static operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: device_launch_func
+def Dwc_DeviceLaunchFuncOp : Dwc_Op<"device_launch_func"> {
+  let summary = "DWC device_launch_func operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: device_type
+def Dwc_DeviceTypeOp : Dwc_Op<"device_type"> {
+  let summary = "DWC device_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dim_mapping
+def Dwc_DimMappingOp : Dwc_Op<"dim_mapping"> {
+  let summary = "DWC dim_mapping operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dimension_layout
+def Dwc_DimensionLayoutOp : Dwc_Op<"dimension_layout"> {
+  let summary = "DWC dimension_layout operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dive_unroll_factor
+def Dwc_DiveUnrollFactorOp : Dwc_Op<"dive_unroll_factor"> {
+  let summary = "DWC dive_unroll_factor operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dynamic_intermediate_input_shard
+def Dwc_DynamicIntermediateInputShardOp : Dwc_Op<"dynamic_intermediate_input_shard"> {
+  let summary = "DWC dynamic_intermediate_input_shard operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dynamic_intermediate_output_shard
+def Dwc_DynamicIntermediateOutputShardOp : Dwc_Op<"dynamic_intermediate_output_shard"> {
+  let summary = "DWC dynamic_intermediate_output_shard operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dynamic_slice_nd
+def Dwc_DynamicSliceNdOp : Dwc_Op<"dynamic_slice_nd"> {
+  let summary = "DWC dynamic_slice_nd operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dynamic_slice_nd_v2
+def Dwc_DynamicSliceNdV2Op : Dwc_Op<"dynamic_slice_nd_v2"> {
+  let summary = "DWC dynamic_slice_nd_v2 operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dynamic_update_slice_nd
+def Dwc_DynamicUpdateSliceNdOp : Dwc_Op<"dynamic_update_slice_nd"> {
+  let summary = "DWC dynamic_update_slice_nd operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: dynamic_update_slice_nd_v2
+def Dwc_DynamicUpdateSliceNdV2Op : Dwc_Op<"dynamic_update_slice_nd_v2"> {
+  let summary = "DWC dynamic_update_slice_nd_v2 operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: encoding
+def Dwc_EncodingOp : Dwc_Op<"encoding"> {
+  let summary = "DWC encoding operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: engine
+def Dwc_EngineOp : Dwc_Op<"engine"> {
+  let summary = "DWC engine operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: fetch
+def Dwc_FetchOp : Dwc_Op<"fetch"> {
+  let summary = "DWC fetch operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: fully_connected_sub_channel_v2
+def Dwc_FullyConnectedSubChannelV2Op : Dwc_Op<"fully_connected_sub_channel_v2"> {
+  let summary = "DWC fully_connected_sub_channel_v2 operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: fully_connected_zin_indexed
+def Dwc_FullyConnectedZinIndexedOp : Dwc_Op<"fully_connected_zin_indexed"> {
+  let summary = "DWC fully_connected_zin_indexed operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: fully_connected_zout_indexed
+def Dwc_FullyConnectedZoutIndexedOp : Dwc_Op<"fully_connected_zout_indexed"> {
+  let summary = "DWC fully_connected_zout_indexed operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: generic_pad
+def Dwc_GenericPadOp : Dwc_Op<"generic_pad"> {
+  let summary = "DWC generic_pad operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: hardware_cluster_id_per_signature
+def Dwc_HardwareClusterIdPerSignatureOp : Dwc_Op<"hardware_cluster_id_per_signature"> {
+  let summary = "DWC hardware_cluster_id_per_signature operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: host_space
+def Dwc_HostSpaceOp : Dwc_Op<"host_space"> {
+  let summary = "DWC host_space operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: identity
+def Dwc_IdentityOp : Dwc_Op<"identity"> {
+  let summary = "DWC identity operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: if
+def Dwc_IfOp : Dwc_Op<"if"> {
+  let summary = "DWC if operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: image_format
+def Dwc_ImageFormatOp : Dwc_Op<"image_format"> {
+  let summary = "DWC image_format operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: input
+def Dwc_InputOp : Dwc_Op<"input"> {
+  let summary = "DWC input operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: input_shard
+def Dwc_InputShardOp : Dwc_Op<"input_shard"> {
+  let summary = "DWC input_shard operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: inter_die_input
+def Dwc_InterDieInputOp : Dwc_Op<"inter_die_input"> {
+  let summary = "DWC inter_die_input operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: inter_die_output
+def Dwc_InterDieOutputOp : Dwc_Op<"inter_die_output"> {
+  let summary = "DWC inter_die_output operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: intermediate_input
+def Dwc_IntermediateInputOp : Dwc_Op<"intermediate_input"> {
+  let summary = "DWC intermediate_input operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: intermediate_input_shard
+def Dwc_IntermediateInputShardOp : Dwc_Op<"intermediate_input_shard"> {
+  let summary = "DWC intermediate_input_shard operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: intermediate_output
+def Dwc_IntermediateOutputOp : Dwc_Op<"intermediate_output"> {
+  let summary = "DWC intermediate_output operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: intermediate_output_shard
+def Dwc_IntermediateOutputShardOp : Dwc_Op<"intermediate_output_shard"> {
+  let summary = "DWC intermediate_output_shard operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: internal_padding
+def Dwc_InternalPaddingOp : Dwc_Op<"internal_padding"> {
+  let summary = "DWC internal_padding operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: io_colocation_pairs
+def Dwc_IoColocationPairsOp : Dwc_Op<"io_colocation_pairs"> {
+  let summary = "DWC io_colocation_pairs operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: is_external_parameter
+def Dwc_IsExternalParameterOp : Dwc_Op<"is_external_parameter"> {
+  let summary = "DWC is_external_parameter operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: jump
+def Dwc_JumpOp : Dwc_Op<"jump"> {
+  let summary = "DWC jump operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: kernel_level
+def Dwc_KernelLevelOp : Dwc_Op<"kernel_level"> {
+  let summary = "DWC kernel_level operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: known_trip_count
+def Dwc_KnownTripCountOp : Dwc_Op<"known_trip_count"> {
+  let summary = "DWC known_trip_count operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: launch_custom_kernel
+def Dwc_LaunchCustomKernelOp : Dwc_Op<"launch_custom_kernel"> {
+  let summary = "DWC launch_custom_kernel operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: linear_function
+def Dwc_LinearFunctionOp : Dwc_Op<"linear_function"> {
+  let summary = "DWC linear_function operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: log
+def Dwc_LogOp : Dwc_Op<"log"> {
+  let summary = "DWC log operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: loop_sharding
+def Dwc_LoopShardingOp : Dwc_Op<"loop_sharding"> {
+  let summary = "DWC loop_sharding operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: lower_bound
+def Dwc_LowerBoundOp : Dwc_Op<"lower_bound"> {
+  let summary = "DWC lower_bound operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: materialize_policy
+def Dwc_MaterializePolicyOp : Dwc_Op<"materialize_policy"> {
+  let summary = "DWC materialize_policy operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: memory_location
+def Dwc_MemoryLocationOp : Dwc_Op<"memory_location"> {
+  let summary = "DWC memory_location operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: memory_space
+def Dwc_MemorySpaceOp : Dwc_Op<"memory_space"> {
+  let summary = "DWC memory_space operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: mesh_dim
+def Dwc_MeshDimOp : Dwc_Op<"mesh_dim"> {
+  let summary = "DWC mesh_dim operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: mlir
+def Dwc_MlirOp : Dwc_Op<"mlir"> {
+  let summary = "DWC mlir operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: multimedia
+def Dwc_MultimediaOp : Dwc_Op<"multimedia"> {
+  let summary = "DWC multimedia operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: nlu_e8m0_rounding
+def Dwc_NluE8m0RoundingOp : Dwc_Op<"nlu_e8m0_rounding"> {
+  let summary = "DWC nlu_e8m0_rounding operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: nlu_preprocess
+def Dwc_NluPreprocessOp : Dwc_Op<"nlu_preprocess"> {
+  let summary = "DWC nlu_preprocess operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: normalization_type
+def Dwc_NormalizationTypeOp : Dwc_Op<"normalization_type"> {
+  let summary = "DWC normalization_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: or
+def Dwc_OrOp : Dwc_Op<"or"> {
+  let summary = "DWC or operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: output
+def Dwc_OutputOp : Dwc_Op<"output"> {
+  let summary = "DWC output operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: output_shard
+def Dwc_OutputShardOp : Dwc_Op<"output_shard"> {
+  let summary = "DWC output_shard operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pad
+def Dwc_PadOp : Dwc_Op<"pad"> {
+  let summary = "DWC pad operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: padding_value_type
+def Dwc_PaddingValueTypeOp : Dwc_Op<"padding_value_type"> {
+  let summary = "DWC padding_value_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: parameter
+def Dwc_ParameterOp : Dwc_Op<"parameter"> {
+  let summary = "DWC parameter operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: parameter_lookup_table
+def Dwc_ParameterLookupTableOp : Dwc_Op<"parameter_lookup_table"> {
+  let summary = "DWC parameter_lookup_table operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: per_z_out_scale_padding
+def Dwc_PerZOutScalePaddingOp : Dwc_Op<"per_z_out_scale_padding"> {
+  let summary = "DWC per_z_out_scale_padding operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pool
+def Dwc_PoolOp : Dwc_Op<"pool"> {
+  let summary = "DWC pool operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pooling_3d
+def Dwc_Pooling3dOp : Dwc_Op<"pooling_3d"> {
+  let summary = "DWC pooling_3d operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: probe
+def Dwc_ProbeOp : Dwc_Op<"probe"> {
+  let summary = "DWC probe operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_dynamic_image_interpolation
+def Dwc_PseudoDynamicImageInterpolationOp : Dwc_Op<"pseudo_dynamic_image_interpolation"> {
+  let summary = "DWC pseudo_dynamic_image_interpolation operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_dynamic_pad
+def Dwc_PseudoDynamicPadOp : Dwc_Op<"pseudo_dynamic_pad"> {
+  let summary = "DWC pseudo_dynamic_pad operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_dynamic_reshape
+def Dwc_PseudoDynamicReshapeOp : Dwc_Op<"pseudo_dynamic_reshape"> {
+  let summary = "DWC pseudo_dynamic_reshape operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_dynamic_slice
+def Dwc_PseudoDynamicSliceOp : Dwc_Op<"pseudo_dynamic_slice"> {
+  let summary = "DWC pseudo_dynamic_slice operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_expand_dims
+def Dwc_PseudoExpandDimsOp : Dwc_Op<"pseudo_expand_dims"> {
+  let summary = "DWC pseudo_expand_dims operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_fill
+def Dwc_PseudoFillOp : Dwc_Op<"pseudo_fill"> {
+  let summary = "DWC pseudo_fill operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_generic_norm
+def Dwc_PseudoGenericNormOp : Dwc_Op<"pseudo_generic_norm"> {
+  let summary = "DWC pseudo_generic_norm operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_group_norm
+def Dwc_PseudoGroupNormOp : Dwc_Op<"pseudo_group_norm"> {
+  let summary = "DWC pseudo_group_norm operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_mirror_pad
+def Dwc_PseudoMirrorPadOp : Dwc_Op<"pseudo_mirror_pad"> {
+  let summary = "DWC pseudo_mirror_pad operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_range
+def Dwc_PseudoRangeOp : Dwc_Op<"pseudo_range"> {
+  let summary = "DWC pseudo_range operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_shape
+def Dwc_PseudoShapeOp : Dwc_Op<"pseudo_shape"> {
+  let summary = "DWC pseudo_shape operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_squeeze
+def Dwc_PseudoSqueezeOp : Dwc_Op<"pseudo_squeeze"> {
+  let summary = "DWC pseudo_squeeze operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: reduce_window_type
+def Dwc_ReduceWindowTypeOp : Dwc_Op<"reduce_window_type"> {
+  let summary = "DWC reduce_window_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: reduction_type
+def Dwc_ReductionTypeOp : Dwc_Op<"reduction_type"> {
+  let summary = "DWC reduction_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: resampler_options
+def Dwc_ResamplerOptionsOp : Dwc_Op<"resampler_options"> {
+  let summary = "DWC resampler_options operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: rkhy_add
+def Dwc_RkhyAddOp : Dwc_Op<"rkhy_add"> {
+  let summary = "DWC rkhy_add operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar_type
+def Dwc_ScalarTypeOp : Dwc_Op<"scalar_type"> {
+  let summary = "DWC scalar_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: shard_barrier
+def Dwc_ShardBarrierOp : Dwc_Op<"shard_barrier"> {
+  let summary = "DWC shard_barrier operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: shard_body
+def Dwc_ShardBodyOp : Dwc_Op<"shard_body"> {
+  let summary = "DWC shard_body operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: shard_group
+def Dwc_ShardGroupOp : Dwc_Op<"shard_group"> {
+  let summary = "DWC shard_group operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: shard_sink
+def Dwc_ShardSinkOp : Dwc_Op<"shard_sink"> {
+  let summary = "DWC shard_sink operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: shard_source
+def Dwc_ShardSourceOp : Dwc_Op<"shard_source"> {
+  let summary = "DWC shard_source operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: shift_right_arithmetic
+def Dwc_ShiftRightArithmeticOp : Dwc_Op<"shift_right_arithmetic"> {
+  let summary = "DWC shift_right_arithmetic operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: signature_na
+def Dwc_SignatureNaOp : Dwc_Op<"signature_na"> {
+  let summary = "DWC signature_na operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: signature_name
+def Dwc_SignatureNameOp : Dwc_Op<"signature_name"> {
+  let summary = "DWC signature_name operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: sparse_fully_connected
+def Dwc_SparseFullyConnectedOp : Dwc_Op<"sparse_fully_connected"> {
+  let summary = "DWC sparse_fully_connected operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: spill_location
+def Dwc_SpillLocationOp : Dwc_Op<"spill_location"> {
+  let summary = "DWC spill_location operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: stabletg_kernel
+def Dwc_StabletgKernelOp : Dwc_Op<"stabletg_kernel"> {
+  let summary = "DWC stabletg_kernel operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: stride_method
+def Dwc_StrideMethodOp : Dwc_Op<"stride_method"> {
+  let summary = "DWC stride_method operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: tile_mesh
+def Dwc_TileMeshOp : Dwc_Op<"tile_mesh"> {
+  let summary = "DWC tile_mesh operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: tile_uid
+def Dwc_TileUidOp : Dwc_Op<"tile_uid"> {
+  let summary = "DWC tile_uid operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: tpu_group_id
+def Dwc_TpuGroupIdOp : Dwc_Op<"tpu_group_id"> {
+  let summary = "DWC tpu_group_id operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: transformation_type
+def Dwc_TransformationTypeOp : Dwc_Op<"transformation_type"> {
+  let summary = "DWC transformation_type operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: visible_tiles_per_signature
+def Dwc_VisibleTilesPerSignatureOp : Dwc_Op<"visible_tiles_per_signature"> {
+  let summary = "DWC visible_tiles_per_signature operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: vrgkh_operation_mode
+def Dwc_VrgkhOperationModeOp : Dwc_Op<"vrgkh_operation_mode"> {
+  let summary = "DWC vrgkh_operation_mode operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: vtid
+def Dwc_VtidOp : Dwc_Op<"vtid"> {
+  let summary = "DWC vtid operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: while
+def Dwc_WhileOp : Dwc_Op<"while"> {
+  let summary = "DWC while operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: xor
+def Dwc_XorOp : Dwc_Op<"xor"> {
+  let summary = "DWC xor operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: yield
+def Dwc_YieldOp : Dwc_Op<"yield"> {
+  let summary = "DWC yield operation.";
+  let description = [{
+    Takes any number of operands. Op token with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 #endif // DWC_OPS

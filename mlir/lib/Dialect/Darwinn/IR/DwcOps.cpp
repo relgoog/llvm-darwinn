@@ -890,3 +890,491 @@ LogicalResult dwc::GatherNdOp::verify() {
 LogicalResult dwc::AnnotateMaterializePolicyOp::verify() {
   return success();
 }
+
+LogicalResult dwc::ActivationFunctionOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::AdditionalInputOutputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::AfOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::AlgorithmOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::AndOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ArgumentCopyOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::BiasParameterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::BitSelectTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::BranchOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CellOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ClassificationTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CodegenOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ComparisonTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CompilationUnitOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CompilationUnitWrapperOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CompressionModeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::Convolution3dOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CumulativeTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CustomPaddingValueTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CwiseTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DeclareTensorStaticOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DeviceLaunchFuncOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DeviceTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DimMappingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DimensionLayoutOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DiveUnrollFactorOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicIntermediateInputShardOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicIntermediateOutputShardOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicSliceNdOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicSliceNdV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicUpdateSliceNdOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicUpdateSliceNdV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwc::EncodingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::EngineOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FetchOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FullyConnectedSubChannelV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwc::FullyConnectedZinIndexedOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FullyConnectedZoutIndexedOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::GenericPadOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::HardwareClusterIdPerSignatureOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::HostSpaceOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IdentityOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IfOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ImageFormatOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::InputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::InputShardOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::InterDieInputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::InterDieOutputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IntermediateInputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IntermediateInputShardOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IntermediateOutputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IntermediateOutputShardOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::InternalPaddingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IoColocationPairsOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IsExternalParameterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::JumpOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::KernelLevelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::KnownTripCountOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::LaunchCustomKernelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::LinearFunctionOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::LogOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::LoopShardingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::LowerBoundOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MaterializePolicyOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MemoryLocationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MemorySpaceOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MeshDimOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MlirOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MultimediaOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::NluE8m0RoundingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::NluPreprocessOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::NormalizationTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::OrOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::OutputOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::OutputShardOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PadOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PaddingValueTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ParameterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ParameterLookupTableOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PerZOutScalePaddingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PoolOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::Pooling3dOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ProbeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoDynamicImageInterpolationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoDynamicPadOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoDynamicReshapeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoDynamicSliceOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoExpandDimsOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoFillOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoGenericNormOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoGroupNormOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoMirrorPadOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoRangeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoShapeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PseudoSqueezeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ReduceWindowTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ReductionTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ResamplerOptionsOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RkhyAddOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ScalarTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShardBarrierOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShardBodyOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShardGroupOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShardSinkOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShardSourceOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShiftRightArithmeticOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SignatureNaOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SignatureNameOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SparseFullyConnectedOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SpillLocationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::StabletgKernelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::StrideMethodOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TileMeshOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TileUidOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TpuGroupIdOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TransformationTypeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::VisibleTilesPerSignatureOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::VrgkhOperationModeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::VtidOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::WhileOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::XorOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::YieldOp::verify() {
+  return success();
+}
