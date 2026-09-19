@@ -157,4 +157,23 @@ def Dwc_SimpleActivationFunctionEnum : Dwc_I32Enum<
   ]>;
 def Dwc_SimpleActivationFunctionAttr : Dwc_I32EnumAttr<"simple_activation_function", Dwc_SimpleActivationFunctionEnum>;
 
+def Dwc_ActivationFunctionExp : I32EnumAttrCase<"Exp", 0, "EXP">;
+def Dwc_ActivationFunctionGeluApproximated : I32EnumAttrCase<"GeluApproximated", 1, "GELU_APPROXIMATED">;
+def Dwc_ActivationFunctionLogistic : I32EnumAttrCase<"Logistic", 2, "LOGISTIC">;
+def Dwc_ActivationFunctionNone : I32EnumAttrCase<"None", 3, "NONE">;
+def Dwc_ActivationFunctionReciprocalSqrt : I32EnumAttrCase<"ReciprocalSqrt", 4, "RECIPROCAL_SQRT">;
+def Dwc_ActivationFunctionRelu : I32EnumAttrCase<"Relu", 5, "RELU">;
+def Dwc_ActivationFunctionTanh : I32EnumAttrCase<"Tanh", 6, "TANH">;
+def Dwc_ActivationFunctionEnum : Dwc_I32Enum<
+  "ActivationFunction", "DWC activation function", [
+    Dwc_ActivationFunctionExp,
+    Dwc_ActivationFunctionGeluApproximated,
+    Dwc_ActivationFunctionLogistic,
+    Dwc_ActivationFunctionNone,
+    Dwc_ActivationFunctionReciprocalSqrt,
+    Dwc_ActivationFunctionRelu,
+    Dwc_ActivationFunctionTanh
+  ]>;
+def Dwc_ActivationFunctionAttr : Dwc_I32EnumAttr<"activation_function", Dwc_ActivationFunctionEnum>;
+
 #endif // DWC_DIALECT
