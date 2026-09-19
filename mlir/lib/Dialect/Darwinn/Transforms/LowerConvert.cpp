@@ -117,6 +117,10 @@ struct DwcLowerConvertPass
     : public mlir::darwinn::impl::DwcLowerConvertPassBase<DwcLowerConvertPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
     mlir::darwinn::populateLowerConvertPatterns(patterns);

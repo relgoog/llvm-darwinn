@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
@@ -152,6 +153,11 @@ struct GatherLowering : public RewritePattern {
 struct DwcLowerCopySlicePass
     : public darwinn::impl::DwcLowerCopySlicePassBase<DwcLowerCopySlicePass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
