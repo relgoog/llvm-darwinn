@@ -1965,14 +1965,6 @@ struct DwcConvertFuncToLlvmPass
   }
 
   void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    LLVMTypeConverter converter(&getContext());
-    SymbolTableCollection symbolTables;
-    populateFuncToLLVMConversionPatterns(converter, patterns, &symbolTables);
-    LLVMConversionTarget target(getContext());
-    if (failed(applyPartialConversion(getOperation(), target,
-                                      std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
