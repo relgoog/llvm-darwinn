@@ -415,7 +415,12 @@ LogicalResult dwc::PaddingOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.padding' to have attribute 'post_padding'");
   if (!(*this)->hasAttr("pre_padding"))
     return (*this)->emitOpError("expected op 'dwc.padding' to have attribute 'pre_padding'");
-  return success();
+  if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
+    if (ranked.getRank() == 0)
+      return (*this)->emitOpError("operand 0 expects non-0-ranked tensor");
+    return success();
+  }
+  return (*this)->emitOpError("operand 0 expects ranked tensor");
 }
 
 LogicalResult dwc::PopCountOp::verify() {

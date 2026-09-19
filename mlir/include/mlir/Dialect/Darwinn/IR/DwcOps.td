@@ -479,7 +479,7 @@ def Dwc_OneHotOp : Dwc_Op<"one_hot"> {
 def Dwc_PaddingOp : Dwc_Op<"padding"> {
   let summary = "DWC padding operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints. Requires `dimension`, `padding_value`, `post_padding`, `pre_padding`.
+    Exactly 1 non-0-ranked tensor operand per the blob constraints. Requires `dimension`, `padding_value`, `post_padding`, `pre_padding`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
