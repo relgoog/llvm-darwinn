@@ -302,6 +302,15 @@ LogicalResult dwc::CwiseOp::verify() {
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   if (!llvm::isa<CwiseOpTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects CwiseOpTypeAttr");
+  switch (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue()) {
+  case ActivationFunction::None:
+  case ActivationFunction::Relu:
+  case ActivationFunction::Tanh:
+  case ActivationFunction::ReciprocalSqrt:
+    break;
+  default:
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE, RELU, TANH, or RECIPROCAL_SQRT");
+  }
   for (unsigned index = 0; index < 2; ++index) {
     if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[index].getType())) {
       if (ranked.getRank() == 0)
@@ -831,6 +840,17 @@ LogicalResult dwc::RescalingOp::verify() {
     return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects NONE");
   if (!llvm::cast<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales")).empty())
     return (*this)->emitOpError("attribute 'output_activation_per_z_out_scales' expects empty array");
+  switch (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue()) {
+  case ActivationFunction::None:
+  case ActivationFunction::Exp:
+  case ActivationFunction::Logistic:
+  case ActivationFunction::Tanh:
+  case ActivationFunction::ReciprocalSqrt:
+  case ActivationFunction::GeluApproximated:
+    break;
+  default:
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE, EXP, LOGISTIC, TANH, RECIPROCAL_SQRT, or GELU_APPROXIMATED");
+  }
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type>(element))
