@@ -533,6 +533,10 @@ LogicalResult dwc::GenericDotOp::verify() {
     return (*this)->emitOpError("attribute 'contracting_dim_count' expects IntegerAttr");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("batch_dim_count")).getInt() != 1)
+    return (*this)->emitOpError("attribute 'batch_dim_count' expects 1");
   return success();
 }
 
@@ -575,6 +579,8 @@ LogicalResult dwc::MatrixMultiplyOp::verify() {
     return (*this)->emitOpError("attribute 'transpose_rhs' expects BoolAttr");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   return success();
 }
 
@@ -958,6 +964,9 @@ LogicalResult dwc::SubtractOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.subtract' to have attribute 'activation_function'");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  auto activation = llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue();
+  if (activation != ActivationFunction::None && activation != ActivationFunction::Relu)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE or RELU");
   return success();
 }
 
