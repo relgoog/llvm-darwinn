@@ -160,6 +160,9 @@ LogicalResult dwc::ConcatenationOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.concatenation' to have attribute 'mode'");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
     return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
+  auto mode = llvm::cast<IntegerAttr>((*this)->getAttr("mode"));
+  if (!mode.getType().isSignlessInteger(32))
+    return (*this)->emitOpError("attribute 'mode' expects 32-bit signless integer");
   return success();
 }
 
@@ -683,6 +686,10 @@ LogicalResult dwc::PaddingOp::verify() {
     return (*this)->emitOpError("attribute 'post_padding' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("pre_padding")))
     return (*this)->emitOpError("attribute 'pre_padding' expects IntegerAttr");
+  for (const char *name : {"post_padding", "pre_padding"}) {
+    if (!llvm::cast<IntegerAttr>((*this)->getAttr(name)).getType().isSignlessInteger(32))
+      return (*this)->emitOpError("attribute '") << name << "' expects 32-bit signless integer";
+  }
   if (llvm::cast<IntegerAttr>((*this)->getAttr("post_padding")).getInt() < 0)
     return (*this)->emitOpError("attribute 'post_padding' expects non-negative");
   if (llvm::cast<IntegerAttr>((*this)->getAttr("pre_padding")).getInt() < 0)
@@ -959,6 +966,10 @@ LogicalResult dwc::SliceOp::verify() {
     return (*this)->emitOpError("attribute 'in_size' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
     return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
+  for (const char *name : {"in_begin", "in_size", "mode"}) {
+    if (!llvm::cast<IntegerAttr>((*this)->getAttr(name)).getType().isSignlessInteger(32))
+      return (*this)->emitOpError("attribute '") << name << "' expects 32-bit signless integer";
+  }
   if (llvm::cast<IntegerAttr>((*this)->getAttr("in_begin")).getInt() < 0)
     return (*this)->emitOpError("attribute 'in_begin' expects non-negative");
   if (llvm::cast<IntegerAttr>((*this)->getAttr("mode")).getInt() < 0)

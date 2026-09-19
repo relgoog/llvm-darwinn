@@ -68,7 +68,7 @@ func.func @test_compare(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: concatenation
 func.func @test_concatenation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.concatenation
-  %0 = "dwc.concatenation"(%arg0) {mode = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.concatenation"(%arg0) {mode = 0 : i32} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -308,7 +308,7 @@ func.func @test_one_hot(%arg0: tensor<4xi32>) -> tensor<4xi32> {
 // CHECK-LABEL: padding
 func.func @test_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.padding
-  %0 = "dwc.padding"(%arg0) {dimension = 0 : i64, padding_value = 0.0 : f32, post_padding = 0 : i64, pre_padding = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.padding"(%arg0) {dimension = 0 : i64, padding_value = 0.0 : f32, post_padding = 0 : i32, pre_padding = 0 : i32} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -436,7 +436,7 @@ func.func @test_sin(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: slice
 func.func @test_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.slice
-  %0 = "dwc.slice"(%arg0) {in_begin = 0 : i64, in_size = 4 : i64, mode = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.slice"(%arg0) {in_begin = 0 : i32, in_size = 4 : i32, mode = 0 : i32} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
