@@ -1917,6 +1917,27 @@ def DwcInitializeDwcTransformMetadataPass : Pass<"initialize-dwc-transform-metad
   }];
 }
 
+def DwcTestRepeatingRegionClusterTpuOpsPass : Pass<"test-repeating-region-cluster-tpu-ops", "func::FuncOp"> {
+  let summary = "DWC pass test-repeating-region-cluster-tpu-ops";
+  let description = [{
+    Blob-evidenced darwinn pass. Test repeating region cluster TPU ops. Test-only pass clustering repeating regions.
+  }];
+}
+
+def DwcLinearUnitInputCheckPass : Pass<"linear-unit-input-check", "func::FuncOp"> {
+  let summary = "DWC pass linear-unit-input-check";
+  let description = [{
+    Blob-evidenced darwinn pass. Linear unit input check. Verifies linear unit inputs before lowering.
+  }];
+}
+
+def DwcSliceCheckPass : Pass<"slice-check", "func::FuncOp"> {
+  let summary = "DWC pass slice-check";
+  let description = [{
+    Blob-evidenced darwinn pass. Slice check. Verifies slicing assignments before codegen.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

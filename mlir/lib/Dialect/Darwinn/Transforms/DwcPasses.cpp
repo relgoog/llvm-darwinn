@@ -139,6 +139,9 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCUNFUSEBIASADDFROMTFQUANTIZEDCONVPASS
 #define GEN_PASS_DEF_DWCWHILEOPELIMINATEPASSTHROUGHPASS
 #define GEN_PASS_DEF_DWCINITIALIZEDWCTRANSFORMMETADATAPASS
+#define GEN_PASS_DEF_DWCTESTREPEATINGREGIONCLUSTERTPUOPSPASS
+#define GEN_PASS_DEF_DWCLINEARUNITINPUTCHECKPASS
+#define GEN_PASS_DEF_DWCSLICECHECKPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8698,6 +8701,50 @@ struct DwcInitializeDwcTransformMetadataPass
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     func->setAttr("dwc.transform_metadata_initialized", UnitAttr::get(&getContext()));
+  }
+};
+
+struct DwcTestRepeatingRegionClusterTpuOpsPass
+    : public darwinn::impl::DwcTestRepeatingRegionClusterTpuOpsPassBase<DwcTestRepeatingRegionClusterTpuOpsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.test_clustered", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcLinearUnitInputCheckPass
+    : public darwinn::impl::DwcLinearUnitInputCheckPassBase<DwcLinearUnitInputCheckPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.generic_compute")
+        return;
+      if (op->getNumOperands() == 0)
+        op->emitError("linear-unit-input-check expects at least one operand");
+    });
+  }
+};
+
+struct DwcSliceCheckPass
+    : public darwinn::impl::DwcSliceCheckPassBase<DwcSliceCheckPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.slicing_assigned"))
+        return;
+      if (!op->hasAttr("dwc.slice_granularity") && !op->hasAttr("dwc.slicing_propagated"))
+        op->emitError("slice-check expects granularity or propagation");
+    });
   }
 };
 
