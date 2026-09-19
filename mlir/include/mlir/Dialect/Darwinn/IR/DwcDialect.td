@@ -224,4 +224,14 @@ def Dwc_ProbeSubTensorAttr : AttrDef<Dwc_Dialect, "ProbeSubTensor"> {
   let assemblyFormat = "`<` $full_probe_id `,` $padding_amount `,` $padding_value `,` $slice_begin `,` $slice_size `>`";
 }
 
+def Dwc_ParameterLookupTableAttr : AttrDef<Dwc_Dialect, "ParameterLookupTable"> {
+  let summary = "DWC parameter lookup table attribute.";
+  let mnemonic = "parameter_lookup_table";
+  let parameters = (ins
+    "DenseIntElementsAttr":$lookup_table,
+    "IntegerAttr":$zero_point
+  );
+  let assemblyFormat = "`<` $lookup_table `,` $zero_point `>`";
+}
+
 #endif // DWC_DIALECT
