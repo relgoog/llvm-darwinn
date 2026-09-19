@@ -381,7 +381,17 @@ LogicalResult dwc::OneHotOp::verify() {
     return emitOpError("expects 1 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("axis"))
     return (*this)->emitOpError("expected op 'dwc.one_hot' to have attribute 'axis'");
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 16 || integer.getWidth() == 32))
+      return success();
+    if (integer.isSignless() && integer.getWidth() == 64)
+      return success();
+    if (integer.isUnsigned() && integer.getWidth() == 16)
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i16, i32, i64, or u16");
 }
 
 LogicalResult dwc::PaddingOp::verify() {

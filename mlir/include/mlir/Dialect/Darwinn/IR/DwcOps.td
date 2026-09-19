@@ -467,7 +467,7 @@ def Dwc_NotOp : Dwc_Op<"not"> {
 def Dwc_OneHotOp : Dwc_Op<"one_hot"> {
   let summary = "DWC one_hot operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints. Requires `axis`.
+    Exactly 1 i16, i32, i64, or u16 operand per the blob element constraints. Requires `axis`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

@@ -298,10 +298,10 @@ func.func @test_not(%arg0: tensor<4xi1>) -> tensor<4xi1> {
 
 // -----
 // CHECK-LABEL: one_hot
-func.func @test_one_hot(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_one_hot(%arg0: tensor<4xi32>) -> tensor<4xi32> {
   // CHECK: dwc.one_hot
-  %0 = "dwc.one_hot"(%arg0) {axis = "x"} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.one_hot"(%arg0) {axis = "x"} : (tensor<4xi32>) -> tensor<4xi32>
+  return %0 : tensor<4xi32>
 }
 
 // -----
