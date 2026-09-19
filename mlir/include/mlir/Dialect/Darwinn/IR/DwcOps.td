@@ -299,7 +299,7 @@ def Dwc_FloorOp : Dwc_Op<"floor"> {
 def Dwc_FloorDivOp : Dwc_Op<"floor_div"> {
   let summary = "DWC floor_div operation.";
   let description = [{
-    Exactly 2 operands per blob operand constraints.
+    Exactly 2 32-bit float, bfloat16, or 16-bit float operands per the blob element constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

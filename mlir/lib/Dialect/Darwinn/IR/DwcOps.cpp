@@ -255,6 +255,13 @@ LogicalResult dwc::FloorOp::verify() {
 LogicalResult dwc::FloorDivOp::verify() {
   if (getInputs().size() != 2)
     return emitOpError("expects 2 operands, got ") << getInputs().size();
+  for (unsigned index = 0; index < 2; ++index) {
+    auto tensor = llvm::dyn_cast<TensorType>(getInputs()[index].getType());
+    Type element = tensor ? tensor.getElementType() : getInputs()[index].getType();
+    if (llvm::isa<Float32Type, BFloat16Type, Float16Type>(element))
+      continue;
+    return (*this)->emitOpError("operand ") << index << " expects 32-bit float, bfloat16, or 16-bit float";
+  }
   return success();
 }
 
