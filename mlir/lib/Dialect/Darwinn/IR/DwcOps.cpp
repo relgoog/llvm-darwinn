@@ -1280,6 +1280,8 @@ LogicalResult dwc::HostedTensorOp::verify() {
 }
 
 LogicalResult dwc::ImageInterpolationOp::verify() {
+  if (getInputs().size() != 1 && getInputs().size() != 2)
+    return emitOpError("expects 1 or 2 operands, got ") << getInputs().size();
   return success();
 }
 
