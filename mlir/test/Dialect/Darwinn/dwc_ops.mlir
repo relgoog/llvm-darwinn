@@ -52,7 +52,7 @@ func.func @test_ceil(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: classifier
 func.func @test_classifier(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.classifier
-  %0 = "dwc.classifier"(%arg0) {axis = "x", beta = "x", op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.classifier"(%arg0) {axis = 1 : i64, beta = 1.0 : f32, op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -108,7 +108,7 @@ func.func @test_cos(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: cumulative
 func.func @test_cumulative(%arg0: tensor<4xi32>) -> tensor<4xi32> {
   // CHECK: dwc.cumulative
-  %0 = "dwc.cumulative"(%arg0) {axis = "x", exclusive = "x", op_type = "x"} : (tensor<4xi32>) -> tensor<4xi32>
+  %0 = "dwc.cumulative"(%arg0) {axis = 0 : i64, exclusive = true, op_type = "x"} : (tensor<4xi32>) -> tensor<4xi32>
   return %0 : tensor<4xi32>
 }
 
@@ -204,7 +204,7 @@ func.func @test_fully_connected(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: gather
 func.func @test_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.gather
-  %0 = "dwc.gather"(%arg0) {axis = "x", batch_dims = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.gather"(%arg0) {axis = 1 : i64, batch_dims = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

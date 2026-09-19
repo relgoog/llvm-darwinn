@@ -121,6 +121,10 @@ LogicalResult dwc::ClassifierOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.classifier' to have attribute 'beta'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.classifier' to have attribute 'op_type'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("axis")))
+    return (*this)->emitOpError("attribute 'axis' expects IntegerAttr");
+  if (!llvm::isa<FloatAttr>((*this)->getAttr("beta")))
+    return (*this)->emitOpError("attribute 'beta' expects FloatAttr");
   return success();
 }
 
@@ -204,6 +208,10 @@ LogicalResult dwc::CumulativeOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.cumulative' to have attribute 'exclusive'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.cumulative' to have attribute 'op_type'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("axis")))
+    return (*this)->emitOpError("attribute 'axis' expects IntegerAttr");
+  if (!llvm::isa<BoolAttr>((*this)->getAttr("exclusive")))
+    return (*this)->emitOpError("attribute 'exclusive' expects BoolAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
@@ -356,6 +364,10 @@ LogicalResult dwc::GatherOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.gather' to have attribute 'axis'");
   if (!(*this)->hasAttr("batch_dims"))
     return (*this)->emitOpError("expected op 'dwc.gather' to have attribute 'batch_dims'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("axis")))
+    return (*this)->emitOpError("attribute 'axis' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("batch_dims")))
+    return (*this)->emitOpError("attribute 'batch_dims' expects IntegerAttr");
   return success();
 }
 
