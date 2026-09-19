@@ -1749,6 +1749,13 @@ def DwcAnnotateCustomTilingOptionsPass : Pass<"annotate-custom-tiling-options", 
   }];
 }
 
+def DwcLowerSynchronizedOpsToTensorOpPass : Pass<"lower-synchronized-ops-to-tensor-op", "func::FuncOp"> {
+  let summary = "DWC pass lower-synchronized-ops-to-tensor-op";
+  let description = [{
+    Blob-evidenced lisa pass. Lower synchronized ops to tensor op. Converts synchronized copies to tensor ops.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

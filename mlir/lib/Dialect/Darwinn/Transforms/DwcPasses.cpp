@@ -115,6 +115,7 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCREPLACERESHAPEWITHREDISTRIBUTEPASS
 #define GEN_PASS_DEF_DWCDWCLISAFITTERPASS
 #define GEN_PASS_DEF_DWCANNOTATECUSTOMTILINGOPTIONSPASS
+#define GEN_PASS_DEF_DWCLOWERSYNCHRONIZEDOPSTOTENSOROPPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8323,6 +8324,20 @@ struct DwcAnnotateCustomTilingOptionsPass
       if (!op->hasAttr("dwc.custom_tiling"))
         return;
       op->setAttr("dwc.tiling_annotated", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcLowerSynchronizedOpsToTensorOpPass
+    : public darwinn::impl::DwcLowerSynchronizedOpsToTensorOpPassBase<DwcLowerSynchronizedOpsToTensorOpPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.synchronized_copy_op")
+        return;
+      op->setAttr("dwc.sync_lowered", UnitAttr::get(&getContext()));
     });
   }
 };
