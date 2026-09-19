@@ -89,6 +89,7 @@
 #include "mlir/Dialect/Tensor/Transforms/RuntimeOpVerification.h"
 #include "mlir/Dialect/Tensor/Transforms/SubsetInsertionOpInterfaceImpl.h"
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
+#include "mlir/Dialect/Darwinn/IR/DwcOps.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Tosa/IR/ShardingInterfaceImpl.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"

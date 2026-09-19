@@ -1,4 +1,4 @@
-//===-- DarwinnOps.h - Darwinn dialect declarations --------*- C++ -*-===//
+//===- DwcOps.h - DWC dialect declarations -------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,30 +6,28 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file declares the Darwinn dialect in MLIR.
+// This file declares the DWC dialect in MLIR.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_DIALECT_DARWINN_IR_DARWINNOPS_H
-#define MLIR_DIALECT_DARWINN_IR_DARWINNOPS_H
+#ifndef MLIR_DIALECT_DARWINN_IR_DWCOPS_H
+#define MLIR_DIALECT_DARWINN_IR_DWCOPS_H
 
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 
 //===----------------------------------------------------------------------===//
-// Darwinn dialect includes.
+// DWC dialect includes.
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Darwinn/IR/DarwinnOpsDialect.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DwcOpsEnums.h.inc"
 
-#define GET_ATTRDEF_CLASSES
-#include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DwcOpsDialect.h.inc"
 
-#define GET_TYPEDEF_CLASSES
-#include "mlir/Dialect/Darwinn/IR/DarwinnTypes.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DwcAttributes.h.inc"
 
 #define GET_OP_CLASSES
-#include "mlir/Dialect/Darwinn/IR/DarwinnOps.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DwcOps.h.inc"
 
-#endif // MLIR_DIALECT_DARWINN_IR_DARWINNOPS_H
+#endif // MLIR_DIALECT_DARWINN_IR_DWCOPS_H
