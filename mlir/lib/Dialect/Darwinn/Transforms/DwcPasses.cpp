@@ -749,6 +749,7 @@ struct DwcAddDiveTracingPass
       return signalPassFailure();
     }
     SmallVector<Type> traceParams{LLVM::LLVMPointerType::get(ctx)};
+    func->setAttr("dive.tracing_added", builder.getUnitAttr());
     auto callee = LLVM::lookupOrCreateFn(builder, moduleOp,
                                          "DiveRuntime_TraceEntry", traceParams,
                                          LLVM::LLVMVoidType::get(ctx));
@@ -759,7 +760,6 @@ struct DwcAddDiveTracingPass
     Value probe = LLVM::UndefOp::create(builder, func.getLoc(),
                                        LLVM::LLVMPointerType::get(ctx));
     LLVM::CallOp::create(builder, func.getLoc(), *callee, ValueRange({probe}));
-    func->setAttr("dive.tracing_added", builder.getUnitAttr());
   }
 };
 
@@ -6711,6 +6711,9 @@ struct DwcRenameDiveEntryFunctionPass
       return;
     if (failed(checkDwcConvertibleTypes(func.getOperation())))
       return signalPassFailure();
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (moduleOp && SymbolTable::lookupSymbolIn(moduleOp, "dive_entry"))
+      return;
     SymbolTable::setSymbolName(func.getOperation(), "dive_entry");
   }
 };
