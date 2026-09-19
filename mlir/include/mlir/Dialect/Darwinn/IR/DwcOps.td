@@ -527,7 +527,7 @@ def Dwc_PseudoSplitOp : Dwc_Op<"pseudo_split"> {
 def Dwc_ReductionOp : Dwc_Op<"reduction"> {
   let summary = "DWC reduction operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints. Requires `activation_function`, `dimensions`, `op_type`.
+    Exactly 1 16-bit float, bfloat16, or 32-bit float operand per the blob element constraints. Requires `activation_function`, `dimensions`, `op_type`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

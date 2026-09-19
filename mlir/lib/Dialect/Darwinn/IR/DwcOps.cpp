@@ -460,7 +460,11 @@ LogicalResult dwc::ReductionOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.reduction' to have attribute 'dimensions'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.reduction' to have attribute 'op_type'");
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects 16-bit float, bfloat16, or 32-bit float");
 }
 
 LogicalResult dwc::RemainderOp::verify() {
