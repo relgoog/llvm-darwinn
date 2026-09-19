@@ -4427,10 +4427,8 @@ struct DwcDwcLowerScalarOpsPass
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.relu" && name != "darwinn.binary_map" &&
-          name != "darwinn.unary_map" && name != "darwinn.unary_tensor_op" &&
-          name != "darwinn.dive_ref_cwise" &&
-          name != "darwinn.rkhy_residual_add_op")
+      if (name != "darwinn.relu" && name != "darwinn.unary_map" &&
+          name != "darwinn.unary_tensor_op" && name != "darwinn.dive_ref_cwise")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -6777,8 +6775,7 @@ struct DwcRkhyShapeLegalizationPassPass
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.rkhy_compute_op" &&
           name != "darwinn.rkhy_unary_compute_op" &&
-          name != "darwinn.rkhy_depth_to_space_op" &&
-          name != "darwinn.rkhy_residual_add_op")
+          name != "darwinn.rkhy_depth_to_space_op")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
