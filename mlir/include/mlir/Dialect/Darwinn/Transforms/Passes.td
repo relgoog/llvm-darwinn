@@ -954,7 +954,7 @@ def DwcInterpolateLoweringPassPass : Pass<"interpolate-lowering-pass", "func::Fu
   }];
 }
 
-def DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPass : Pass<"is-not-immutable-try-removing-mutable-variables-in-your-model-since-mutable-variables-are-currently-not-supported-through-this-converter", "func::FuncOp"> {
+def DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPass : Pass<"is not immutable, try removing mutable variables in your model since mutable variables are currently not supported through this converter", "func::FuncOp"> {
   let summary = "DWC pass is-not-immutable-try-removing-mutable-variables-in-your-model-since-mutable-variables-are-currently-not-supported-through-this-converter";
   let description = [{
     Seen at 0xdac290 in task3_passes.tsv, this pass stamps every non-function op with a pass-named
@@ -1037,7 +1037,7 @@ def DwcLegalizeShapeOpsPass : Pass<"legalize-shape-ops", "func::FuncOp"> {
   }];
 }
 
-def DwcLegalizeTestUsingLayerirFlowPass : Pass<"legalize-test-using-layerir-flow", "func::FuncOp"> {
+def DwcLegalizeTestUsingLayerirFlowPass : Pass<"legalize test using layerir flow", "func::FuncOp"> {
   let summary = "DWC pass legalize-test-using-layerir-flow";
   let description = [{
     Seen at 0xd61f43 in task3_passes.tsv, this pass folds same-type one-operand one-result
@@ -1187,7 +1187,7 @@ def DwcMidToLowLevelLoweringPass : Pass<"mid-to-low-level-lowering", "func::Func
   }];
 }
 
-def DwcMlirDarwinnComputeEnginePass : Pass<"mlir-darwinn-compute-engine", "func::FuncOp"> {
+def DwcMlirDarwinnComputeEnginePass : Pass<"::mlir::darwinn::compute::Engine", "func::FuncOp"> {
   let summary = "DWC pass mlir-darwinn-compute-engine";
   let description = [{
     Seen at 0xe03654 in task3_passes.tsv, this pass folds same-type one-operand one-result
@@ -1197,7 +1197,7 @@ def DwcMlirDarwinnComputeEnginePass : Pass<"mlir-darwinn-compute-engine", "func:
   }];
 }
 
-def DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass : Pass<"only-denseelementsattr-are-supported-for-constant-lowering", "func::FuncOp"> {
+def DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass : Pass<"Only DenseElementsAttr are supported for constant lowering", "func::FuncOp"> {
   let summary = "DWC pass only-denseelementsattr-are-supported-for-constant-lowering";
   let description = [{
     Seen at 0xddee55 in task3_passes.tsv, this pass lowers arith.constant and darwinn.constant_generator
@@ -1223,7 +1223,7 @@ def DwcParameterCachingDiveProgramPass : Pass<"parameter-caching-dive-program", 
   }];
 }
 
-def DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass : Pass<"platforms-darwinn-code-generator-entry-score-type", "func::FuncOp"> {
+def DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass : Pass<"platforms.darwinn.code_generator.Entry.Score.type", "func::FuncOp"> {
   let summary = "DWC pass platforms-darwinn-code-generator-entry-score-type";
   let description = [{
     Seen at 0xdf68e2 in task3_passes.tsv, this pass folds same-type one-operand one-result `func`
@@ -1232,7 +1232,7 @@ def DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass : Pass<"platforms-darwinn
   }];
 }
 
-def DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPass : Pass<"platforms-darwinn-compiler-probeinstrumentationlocation-constraints-functions", "func::FuncOp"> {
+def DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPass : Pass<"platforms.darwinn.compiler.ProbeInstrumentationLocation.Constraints.functions", "func::FuncOp"> {
   let summary = "DWC pass platforms-darwinn-compiler-probeinstrumentationlocation-constraints-functions";
   let description = [{
     Seen at 0xd87375 in task3_passes.tsv, this pass folds same-type one-operand one-result `func`
@@ -1397,7 +1397,7 @@ def DwcShardingUsingDivePass : Pass<"sharding-using-dive", "func::FuncOp"> {
   }];
 }
 
-def DwcSkippingFoldOfFloatConvertPass : Pass<"skipping-fold-of-float-convert", "func::FuncOp"> {
+def DwcSkippingFoldOfFloatConvertPass : Pass<"skipping fold of float convert", "func::FuncOp"> {
   let summary = "DWC pass skipping-fold-of-float-convert";
   let description = [{
     Seen at 0xd68cda in task3_passes.tsv, this pass runs applyLocalConvertLowering, folding same-type
@@ -1638,7 +1638,7 @@ def DwcLowerCopySlicePass : Pass<"lower-copy-slice", "func::FuncOp"> {
   }];
 }
 
-def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla-cpu-use-new-xtile-lowering", "func::FuncOp"> {
+def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
     Seen at 0xdded02 in task3_passes.tsv, this pass applies populateLowerCopySlicePatterns greedily and
