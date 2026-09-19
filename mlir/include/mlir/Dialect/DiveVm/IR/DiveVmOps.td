@@ -934,7 +934,7 @@ def DiveVm_HeapSizeBytesOp : DiveVm_Op<"heap_size_bytes"> {
 def DiveVm_HibGatherEditOp : DiveVm_Op<"hib_gather_edit"> {
   let summary = "DiveVM hib_gather_edit operation.";
   let description = [{
-    Verifier requires at least 2 operands. No callee symbol for dive_vm.hib_gather_edit evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier requires at least 2 operands. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.hib_gather_edit to DiveVm_HIBGatherEditE32, evidenced as a defined RISC-V vector function in the embedded vm_utility bitcode modules. No darwinn lowering forwarding to it evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
