@@ -236,7 +236,7 @@ func.func @test_generic_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_dot
 func.func @test_generic_dot(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_dot
-  %0 = "dwc.generic_dot"(%arg0) {activation_function = "x", batch_dim_count = 1 : i64, contracting_dim_count = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_dot"(%arg0) {activation_function = #dwc.activation_function<NONE>, batch_dim_count = 1 : i64, contracting_dim_count = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -260,7 +260,7 @@ func.func @test_logistic(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: matrix_multiply
 func.func @test_matrix_multiply(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.matrix_multiply
-  %0 = "dwc.matrix_multiply"(%arg0) {activation_function = "x", transpose_rhs = true} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.matrix_multiply"(%arg0) {activation_function = #dwc.activation_function<NONE>, transpose_rhs = true} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -436,7 +436,7 @@ func.func @test_sin(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: slice
 func.func @test_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.slice
-  %0 = "dwc.slice"(%arg0) {in_begin = "x", in_size = "x", mode = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.slice"(%arg0) {in_begin = 0 : i64, in_size = 4 : i64, mode = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -460,7 +460,7 @@ func.func @test_sqrt(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: subtract
 func.func @test_subtract(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.subtract
-  %0 = "dwc.subtract"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.subtract"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

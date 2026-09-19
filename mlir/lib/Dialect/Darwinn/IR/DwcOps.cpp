@@ -215,6 +215,14 @@ LogicalResult dwc::ConvolutionV2Op::verify() {
     return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
   if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
     return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_dilation_rate")))
+    return (*this)->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_stride")))
+    return (*this)->emitOpError("attribute 'x_stride' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_dilation_rate")))
+    return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
+    return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
   return success();
 }
 
@@ -302,6 +310,16 @@ LogicalResult dwc::DepthwiseConvolutionV2Op::verify() {
     return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
   if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
     return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("depth_multiplier")))
+    return (*this)->emitOpError("attribute 'depth_multiplier' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_dilation_rate")))
+    return (*this)->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_stride")))
+    return (*this)->emitOpError("attribute 'x_stride' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_dilation_rate")))
+    return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
+    return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
   return success();
 }
 
@@ -504,6 +522,8 @@ LogicalResult dwc::GenericDotOp::verify() {
     return (*this)->emitOpError("attribute 'batch_dim_count' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("contracting_dim_count")))
     return (*this)->emitOpError("attribute 'contracting_dim_count' expects IntegerAttr");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -544,6 +564,8 @@ LogicalResult dwc::MatrixMultiplyOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.matrix_multiply' to have attribute 'transpose_rhs'");
   if (!llvm::isa<BoolAttr>((*this)->getAttr("transpose_rhs")))
     return (*this)->emitOpError("attribute 'transpose_rhs' expects BoolAttr");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -879,6 +901,12 @@ LogicalResult dwc::SliceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.slice' to have attribute 'in_size'");
   if (!(*this)->hasAttr("mode"))
     return (*this)->emitOpError("expected op 'dwc.slice' to have attribute 'mode'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("in_begin")))
+    return (*this)->emitOpError("attribute 'in_begin' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("in_size")))
+    return (*this)->emitOpError("attribute 'in_size' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
+    return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
   return success();
 }
 
@@ -916,10 +944,11 @@ LogicalResult dwc::SqrtOp::verify() {
   return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
 
-
 LogicalResult dwc::SubtractOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.subtract' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -992,6 +1021,18 @@ LogicalResult dwc::TransposedConvolutionOp::verify() {
     return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
   if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
     return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_dilation_rate")))
+    return (*this)->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_out_dim")))
+    return (*this)->emitOpError("attribute 'x_out_dim' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_stride")))
+    return (*this)->emitOpError("attribute 'x_stride' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_dilation_rate")))
+    return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_out_dim")))
+    return (*this)->emitOpError("attribute 'y_out_dim' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
+    return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
   return success();
 }
 
