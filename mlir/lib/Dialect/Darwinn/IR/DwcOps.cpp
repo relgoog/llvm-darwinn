@@ -515,6 +515,9 @@ LogicalResult dwc::GenericConstantOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_constant' to have attribute 'value'");
   if (!llvm::isa<ElementsAttr>((*this)->getAttr("value")))
     return (*this)->emitOpError("attribute 'value' expects ElementsAttr");
+  auto shaped = llvm::dyn_cast<ShapedType>(llvm::cast<ElementsAttr>((*this)->getAttr("value")).getType());
+  if (!shaped || !shaped.hasRank() || shaped.getRank() < 1)
+    return (*this)->emitOpError("attribute 'value' expects constant vector/tensor");
   return success();
 }
 
