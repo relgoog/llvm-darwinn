@@ -1714,6 +1714,20 @@ def DwcPreemptionPointsInsertionPass : Pass<"preemption-points-insertion", "func
   }];
 }
 
+def DwcLateSimpleShardingPass : Pass<"late-simple-sharding", "func::FuncOp"> {
+  let summary = "DWC pass late-simple-sharding";
+  let description = [{
+    Blob-evidenced lisa pass. Late simple sharding. Applies simple sharding late after slicing converges.
+  }];
+}
+
+def DwcRedistributeOptimizationPass : Pass<"redistribute-optimization", "func::FuncOp"> {
+  let summary = "DWC pass redistribute-optimization";
+  let description = [{
+    Blob-evidenced lisa pass. Redistribute optimization. Optimizes redistribute ops after sharding.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

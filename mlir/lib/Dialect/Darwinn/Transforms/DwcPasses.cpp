@@ -110,6 +110,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCOPREORDERINGFORSTREAMINGPASS
 #define GEN_PASS_DEF_DWCPARAMETERREORDERINGPASS
 #define GEN_PASS_DEF_DWCPREEMPTIONPOINTSINSERTIONPASS
+#define GEN_PASS_DEF_DWCLATESIMPLESHARDINGPASS
+#define GEN_PASS_DEF_DWCREDISTRIBUTEOPTIMIZATIONPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8247,6 +8249,34 @@ struct DwcPreemptionPointsInsertionPass
       if (op->getNumResults() == 0)
         return;
       op->setAttr("dwc.preemption_point", IntegerAttr::get(IntegerType::get(&getContext(), 32), points++));
+    });
+  }
+};
+
+struct DwcLateSimpleShardingPass
+    : public darwinn::impl::DwcLateSimpleShardingPassBase<DwcLateSimpleShardingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() != 1)
+        return;
+      op->setAttr("dwc.sharded", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcRedistributeOptimizationPass
+    : public darwinn::impl::DwcRedistributeOptimizationPassBase<DwcRedistributeOptimizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.sharded"))
+        return;
+      op->setAttr("dwc.redistribute_optimized", UnitAttr::get(&getContext()));
     });
   }
 };
