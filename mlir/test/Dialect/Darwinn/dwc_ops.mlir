@@ -140,7 +140,7 @@ func.func @test_divide(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: dynamic_slice
 func.func @test_dynamic_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.dynamic_slice
-  %0 = "dwc.dynamic_slice"(%arg0) {mode = 0 : i64, read_location = "x", slice_size = 4 : i64} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.dynamic_slice"(%arg0) {mode = 0 : i64, read_location = #dwc.memory_location<UNKNOWN>, slice_size = 4 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -148,7 +148,7 @@ func.func @test_dynamic_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: dynamic_update_slice
 func.func @test_dynamic_update_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.dynamic_update_slice
-  %0 = "dwc.dynamic_update_slice"(%arg0) {mode = 0 : i64, write_location = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.dynamic_update_slice"(%arg0) {mode = 0 : i64, write_location = #dwc.memory_location<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -212,7 +212,7 @@ func.func @test_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_compute
 func.func @test_generic_compute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_compute
-  %0 = "dwc.generic_compute"(%arg0) {activation_function = #dwc.activation_function<NONE>, indexing_maps = [], linear_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_compute"(%arg0) {activation_function = #dwc.activation_function<NONE>, indexing_maps = [], linear_function = #dwc.linear_function_type<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

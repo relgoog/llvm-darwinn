@@ -203,6 +203,19 @@ def Dwc_PaddingEnum : Dwc_I32Enum<
     Dwc_PaddingNone
   ]>;
 def Dwc_PaddingAttr : Dwc_I32EnumAttr<"padding", Dwc_PaddingEnum>;
+def Dwc_MemoryLocationUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_MemoryLocationEnum : Dwc_I32Enum<
+  "MemoryLocation", "DWC memory location", [
+    Dwc_MemoryLocationUnknown
+  ]>;
+def Dwc_MemoryLocationAttr : Dwc_I32EnumAttr<"memory_location", Dwc_MemoryLocationEnum>;
+
+def Dwc_LinearFunctionTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_LinearFunctionTypeEnum : Dwc_I32Enum<
+  "LinearFunctionType", "DWC linear function type", [
+    Dwc_LinearFunctionTypeUnknown
+  ]>;
+def Dwc_LinearFunctionTypeAttr : Dwc_I32EnumAttr<"linear_function_type", Dwc_LinearFunctionTypeEnum>;
 
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<

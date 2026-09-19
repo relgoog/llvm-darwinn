@@ -324,6 +324,8 @@ LogicalResult dwc::DynamicSliceOp::verify() {
     return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("slice_size")))
     return (*this)->emitOpError("attribute 'slice_size' expects IntegerAttr");
+  if (!llvm::isa<MemoryLocationAttr>((*this)->getAttr("read_location")))
+    return (*this)->emitOpError("attribute 'read_location' expects MemoryLocationAttr");
   return success();
 }
 
@@ -334,6 +336,8 @@ LogicalResult dwc::DynamicUpdateSliceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.dynamic_update_slice' to have attribute 'write_location'");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
     return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
+  if (!llvm::isa<MemoryLocationAttr>((*this)->getAttr("write_location")))
+    return (*this)->emitOpError("attribute 'write_location' expects MemoryLocationAttr");
   return success();
 }
 
@@ -440,6 +444,8 @@ LogicalResult dwc::GenericComputeOp::verify() {
     return (*this)->emitOpError("attribute 'indexing_maps' expects ArrayAttr");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<LinearFunctionTypeAttr>((*this)->getAttr("linear_function")))
+    return (*this)->emitOpError("attribute 'linear_function' expects LinearFunctionTypeAttr");
   return success();
 }
 
