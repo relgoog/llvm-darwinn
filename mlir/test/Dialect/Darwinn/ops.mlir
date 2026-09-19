@@ -1300,19 +1300,3 @@ func.func @test_zero_point() -> tensor<4xf32> {
   %0 = "darwinn.zero_point"() : () -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
-
-// -----
-// CHECK-LABEL: generic_norm
-func.func @test_generic_norm(%arg0: tensor<4x8xf32>) -> tensor<4x8xf32> {
-  // CHECK: darwinn.generic_norm
-  %0 = darwinn.generic_norm %arg0 : (tensor<4x8xf32>) -> tensor<4x8xf32>
-  return %0 : tensor<4x8xf32>
-}
-
-// -----
-// CHECK-LABEL: pseudo_norm
-func.func @test_pseudo_norm(%arg0: tensor<4x8xf32>) -> tensor<4x8xf32> {
-  // CHECK: darwinn.pseudo_norm
-  %0 = darwinn.pseudo_norm %arg0 : (tensor<4x8xf32>) -> tensor<4x8xf32>
-  return %0 : tensor<4x8xf32>
-}

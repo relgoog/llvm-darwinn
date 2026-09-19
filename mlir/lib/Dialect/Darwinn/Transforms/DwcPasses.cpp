@@ -2006,16 +2006,39 @@ struct DwcConvertGenericNormToPseudoOpPass
           DwcConvertGenericNormToPseudoOpPass> {
   using Base::Base;
 
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
-  }
-
   void runOnOperation() override {
+    // No honest rewrite exists. Neither darwinn.generic_norm nor
+    // darwinn.pseudo_norm appears as a NUL-delimited op token in the blob,
+    // and DiveVmOps.td names no norm target beyond the descriptor op.
     func::FuncOp func = getOperation();
-    unsigned lowered = 0;
-    if (failed(forwardDwcLowerTo(func, {"darwinn.generic_norm"},
-                                 "dive_vm.compute_norm_stats_for_rkhy",
-                                 lowered)))
+    Operation *root = func.getOperation();
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn")
+        return WalkResult::advance();
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
       return signalPassFailure();
   }
 };

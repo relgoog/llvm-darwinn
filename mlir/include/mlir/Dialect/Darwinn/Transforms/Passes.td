@@ -253,8 +253,9 @@ def DwcConvertFuncToLlvmPass : Pass<"dwc-convert-func-to-llvm", "func::FuncOp"> 
 def DwcConvertGenericNormToPseudoOpPass : Pass<"convert-generic-norm-to-pseudo-op", "func::FuncOp"> {
   let summary = "DWC pass convert-generic-norm-to-pseudo-op";
   let description = [{
-    Seen at 0xdb45be in task3_passes.tsv, this pass forwards darwinn.generic_norm to dive_vm.compute_norm_stats_for_rkhy
-    with forwardDwcLowerTo, carrying attrs across. The dive_vm target carries 3 blob xrefs.
+    Seen at 0xdb45be in task3_passes.tsv, this pass folds same-type one-operand one-result darwinn
+    dialect ops identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over
+    remaining darwinn dialect ops and fails the pass on any failure.
   }];
 }
 
