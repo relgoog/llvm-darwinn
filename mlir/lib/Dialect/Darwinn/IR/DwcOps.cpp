@@ -676,12 +676,21 @@ LogicalResult dwc::SelectOp::verify() {
   auto integer0 = llvm::dyn_cast<IntegerType>(element0);
   if (!integer0 || !integer0.isSignless() || integer0.getWidth() != 1)
     return (*this)->emitOpError("operand 0 expects 1-bit signless integer");
-  if (auto ranked0 = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
-    if (!ranked0.hasStaticShape())
-      return (*this)->emitOpError("operand 0 expects statically shaped tensor");
+  if (!llvm::isa<RankedTensorType>(getInputs()[0].getType()))
+    return (*this)->emitOpError("operand 0 expects statically shaped tensor");
+  if (!llvm::cast<RankedTensorType>(getInputs()[0].getType()).hasStaticShape())
+    return (*this)->emitOpError("operand 0 expects statically shaped tensor");
+  auto tensor1 = llvm::dyn_cast<TensorType>(getInputs()[1].getType());
+  Type element1 = tensor1 ? tensor1.getElementType() : getInputs()[1].getType();
+  if (llvm::isa<Float32Type, Float64Type>(element1))
     return success();
+  if (auto integer1 = llvm::dyn_cast<IntegerType>(element1)) {
+    if ((integer1.isSignless() || integer1.isUnsigned()) && (integer1.getWidth() == 8 || integer1.getWidth() == 16 || integer1.getWidth() == 32 || integer1.getWidth() == 64))
+      return success();
+    if (integer1.isSignless() && integer1.getWidth() == 1)
+      return success();
   }
-  return (*this)->emitOpError("operand 0 expects statically shaped tensor");
+  return (*this)->emitOpError("operand 1 expects 8/16/32/64-bit int or 32/64-bit float");
 }
 
 LogicalResult dwc::SignOp::verify() {
