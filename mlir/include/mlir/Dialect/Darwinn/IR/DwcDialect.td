@@ -150,4 +150,11 @@ def Dwc_CwiseOpTypeEnum : Dwc_I32Enum<
   ]>;
 def Dwc_CwiseOpTypeAttr : Dwc_I32EnumAttr<"cwise_op_type", Dwc_CwiseOpTypeEnum>;
 
+def Dwc_SimpleActivationFunctionNone : I32EnumAttrCase<"None", 0, "NONE">;
+def Dwc_SimpleActivationFunctionEnum : Dwc_I32Enum<
+  "SimpleActivationFunction", "DWC simple activation function", [
+    Dwc_SimpleActivationFunctionNone
+  ]>;
+def Dwc_SimpleActivationFunctionAttr : Dwc_I32EnumAttr<"simple_activation_function", Dwc_SimpleActivationFunctionEnum>;
+
 #endif // DWC_DIALECT
