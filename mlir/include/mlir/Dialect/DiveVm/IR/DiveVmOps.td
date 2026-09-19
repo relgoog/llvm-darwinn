@@ -94,7 +94,7 @@ def DiveVm_AddressOfOutputActivationOp : DiveVm_Op<"address_of_output_activation
 def DiveVm_AddressOfParameterOp : DiveVm_Op<"address_of_parameter"> {
   let summary = "DiveVM address_of_parameter operation.";
   let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.address_of_parameter evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.address_of_parameter to DiveVm_GetAddressOfParameterRegion, the same embedded wrapper as dive_vm.address_of_parameter_region with 3 blob xrefs each. No darwinn lowering forwarding to it evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

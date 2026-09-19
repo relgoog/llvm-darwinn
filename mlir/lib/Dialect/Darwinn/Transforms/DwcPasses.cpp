@@ -1462,6 +1462,8 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveVm_GetAddressOfOutputActivation";
       else if (op->getName().getStringRef() == "dive_vm.address_of_parameter_region")
         callee = "DiveVm_GetAddressOfParameterRegion";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter")
+        callee = "DiveVm_GetAddressOfParameterRegion";
       else if (op->getName().getStringRef() == "dive_vm.address_of_scratch")
         callee = "DiveVm_GetAddressOfScratch";
       else if (op->getName().getStringRef() == "dive_vm.translate_sram_address" ||
@@ -1748,6 +1750,8 @@ struct DwcConvertDiveVmToMemrefPass
       else if (op->getName().getStringRef() == "dive_vm.address_of_output_activation")
         callee = "DiveVm_GetAddressOfOutputActivation";
       else if (op->getName().getStringRef() == "dive_vm.address_of_parameter_region")
+        callee = "DiveVm_GetAddressOfParameterRegion";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter")
         callee = "DiveVm_GetAddressOfParameterRegion";
       else if (op->getName().getStringRef() == "dive_vm.address_of_scratch")
         callee = "DiveVm_GetAddressOfScratch";
