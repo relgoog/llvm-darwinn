@@ -438,7 +438,11 @@ LogicalResult dwc::RescalingOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'output_activation_per_z_out_scales'");
   if (!(*this)->hasAttr("per_z_out_scales_padding"))
     return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'per_z_out_scales_padding'");
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type>(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects 16-bit float or bfloat16");
 }
 
 LogicalResult dwc::ReshapeOp::verify() {

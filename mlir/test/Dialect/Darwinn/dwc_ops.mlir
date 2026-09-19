@@ -354,10 +354,10 @@ func.func @test_remainder(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: rescaling
-func.func @test_rescaling(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_rescaling(%arg0: tensor<4xf16>) -> tensor<4xf16> {
   // CHECK: dwc.rescaling
-  %0 = "dwc.rescaling"(%arg0) {activation_function = "x", output_activation_per_z_out_scales = "x", per_z_out_scales_padding = "x"} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.rescaling"(%arg0) {activation_function = "x", output_activation_per_z_out_scales = "x", per_z_out_scales_padding = "x"} : (tensor<4xf16>) -> tensor<4xf16>
+  return %0 : tensor<4xf16>
 }
 
 // -----
