@@ -191,7 +191,7 @@ def Dwc_CumulativeOp : Dwc_Op<"cumulative"> {
 def Dwc_CwiseOp : Dwc_Op<"cwise"> {
   let summary = "DWC cwise operation.";
   let description = [{
-    Exactly 2 operands per blob operand constraints. Requires `activation_function`, `op_type`.
+    Exactly 2 non-0-ranked tensor operands per the blob constraints. Requires `activation_function`, `op_type`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

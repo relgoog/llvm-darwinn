@@ -186,6 +186,14 @@ LogicalResult dwc::CwiseOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.cwise' to have attribute 'activation_function'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.cwise' to have attribute 'op_type'");
+  for (unsigned index = 0; index < 2; ++index) {
+    if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[index].getType())) {
+      if (ranked.getRank() == 0)
+        return (*this)->emitOpError("operand ") << index << " expects non-0-ranked tensor";
+      continue;
+    }
+    return (*this)->emitOpError("operand ") << index << " expects ranked tensor";
+  }
   return success();
 }
 
