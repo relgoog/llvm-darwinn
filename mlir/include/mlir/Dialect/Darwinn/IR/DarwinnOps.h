@@ -22,6 +22,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Darwinn/IR/DarwinnOpsDialect.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DwcOpsDialect.h.inc"
 
 #define GET_ATTRDEF_CLASSES
 #include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.h.inc"
@@ -31,5 +32,8 @@
 
 #define GET_OP_CLASSES
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h.inc"
+
+#define GET_OP_CLASSES
+#include "mlir/Dialect/Darwinn/IR/DwcOps.h.inc"
 
 #endif // MLIR_DIALECT_DARWINN_IR_DARWINNOPS_H

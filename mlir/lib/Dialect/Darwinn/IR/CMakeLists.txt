@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRDarwinnDialect
 
   DEPENDS
   MLIRDarwinnOpsIncGen
+  MLIRDwcOpsIncGen
   MLIRDarwinnAttributesIncGen
 
   LINK_LIBS PUBLIC

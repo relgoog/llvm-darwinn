@@ -152,6 +152,7 @@ void mlir::registerAllDialects(DialectRegistry &registry) {
                   spirv::SPIRVDialect,
                   tensor::TensorDialect,
                   darwinn::DarwinnDialect,
+                  dwc::DwcDialect,
                   dive_vm::DiveVmDialect,
                   edgetpu::EdgeTpuDialect,
                   tosa::TosaDialect,

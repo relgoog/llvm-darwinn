@@ -1,5 +1,7 @@
 add_mlir_dialect(DarwinnOps darwinn)
 add_mlir_doc(DarwinnOps DarwinnOps Dialects/ -gen-op-doc -dialect=darwinn)
+add_mlir_dialect(DwcOps dwc)
+add_mlir_doc(DwcOps DwcOps Dialects/ -gen-op-doc -dialect=dwc)
 
 set(LLVM_TARGET_DEFINITIONS DarwinnDialect.td)
 mlir_tablegen(DarwinnAttributes.h.inc -gen-attrdef-decls -attrdefs-dialect=darwinn)
