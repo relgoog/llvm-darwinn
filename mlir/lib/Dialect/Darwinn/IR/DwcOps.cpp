@@ -351,6 +351,8 @@ LogicalResult dwc::DivideOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.divide' to have attribute 'activation_function'");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::Relu)
+    return (*this)->emitOpError("attribute 'activation_function' expects RELU");
   return success();
 }
 

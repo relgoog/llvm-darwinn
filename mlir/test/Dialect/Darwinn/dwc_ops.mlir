@@ -132,7 +132,7 @@ func.func @test_depthwise_convolution_v2(%arg0: tensor<4xf32>) -> tensor<4xf32> 
 // CHECK-LABEL: divide
 func.func @test_divide(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.divide
-  %0 = "dwc.divide"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.divide"(%arg0) {activation_function = #dwc.activation_function<RELU>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
