@@ -1512,9 +1512,10 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.reduction")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10TopKVectorEPfS3_Piiii";
-      else {
+      else if (op->getName().getStringRef() == "dive_vm.reduction") {
+        op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
+        return signalPassFailure();
+      } else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
         return signalPassFailure();
       }
@@ -1621,6 +1622,16 @@ struct DwcConvertDiveVmToMemrefPass
         continue;
       }
       const char *callee = nullptr;
+      if (op->getName().getStringRef() == "dive_vm.const" ||
+          op->getName().getStringRef() == "dive_vm.const_bytes") {
+        if (!op->use_empty()) {
+          op->emitError("dive_vm const carries no LLVM callee, use it or drop it");
+          return signalPassFailure();
+        }
+        op->erase();
+        ++lowered;
+        continue;
+      }
       if (op->getName().getStringRef() == "dive_vm.add")
         callee = "DiveRuntime_Log";
       else if (op->getName().getStringRef() == "dive_vm.copy")
@@ -1770,7 +1781,10 @@ struct DwcConvertDiveVmToMemrefPass
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
-      else {
+      else if (op->getName().getStringRef() == "dive_vm.reduction") {
+        op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
+        return signalPassFailure();
+      } else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-memref");
         return signalPassFailure();
       }

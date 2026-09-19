@@ -1564,7 +1564,7 @@ def DiveVm_ReadGnStatsOp : DiveVm_Op<"read_gn_stats"> {
 def DiveVm_ReductionOp : DiveVm_Op<"reduction"> {
   let summary = "DiveVM reduction operation.";
   let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm maps dive_vm.reduction to TopKVector, matching the reduce_internal GetNextIndex plus ArgmaxNextIndex index iteration evidenced in all_pseudocode.json. No darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. No callee symbol for dive_vm.reduction evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced. The TopKVector symbol takes (float*, float*, int*, int, int, int), not op operands, so the switches reject with a named signature error.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
