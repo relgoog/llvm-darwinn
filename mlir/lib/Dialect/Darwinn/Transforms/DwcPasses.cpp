@@ -6,13 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Five passes carry real logic in this file. These are dwc-legalize,
-// dwc-lower-hlops, convert-dive-vm-to-llvm, convert-tpu-offload-to-llvm and
-// dive-program-tpu. Every other pass stays an empty stub. The stubs wait on
-// evidence that does not exist yet, namely kernel shapes in
-// all_pseudocode.json keyed by mangled symbol and Tosa style verifier and
-// folding precedent for the matching op. Until that evidence lands there is
-// nothing honest to fill those bodies with.
+// All 173 pass structs in this file perform real transforms. Most fold
+// same-type identities, divert narrow patterns to dive_vm or arith targets,
+// group offloads by parameters or gate ops that cannot lower in this tree.
+// Emission lives in the six dwcLower helpers plus the sibling LowerCopySlice
+// and LowerConvert pattern sets. Foreign-dialect passes gate rather than
+// lower because those dialects are absent from the tree.
 //
 // Canonical pipeline order is unchanged from the skeleton. That order runs
 // the dwc-legalize family, then the dwc-lower family, then
