@@ -647,7 +647,7 @@ def Dwc_SelectOp : Dwc_Op<"select"> {
 def Dwc_SignOp : Dwc_Op<"sign"> {
   let summary = "DWC sign operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints. Requires `preserve_negative_zero`.
+    Exactly 1 i1, i8, i16, i32, i64, f16, bf16, or f32 operand per the blob constraints excluding quant types. Requires `preserve_negative_zero`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
