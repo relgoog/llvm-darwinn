@@ -87,6 +87,9 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCCONVERTTPUOFFLOADTOLLVMSYMBOLPASS
 #define GEN_PASS_DEF_DWCCOPYOPLOWERINGPASS
 #define GEN_PASS_DEF_DWCCOPYREFERENCEPASS
+#define GEN_PASS_DEF_DWCCANONICALIZATIONPASS
+#define GEN_PASS_DEF_DWCCOALLOCATIONPASS
+#define GEN_PASS_DEF_DWCCOUNTINGVARIABLECLEANUPPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -7886,6 +7889,50 @@ struct DwcCopyReferencePass
         return;
       op->setAttr("dwc.copy_reference", UnitAttr::get(&getContext()));
     });
+  }
+};
+
+struct DwcCanonicalizationPass
+    : public darwinn::impl::DwcCanonicalizationPassBase<DwcCanonicalizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    RewritePatternSet patterns(&getContext());
+    func::FuncOp func = getOperation();
+    (void)func;
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+      return signalPassFailure();
+  }
+};
+
+struct DwcCoallocationPass
+    : public darwinn::impl::DwcCoallocationPassBase<DwcCoallocationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned group = 0;
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.coallocation_group", IntegerAttr::get(IntegerType::get(&getContext(), 32), group++));
+    });
+  }
+};
+
+struct DwcCountingVariableCleanupPass
+    : public darwinn::impl::DwcCountingVariableCleanupPassBase<DwcCountingVariableCleanupPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef().contains("counting_variable") && op->use_empty())
+        dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 

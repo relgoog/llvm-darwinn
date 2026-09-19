@@ -1550,6 +1550,30 @@ def DwcCopyReferencePass : Pass<"copy-reference", "func::FuncOp"> {
   }];
 }
 
+def DwcCanonicalizationPass : Pass<"canonicalization", "func::FuncOp"> {
+  let summary = "DWC pass canonicalization";
+  let description = [{
+    Blob-evidenced lisa CanonicalizationPass. Runs canonicalization patterns
+    over darwinn ops inside the function.
+  }];
+}
+
+def DwcCoallocationPass : Pass<"coallocation", "func::FuncOp"> {
+  let summary = "DWC pass coallocation";
+  let description = [{
+    Blob-evidenced lisa CoallocationPass. Assigns coallocation groups to
+    sibling buffers shared across producer consumer edges.
+  }];
+}
+
+def DwcCountingVariableCleanupPass : Pass<"counting-variable-cleanup", "func::FuncOp"> {
+  let summary = "DWC pass counting-variable-cleanup";
+  let description = [{
+    Blob-evidenced lisa CountingVariableCleanupPass. Removes dead counting
+    variable ops left over after slicing and unrolling.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
