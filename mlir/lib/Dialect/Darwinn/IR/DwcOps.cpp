@@ -169,6 +169,14 @@ LogicalResult dwc::ConvolutionOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'y_dilation_rate'");
   if (!(*this)->hasAttr("y_stride"))
     return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'y_stride'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_dilation_rate")))
+    return (*this)->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_stride")))
+    return (*this)->emitOpError("attribute 'x_stride' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_dilation_rate")))
+    return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
+    return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
   return success();
 }
 
@@ -390,6 +398,8 @@ LogicalResult dwc::GenericComputeOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_compute' to have attribute 'indexing_maps'");
   if (!(*this)->hasAttr("linear_function"))
     return (*this)->emitOpError("expected op 'dwc.generic_compute' to have attribute 'linear_function'");
+  if (!llvm::isa<ArrayAttr>((*this)->getAttr("indexing_maps")))
+    return (*this)->emitOpError("attribute 'indexing_maps' expects ArrayAttr");
   return success();
 }
 
@@ -742,6 +752,8 @@ LogicalResult dwc::SignOp::verify() {
     return emitOpError("expects 1 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("preserve_negative_zero"))
     return (*this)->emitOpError("expected op 'dwc.sign' to have attribute 'preserve_negative_zero'");
+  if (!llvm::isa<BoolAttr>((*this)->getAttr("preserve_negative_zero")))
+    return (*this)->emitOpError("attribute 'preserve_negative_zero' expects BoolAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))

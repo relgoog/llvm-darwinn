@@ -84,7 +84,7 @@ func.func @test_const(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: convolution
 func.func @test_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.convolution
-  %0 = "dwc.convolution"(%arg0) {activation_function = "x", cell_operation = "x", pad = "x", x_dilation_rate = "x", x_stride = "x", y_dilation_rate = "x", y_stride = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.convolution"(%arg0) {activation_function = "x", cell_operation = "x", pad = "x", x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -212,7 +212,7 @@ func.func @test_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_compute
 func.func @test_generic_compute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_compute
-  %0 = "dwc.generic_compute"(%arg0) {activation_function = "x", indexing_maps = "x", linear_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_compute"(%arg0) {activation_function = "x", indexing_maps = [], linear_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -420,7 +420,7 @@ func.func @test_select(%arg0: tensor<4xi1>, %arg1: tensor<4xf32>) -> tensor<4xf3
 // CHECK-LABEL: sign
 func.func @test_sign(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.sign
-  %0 = "dwc.sign"(%arg0) {preserve_negative_zero = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.sign"(%arg0) {preserve_negative_zero = true} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
