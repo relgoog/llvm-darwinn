@@ -34,10 +34,10 @@
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/Transforms/DialectConversion.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Visitors.h"
@@ -1068,6 +1068,11 @@ struct DwcConvertArithToLlvmPass
           DwcConvertArithToLlvmPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
+
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
@@ -1085,11 +1090,17 @@ struct DwcConvertCfToLlvmPass
     : public darwinn::impl::DwcConvertCfToLlvmPassBase<DwcConvertCfToLlvmPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<LLVM::LLVMDialect>();
+  }
+
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
     LLVMTypeConverter converter(&getContext());
     cf::populateControlFlowToLLVMConversionPatterns(converter, patterns);
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+    LLVMConversionTarget target(getContext());
+    if (failed(applyPartialConversion(getOperation(), target,
+                                      std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
@@ -1129,6 +1140,10 @@ struct DwcConvertConv1x1ToFcPass
     : public darwinn::impl::DwcConvertConv1x1ToFcPassBase<
           DwcConvertConv1x1ToFcPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -1945,11 +1960,18 @@ struct DwcConvertFuncToLlvmPass
           DwcConvertFuncToLlvmPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
+
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
     LLVMTypeConverter converter(&getContext());
-    populateFuncToLLVMConversionPatterns(converter, patterns);
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+    SymbolTableCollection symbolTables;
+    populateFuncToLLVMConversionPatterns(converter, patterns, &symbolTables);
+    LLVMConversionTarget target(getContext());
+    if (failed(applyPartialConversion(getOperation(), target,
+                                      std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
@@ -2097,6 +2119,10 @@ struct DwcConvertMathToLlvmPass
     : public darwinn::impl::DwcConvertMathToLlvmPassBase<
           DwcConvertMathToLlvmPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
@@ -2299,6 +2325,10 @@ struct DwcConvertSignedIntWithRescalingOpsPass
     : public darwinn::impl::DwcConvertSignedIntWithRescalingOpsPassBase<
           DwcConvertSignedIntWithRescalingOpsPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -2814,6 +2844,7 @@ struct DwcCopyOpLoweringPass
     registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     RewritePatternSet patterns(&getContext());
@@ -2895,6 +2926,10 @@ struct DwcDarwinnBundlingPass
 struct DwcDarwinnConvertPass
     : public darwinn::impl::DwcDarwinnConvertPassBase<DwcDarwinnConvertPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     // darwinn.convert lowers through the cast Fallback kernel shape, same
@@ -3296,6 +3331,10 @@ struct DwcDwcCopyStridedBuffersOnTpuPass
     : public darwinn::impl::DwcDwcCopyStridedBuffersOnTpuPassBase<
           DwcDwcCopyStridedBuffersOnTpuPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -5981,6 +6020,10 @@ struct DwcLowerAllFunctionsPass
 struct DwcLowerAllPadsPass
     : public darwinn::impl::DwcLowerAllPadsPassBase<DwcLowerAllPadsPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
