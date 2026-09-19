@@ -772,6 +772,8 @@ LogicalResult dwc::ReductionOp::verify() {
     return (*this)->emitOpError("attribute 'activation_function' expects SimpleActivationFunctionAttr");
   if (!llvm::isa<ReductionTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects ReductionTypeAttr");
+  if (llvm::cast<SimpleActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != SimpleActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
@@ -802,6 +804,8 @@ LogicalResult dwc::RescalingOp::verify() {
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   if (!llvm::isa<PerZOutScalePaddingAttr>((*this)->getAttr("per_z_out_scales_padding")))
     return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects PerZOutScalePaddingAttr");
+  if (llvm::cast<PerZOutScalePaddingAttr>((*this)->getAttr("per_z_out_scales_padding")).getValue() != PerZOutScalePadding::None)
+    return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects NONE");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type>(element))
