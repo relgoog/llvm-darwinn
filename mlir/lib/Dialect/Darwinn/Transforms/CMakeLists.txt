@@ -15,6 +15,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   MLIRDiveVmDialect
   MLIRFuncDialect
   MLIRFuncToLLVM
+  MLIRLinalgTransforms
   MLIRMathToLLVM
   MLIRMathToLibm
   MLIRPass

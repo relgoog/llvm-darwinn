@@ -30,6 +30,7 @@
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
@@ -1511,6 +1512,8 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.reduction")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10TopKVectorEPfS3_Piiii";
       else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
         return signalPassFailure();
@@ -1995,9 +1998,10 @@ struct DwcConvertLinalgToLoopsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. Loops need the upstream ConvertLinalgToLoops
-    // pass elsewhere in the tree so this pass only accepts linalg ops at
-    // typed shapes.
+    RewritePatternSet patterns(&getContext());
+    linalg::populateLinalgNamedOpsGeneralizationPatterns(patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
@@ -2015,7 +2019,6 @@ struct DwcConvertLinalgToLoopsPass
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
-
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
