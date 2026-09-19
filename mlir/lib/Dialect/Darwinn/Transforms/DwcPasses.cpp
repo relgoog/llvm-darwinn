@@ -122,6 +122,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCWIDEREGISTERREUSEPASS
 #define GEN_PASS_DEF_DWCCEPPSYTHWSVGMLLKWTPASS
 #define GEN_PASS_DEF_DWCDUMPOPSTATSPASS
+#define GEN_PASS_DEF_DWCDETECTPARAMETERSPARSITYPASS
+#define GEN_PASS_DEF_DWCCUSTOMKERNELSHAPEINSTANTIATIONPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8431,6 +8433,34 @@ struct DwcDumpOpStatsPass
       ++count;
     });
     (void)count;
+  }
+};
+
+struct DwcDetectParameterSparsityPass
+    : public darwinn::impl::DwcDetectParameterSparsityPassBase<DwcDetectParameterSparsityPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.const" && op->getName().getStringRef() != "dwc.generic_constant")
+        return;
+      op->setAttr("dwc.sparse_parameter", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcCustomKernelShapeInstantiationPass
+    : public darwinn::impl::DwcCustomKernelShapeInstantiationPassBase<DwcCustomKernelShapeInstantiationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.sparse_parameter"))
+        return;
+      op->setAttr("dwc.kernel_shape_instantiated", UnitAttr::get(&getContext()));
+    });
   }
 };
 

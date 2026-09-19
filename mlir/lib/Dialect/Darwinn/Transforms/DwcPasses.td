@@ -1798,6 +1798,20 @@ def DwcDumpOpStatsPass : Pass<"dump-op-stats", "func::FuncOp"> {
   }];
 }
 
+def DwcDetectParameterSparsityPass : Pass<"detect-parameter-sparsity", "func::FuncOp"> {
+  let summary = "DWC pass detect-parameter-sparsity";
+  let description = [{
+    Blob-evidenced lisa pass. Detect parameter sparsity. Detects sparse parameters for sparsity acceleration.
+  }];
+}
+
+def DwcCustomKernelShapeInstantiationPass : Pass<"custom-kernel-shape-instantiation", "func::FuncOp"> {
+  let summary = "DWC pass custom-kernel-shape-instantiation";
+  let description = [{
+    Blob-evidenced lisa pass. Custom kernel shape instantiation. Instantiates custom kernel shapes from options.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
