@@ -116,6 +116,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDWCLISAFITTERPASS
 #define GEN_PASS_DEF_DWCANNOTATECUSTOMTILINGOPTIONSPASS
 #define GEN_PASS_DEF_DWCLOWERSYNCHRONIZEDOPSTOTENSOROPPASS
+#define GEN_PASS_DEF_DWCMATERIALIZECASTDATATRANSFERPASS
+#define GEN_PASS_DEF_DWCQUANTIZEDTOINTEGERTYPECONVERSIONPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8338,6 +8340,34 @@ struct DwcLowerSynchronizedOpsToTensorOpPass
       if (op->getName().getStringRef() != "darwinn.synchronized_copy_op")
         return;
       op->setAttr("dwc.sync_lowered", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcMaterializeCastDataTransferPass
+    : public darwinn::impl::DwcMaterializeCastDataTransferPassBase<DwcMaterializeCastDataTransferPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.cast_in" && op->getName().getStringRef() != "darwinn.cast_out")
+        return;
+      op->setAttr("dwc.cast_materialized", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcQuantizedToIntegerTypeConversionPass
+    : public darwinn::impl::DwcQuantizedToIntegerTypeConversionPassBase<DwcQuantizedToIntegerTypeConversionPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getDialect() == nullptr || op->getDialect()->getNamespace() != "darwinn")
+        return;
+      op->setAttr("dwc.quant_converted", UnitAttr::get(&getContext()));
     });
   }
 };

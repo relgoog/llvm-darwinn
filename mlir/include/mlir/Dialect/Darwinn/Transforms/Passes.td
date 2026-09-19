@@ -1756,6 +1756,20 @@ def DwcLowerSynchronizedOpsToTensorOpPass : Pass<"lower-synchronized-ops-to-tens
   }];
 }
 
+def DwcMaterializeCastDataTransferPass : Pass<"materialize-cast-data-transfer", "func::FuncOp"> {
+  let summary = "DWC pass materialize-cast-data-transfer";
+  let description = [{
+    Blob-evidenced lisa pass. Materialize cast data transfer. Materializes cast data transfer ops between stages.
+  }];
+}
+
+def DwcQuantizedToIntegerTypeConversionPass : Pass<"quantized-to-integer-type-conversion", "func::FuncOp"> {
+  let summary = "DWC pass quantized-to-integer-type-conversion";
+  let description = [{
+    Blob-evidenced lisa pass. Quantized to integer type conversion. Converts quantized types to integer types.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
