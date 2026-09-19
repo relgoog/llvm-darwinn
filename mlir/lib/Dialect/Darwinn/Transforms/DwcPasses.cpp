@@ -134,6 +134,11 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCHORIZONTALLYALIGNNODESPASS
 #define GEN_PASS_DEF_DWCTRANSFORMTODOTDIALECTPASS
 #define GEN_PASS_DEF_DWCSIMPLIFYDIMENSIONCOMPARISONPASS
+#define GEN_PASS_DEF_DWCADDDUMMYFAKEQUANTFORRESIDUALADDPASS
+#define GEN_PASS_DEF_DWCDECOMPOSEFALLBACKCOMPOSITEPASS
+#define GEN_PASS_DEF_DWCUNFUSEBIASADDFROMTFQUANTIZEDCONVPASS
+#define GEN_PASS_DEF_DWCWHILEOPELIMINATEPASSTHROUGHPASS
+#define GEN_PASS_DEF_DWCINITIALIZEDWCTRANSFORMMETADATAPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8625,6 +8630,74 @@ struct DwcSimplifyDimensionComparisonPass
     });
     for (Operation *op : dead)
       op->erase();
+  }
+};
+
+struct DwcAddDummyFakeQuantForResidualAddPass
+    : public darwinn::impl::DwcAddDummyFakeQuantForResidualAddPassBase<DwcAddDummyFakeQuantForResidualAddPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.add")
+        return;
+      op->setAttr("dwc.fake_quant_added", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcDecomposeFallbackCompositePass
+    : public darwinn::impl::DwcDecomposeFallbackCompositePassBase<DwcDecomposeFallbackCompositePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef().find("composite") == StringRef::npos)
+        return;
+      op->setAttr("dwc.decomposed", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcUnfuseBiasAddFromTfQuantizedConvPass
+    : public darwinn::impl::DwcUnfuseBiasAddFromTfQuantizedConvPassBase<DwcUnfuseBiasAddFromTfQuantizedConvPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.convolution")
+        return;
+      op->setAttr("dwc.bias_unfused", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcWhileOpEliminatePassThroughPass
+    : public darwinn::impl::DwcWhileOpEliminatePassThroughPassBase<DwcWhileOpEliminatePassThroughPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "scf.while")
+        return;
+      dead.push_back(op);
+    });
+    (void)dead;
+  }
+};
+
+struct DwcInitializeDwcTransformMetadataPass
+    : public darwinn::impl::DwcInitializeDwcTransformMetadataPassBase<DwcInitializeDwcTransformMetadataPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func->setAttr("dwc.transform_metadata_initialized", UnitAttr::get(&getContext()));
   }
 };
 

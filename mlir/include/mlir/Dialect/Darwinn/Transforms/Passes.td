@@ -1882,6 +1882,41 @@ def DwcSimplifyDimensionComparisonPass : Pass<"simplify-dimension-comparison", "
   }];
 }
 
+def DwcAddDummyFakeQuantForResidualAddPass : Pass<"add-dummy-fake-quant-for-residual-add", "func::FuncOp"> {
+  let summary = "DWC pass add-dummy-fake-quant-for-residual-add";
+  let description = [{
+    Blob-evidenced darwinn pass. Add dummy fake quant for residual add. Inserts fake quant ops on residual inputs.
+  }];
+}
+
+def DwcDecomposeFallbackCompositePass : Pass<"decompose-fallback-composite", "func::FuncOp"> {
+  let summary = "DWC pass decompose-fallback-composite";
+  let description = [{
+    Blob-evidenced darwinn pass. Decompose fallback composite. Decomposes fallback composites into primitive ops.
+  }];
+}
+
+def DwcUnfuseBiasAddFromTfQuantizedConvPass : Pass<"unfuse-bias-add-from-tf-quantized-conv", "func::FuncOp"> {
+  let summary = "DWC pass unfuse-bias-add-from-tf-quantized-conv";
+  let description = [{
+    Blob-evidenced darwinn pass. Unfuse bias add from quantized conv. Separates fused bias adds.
+  }];
+}
+
+def DwcWhileOpEliminatePassThroughPass : Pass<"while-op-eliminate-pass-through", "func::FuncOp"> {
+  let summary = "DWC pass while-op-eliminate-pass-through";
+  let description = [{
+    Blob-evidenced darwinn pass. While op eliminate pass through. Eliminates pass-through while loop-carried values.
+  }];
+}
+
+def DwcInitializeDwcTransformMetadataPass : Pass<"initialize-dwc-transform-metadata", "func::FuncOp"> {
+  let summary = "DWC pass initialize-dwc-transform-metadata";
+  let description = [{
+    Blob-evidenced darwinn pass. Initialize DWC transform metadata. Stamps transform metadata on the module.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
