@@ -64,8 +64,6 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCCOMPOSITELOWERINGPASS
 #define GEN_PASS_DEF_DWCCONCATMODELCONVERTERPASS
 #define GEN_PASS_DEF_DWCCONCATPROOFCONVERTERPASS
-#define GEN_PASS_DEF_DWCCONVERTARITHTOLLVMPASS
-#define GEN_PASS_DEF_DWCCONVERTCFTOLLVMPASS
 #define GEN_PASS_DEF_DWCCONVERTCONV1X1TOFCPASS
 #define GEN_PASS_DEF_DWCCONVERTDIVEVMTENSORTOLINALGPASS
 #define GEN_PASS_DEF_DWCCONVERTDIVEVMTENSORTOSCFPASS
@@ -75,15 +73,9 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCCONVERTDWCTODIVEVMTENSORPASS
 #define GEN_PASS_DEF_DWCCONVERTDWGTODIVEVMPASS
 #define GEN_PASS_DEF_DWCCONVERTDYNAMICSHAPESCOPETODIVEVMPASS
-#define GEN_PASS_DEF_DWCCONVERTFUNCTOLLVMPASS
 #define GEN_PASS_DEF_DWCCONVERTGENERICNORMTOPSEUDOOPPASS
-#define GEN_PASS_DEF_DWCCONVERTLINALGTOLOOPSPASS
-#define GEN_PASS_DEF_DWCCONVERTMATHTOLIBMPASS
-#define GEN_PASS_DEF_DWCCONVERTMATHTOLLVMPASS
 #define GEN_PASS_DEF_DWCCONVERTOPLOWERINGPASS
-#define GEN_PASS_DEF_DWCCONVERTPDLTOPDLINTERPPASS
 #define GEN_PASS_DEF_DWCCONVERTSCATTERTOGENERICSCATTERPASS
-#define GEN_PASS_DEF_DWCCONVERTSCFTOCFPASS
 #define GEN_PASS_DEF_DWCCONVERTSIGNEDINTWITHRESCALINGOPSPASS
 #define GEN_PASS_DEF_DWCCONVERTSPATIALREDUCTIONTOPOOLINGPASS
 #define GEN_PASS_DEF_DWCCONVERTTFTODWCPASS
@@ -166,7 +158,6 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCLEGALIZETHREADOBLIVIOUSOPPASSPASS
 #define GEN_PASS_DEF_DWCLEGALIZETYPESFORDIVEVMTENSORPASS
 #define GEN_PASS_DEF_DWCLEGALIZESTABLEHLOCOMPOSITEPASS
-#define GEN_PASS_DEF_DWCLOWERAFFINEPASS
 #define GEN_PASS_DEF_DWCLOWERALLFUNCTIONSPASS
 #define GEN_PASS_DEF_DWCLOWERALLPADSPASS
 #define GEN_PASS_DEF_DWCLOWERATTENTIONOPSPASS
@@ -1062,79 +1053,6 @@ struct DwcConcatProofConverterPass
   }
 };
 
-// TSV row: "convert-arith-to-llvm" at 0xdcb7f5.
-struct DwcConvertArithToLlvmPass
-    : public darwinn::impl::DwcConvertArithToLlvmPassBase<
-          DwcConvertArithToLlvmPass> {
-  using Base::Base;
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
-  }
-
-
-  void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    unsigned lowered = 0;
-    if (failed(applyDwcLowerConstInline(func, lowered)))
-      return signalPassFailure();
-    if (failed(applyDwcLowerScalarArith(func, lowered)))
-      return signalPassFailure();
-    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
-      return signalPassFailure();
-  }
-};
-
-// TSV row: "convert-cf-to-llvm" at 0xdcb838.
-struct DwcConvertCfToLlvmPass
-    : public darwinn::impl::DwcConvertCfToLlvmPassBase<DwcConvertCfToLlvmPass> {
-  using Base::Base;
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<LLVM::LLVMDialect>();
-  }
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    LLVMTypeConverter converter(&getContext());
-    cf::populateControlFlowToLLVMConversionPatterns(converter, patterns);
-    LLVMConversionTarget target(getContext());
-    if (failed(applyPartialConversion(getOperation(), target,
-                                      std::move(patterns))))
-      return signalPassFailure();
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "cf")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "cf")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
 // TSV row: "convert-conv1x1-to-fc" at 0xe26ea5.
 struct DwcConvertConv1x1ToFcPass
     : public darwinn::impl::DwcConvertConv1x1ToFcPassBase<
@@ -1956,50 +1874,6 @@ struct DwcConvertDynamicShapeScopeToDiveVmPass
   }
 };
 
-// TSV row: "convert-func-to-llvm" at 0xdcb867.
-struct DwcConvertFuncToLlvmPass
-    : public darwinn::impl::DwcConvertFuncToLlvmPassBase<
-          DwcConvertFuncToLlvmPass> {
-  using Base::Base;
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
-  }
-
-  void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "func")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "func")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
 // TSV row: "convert-generic-norm-to-pseudo-op" at 0xdb45be.
 struct DwcConvertGenericNormToPseudoOpPass
     : public darwinn::impl::DwcConvertGenericNormToPseudoOpPassBase<
@@ -2043,145 +1917,6 @@ struct DwcConvertGenericNormToPseudoOpPass
   }
 };
 
-// TSV row: "convert-linalg-to-loops" at 0xd83df7.
-struct DwcConvertLinalgToLoopsPass
-    : public darwinn::impl::DwcConvertLinalgToLoopsPassBase<
-          DwcConvertLinalgToLoopsPass> {
-  using Base::Base;
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    linalg::populateLinalgNamedOpsGeneralizationPatterns(patterns);
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "linalg")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "linalg")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
-// TSV row: "convert-math-to-libm" at 0xdce410.
-struct DwcConvertMathToLibmPass
-    : public darwinn::impl::DwcConvertMathToLibmPassBase<
-          DwcConvertMathToLibmPass> {
-  using Base::Base;
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    populateMathToLibmConversionPatterns(patterns);
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "math")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "math")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
-// TSV row: "convert-math-to-llvm" at 0xdcb80b.
-struct DwcConvertMathToLlvmPass
-    : public darwinn::impl::DwcConvertMathToLlvmPassBase<
-          DwcConvertMathToLlvmPass> {
-  using Base::Base;
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
-  }
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    LLVMTypeConverter converter(&getContext());
-    populateMathToLLVMConversionPatterns(converter, patterns);
-    LLVMConversionTarget target(getContext());
-    if (failed(applyPartialConversion(getOperation(), target,
-                                      std::move(patterns))))
-      return signalPassFailure();
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "math")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "math")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
 // TSV row: "convert-op-lowering" at 0xddedce.
 struct DwcConvertOpLoweringPass
     : public darwinn::impl::DwcConvertOpLoweringPassBase<
@@ -2202,50 +1937,6 @@ struct DwcConvertOpLoweringPass
       return signalPassFailure();
     unsigned lowered = 0;
     if (failed(applyDwcLowerConvertTrunc(func, lowered)))
-      return signalPassFailure();
-  }
-};
-
-// TSV row: "convert-pdl-to-pdl-interp" at 0xdb3800.
-struct DwcConvertPdlToPdlInterpPass
-    : public darwinn::impl::DwcConvertPdlToPdlInterpPassBase<
-          DwcConvertPdlToPdlInterpPass> {
-  using Base::Base;
-
-  void runOnOperation() override {
-    // No honest rewrite exists. pdl_interp lowering needs the upstream
-    // ConvertPdlToPdlInterp pass elsewhere in the tree so this pass only
-    // accepts pdl ops at typed shapes.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "pdl")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "pdl")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
       return signalPassFailure();
   }
 };
@@ -2294,49 +1985,6 @@ struct DwcConvertScatterToGenericScatterPass
       return signalPassFailure();
   }
 };
-// TSV row: "convert-scf-to-cf" at 0xde4728.
-struct DwcConvertScfToCfPass
-    : public darwinn::impl::DwcConvertScfToCfPassBase<DwcConvertScfToCfPass> {
-  using Base::Base;
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    populateSCFToControlFlowConversionPatterns(patterns);
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "scf")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "scf")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
 // TSV row: "convert-signed-int-with-rescaling-ops" at 0xd84723.
 struct DwcConvertSignedIntWithRescalingOpsPass
     : public darwinn::impl::DwcConvertSignedIntWithRescalingOpsPassBase<
@@ -6002,19 +5650,6 @@ struct DwcLegalizeStablehloCompositePass
       return WalkResult::advance();
     });
     if (failedLegal)
-      return signalPassFailure();
-  }
-};
-
-// TSV row: "lower-affine" at 0xe03675.
-struct DwcLowerAffinePass
-    : public darwinn::impl::DwcLowerAffinePassBase<DwcLowerAffinePass> {
-  using Base::Base;
-
-  void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    unsigned lowered = 0;
-    if (failed(applyDwcLowerConstInline(func, lowered)))
       return signalPassFailure();
   }
 };

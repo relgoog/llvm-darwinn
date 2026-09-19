@@ -137,25 +137,6 @@ def DwcConcatProofConverterPass : Pass<"concat-proof-converter", "func::FuncOp">
   }];
 }
 
-def DwcConvertArithToLlvmPass : Pass<"dwc-convert-arith-to-llvm", "func::FuncOp"> {
-  let summary = "DWC pass convert-arith-to-llvm";
-  let description = [{
-    Seen at 0xdcb7f5 in task3_passes.tsv, this pass runs applyDwcLowerConstInline,
-    applyDwcLowerScalarArith and applyDwcLowerConvertTrunc in order. That covers arith.constant and
-    darwinn.constant_generator to dive_vm.const, tgc elementwise ops to arith ops, and convert and cast
-    ops to dive_vm.cast.
-  }];
-}
-
-def DwcConvertCfToLlvmPass : Pass<"dwc-convert-cf-to-llvm", "func::FuncOp"> {
-  let summary = "DWC pass convert-cf-to-llvm";
-  let description = [{
-    Seen at 0xdcb838 in task3_passes.tsv, this pass folds same-type one-operand one-result `cf`
-    identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over the cf
-    dialect ops and leaves every other op untouched.
-  }];
-}
-
 def DwcConvertConv1x1ToFcPass : Pass<"convert-conv1x1-to-fc", "func::FuncOp"> {
   let summary = "DWC pass convert-conv1x1-to-fc";
   let description = [{
@@ -241,48 +222,12 @@ def DwcConvertDynamicShapeScopeToDiveVmPass : Pass<"convert-dynamic-shape-scope-
   }];
 }
 
-def DwcConvertFuncToLlvmPass : Pass<"dwc-convert-func-to-llvm", "func::FuncOp"> {
-  let summary = "DWC pass convert-func-to-llvm";
-  let description = [{
-    Seen at 0xdcb867 in task3_passes.tsv, this pass folds same-type one-operand one-result `func`
-    identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over the func
-    dialect ops and leaves every other op untouched.
-  }];
-}
-
 def DwcConvertGenericNormToPseudoOpPass : Pass<"convert-generic-norm-to-pseudo-op", "func::FuncOp"> {
   let summary = "DWC pass convert-generic-norm-to-pseudo-op";
   let description = [{
     Seen at 0xdb45be in task3_passes.tsv, this pass folds same-type one-operand one-result darwinn
     dialect ops identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over
     remaining darwinn dialect ops and fails the pass on any failure.
-  }];
-}
-
-def DwcConvertLinalgToLoopsPass : Pass<"dwc-convert-linalg-to-loops", "func::FuncOp"> {
-  let summary = "DWC pass convert-linalg-to-loops";
-  let description = [{
-    Seen at 0xd83df7 in task3_passes.tsv, this pass folds same-type one-operand one-result linalg
-    dialect ops identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over
-    the linalg dialect ops and leaves every other op untouched.
-  }];
-}
-
-def DwcConvertMathToLibmPass : Pass<"dwc-convert-math-to-libm", "func::FuncOp"> {
-  let summary = "DWC pass convert-math-to-libm";
-  let description = [{
-    Seen at 0xdce410 in task3_passes.tsv, this pass folds same-type one-operand one-result `math`
-    identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over the math
-    dialect ops and leaves every other op untouched.
-  }];
-}
-
-def DwcConvertMathToLlvmPass : Pass<"dwc-convert-math-to-llvm", "func::FuncOp"> {
-  let summary = "DWC pass convert-math-to-llvm";
-  let description = [{
-    Seen at 0xdcb80b in task3_passes.tsv, this pass folds same-type one-operand one-result `math`
-    identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over the math
-    dialect ops and leaves every other op untouched.
   }];
 }
 
@@ -295,15 +240,6 @@ def DwcConvertOpLoweringPass : Pass<"convert-op-lowering", "func::FuncOp"> {
   }];
 }
 
-def DwcConvertPdlToPdlInterpPass : Pass<"dwc-convert-pdl-to-pdl-interp", "func::FuncOp"> {
-  let summary = "DWC pass convert-pdl-to-pdl-interp";
-  let description = [{
-    Seen at 0xdb3800 in task3_passes.tsv, this pass folds same-type one-operand one-result pdl dialect
-    ops identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over the pdl
-    dialect ops and leaves every other op untouched.
-  }];
-}
-
 def DwcConvertScatterToGenericScatterPass : Pass<"convert-scatter-to-generic-scatter", "func::FuncOp"> {
   let summary = "DWC pass convert-scatter-to-generic-scatter";
   let description = [{
@@ -311,15 +247,6 @@ def DwcConvertScatterToGenericScatterPass : Pass<"convert-scatter-to-generic-sca
     `darwinn.bitcast`, `darwinn.convert` and `darwinn.copy_op` identities with replaceAllUsesWith and
     erase. It then runs checkDwcConvertibleTypes over the darwinn dialect ops and leaves every other op
     untouched.
-  }];
-}
-
-def DwcConvertScfToCfPass : Pass<"dwc-convert-scf-to-cf", "func::FuncOp"> {
-  let summary = "DWC pass convert-scf-to-cf";
-  let description = [{
-    Seen at 0xde4728 in task3_passes.tsv, this pass folds same-type one-operand one-result scf dialect
-    ops identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over the scf
-    dialect ops and leaves every other op untouched.
   }];
 }
 
@@ -1081,15 +1008,6 @@ def DwcLegalizeStablehloCompositePass : Pass<"LegalizeStablehloComposite", "func
     Seen at 0xdef61e in task3_passes.tsv, this pass folds same-type one-operand one-result stablehlo
     dialect ops identities with replaceAllUsesWith and erase. It then runs checkDwcConvertibleTypes over
     the stablehlo dialect ops and leaves every other op untouched.
-  }];
-}
-
-def DwcLowerAffinePass : Pass<"dwc-lower-affine-only", "func::FuncOp"> {
-  let summary = "DWC pass lower-affine";
-  let description = [{
-    Seen at 0xe03675 in task3_passes.tsv, this pass lowers arith.constant and darwinn.constant_generator
-    to dive_vm.const with applyDwcLowerConstInline. It needs one result carrying a DenseElementsAttr
-    value and fails other constant forms, checking each with checkDwcConvertibleTypes.
   }];
 }
 
