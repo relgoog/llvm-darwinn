@@ -330,9 +330,9 @@ func.func @test_pow(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32>
 
 // -----
 // CHECK-LABEL: pseudo_split
-func.func @test_pseudo_split(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_pseudo_split(%arg0: tensor<i32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.pseudo_split
-  %0 = "dwc.pseudo_split"(%arg0, %arg1) {num_splits = "x"} : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.pseudo_split"(%arg0, %arg1) {num_splits = "x"} : (tensor<i32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

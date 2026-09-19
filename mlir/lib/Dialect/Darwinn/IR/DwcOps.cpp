@@ -448,7 +448,24 @@ LogicalResult dwc::PseudoSplitOp::verify() {
     return emitOpError("expects 2 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("num_splits"))
     return (*this)->emitOpError("expected op 'dwc.pseudo_split' to have attribute 'num_splits'");
-  return success();
+  if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
+    if (ranked.getRank() != 0)
+      return (*this)->emitOpError("operand 0 expects 0D tensor");
+    if (auto integer = llvm::dyn_cast<IntegerType>(ranked.getElementType())) {
+      if (integer.isSignless() && integer.getWidth() == 32)
+        return success();
+    }
+    return (*this)->emitOpError("operand 0 expects 0D tensor of 32-bit signless integer");
+  }
+  auto tensor1 = llvm::dyn_cast<TensorType>(getInputs()[1].getType());
+  Type element1 = tensor1 ? tensor1.getElementType() : getInputs()[1].getType();
+  if (llvm::isa<Float32Type>(element1))
+    return success();
+  if (auto integer1 = llvm::dyn_cast<IntegerType>(element1)) {
+    if ((integer1.isSignless() && (integer1.getWidth() == 16 || integer1.getWidth() == 32 || integer1.getWidth() == 64)))
+      return success();
+  }
+  return (*this)->emitOpError("operand 1 expects f32, i16, i32, i64, QI8, or QUI8");
 }
 
 LogicalResult dwc::ReductionOp::verify() {

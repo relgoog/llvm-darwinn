@@ -515,7 +515,7 @@ def Dwc_PowOp : Dwc_Op<"pow"> {
 def Dwc_PseudoSplitOp : Dwc_Op<"pseudo_split"> {
   let summary = "DWC pseudo_split operation.";
   let description = [{
-    Exactly 2 operands per blob operand constraints. Requires `num_splits`.
+    Operand 0 is a 0D 32-bit signless integer tensor and operand 1 is f32, i16, i32, i64, QI8, or QUI8 per the blob constraints. Requires `num_splits`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
