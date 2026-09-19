@@ -7,9 +7,8 @@
 //===----------------------------------------------------------------------===//
 //
 // This file declares the Darwinn DWC lowering passes recovered from
-// task3_passes.tsv (kind=pass rows of blob string inventory). Each pass is
-// boilerplate only. Bodies live in DwcPasses.cpp as empty runOnOperation
-// stubs keyed to the same TSV rows.
+// task3_passes.tsv (kind=pass rows of blob string inventory). Bodies live in
+// DwcPasses.cpp as real transforms keyed to the same TSV rows.
 //
 // Canonical pipeline order:
 //   dwc-legalize family, dwc-lower family, convert-dive-vm-to-llvm,

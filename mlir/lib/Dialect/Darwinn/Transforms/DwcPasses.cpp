@@ -21,6 +21,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
+#include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
+#include "mlir/Conversion/LLVMCommon/Pattern.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MathToLibm/MathToLibm.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
@@ -1111,9 +1116,11 @@ struct DwcConvertCfToLlvmPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. cf to LLVM uses the upstream ConvertCfToLLVM
-    // pass elsewhere in the tree so this pass only accepts cf ops at typed
-    // shapes and leaves lowering to that pass.
+    RewritePatternSet patterns(&getContext());
+    LLVMTypeConverter converter(&getContext());
+    cf::populateControlFlowToLLVMConversionPatterns(converter, patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
@@ -1131,7 +1138,6 @@ struct DwcConvertCfToLlvmPass
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
-
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
@@ -1346,6 +1352,16 @@ struct DwcConvertDiveVmToLlvmPass
         continue;
       }
       const char *callee = nullptr;
+      if (op->getName().getStringRef() == "dive_vm.const" ||
+          op->getName().getStringRef() == "dive_vm.const_bytes") {
+        if (!op->use_empty()) {
+          op->emitError("dive_vm const carries no LLVM callee, use it or drop it");
+          return signalPassFailure();
+        }
+        op->erase();
+        ++lowered;
+        continue;
+      }
       if (op->getName().getStringRef() == "dive_vm.add")
         callee = "DiveRuntime_Log";
       else if (op->getName().getStringRef() == "dive_vm.copy")
@@ -1488,6 +1504,13 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveTpu_WriteScalarArchRegister";
       else if (op->getName().getStringRef() == "dive_vm.cache_clean_invalidate")
         callee = "DiveSystem_CacheCleanInvalidate";
+      else if (op->getName().getStringRef() == "dive_vm.extract_slice" ||
+               op->getName().getStringRef() == "dive_vm.insert_slice")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+      else if (op->getName().getStringRef() == "dive_vm.select")
+        callee = "DiveVm_MaskIndices";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
+        callee = "DiveVm_GetAddressOfInputActivation";
       else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
         return signalPassFailure();
@@ -1737,6 +1760,13 @@ struct DwcConvertDiveVmToMemrefPass
         callee = "DiveTpu_WriteScalarArchRegister";
       else if (op->getName().getStringRef() == "dive_vm.cache_clean_invalidate")
         callee = "DiveSystem_CacheCleanInvalidate";
+      else if (op->getName().getStringRef() == "dive_vm.extract_slice" ||
+               op->getName().getStringRef() == "dive_vm.insert_slice")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+      else if (op->getName().getStringRef() == "dive_vm.select")
+        callee = "DiveVm_MaskIndices";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
+        callee = "DiveVm_GetAddressOfInputActivation";
       else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-memref");
         return signalPassFailure();
@@ -1905,9 +1935,11 @@ struct DwcConvertFuncToLlvmPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. func to LLVM uses the upstream ConvertFuncToLLVM
-    // pass elsewhere in the tree so this pass only accepts func ops at typed
-    // shapes and leaves lowering to that pass.
+    RewritePatternSet patterns(&getContext());
+    LLVMTypeConverter converter(&getContext());
+    populateFuncToLLVMConversionPatterns(converter, patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
@@ -1925,7 +1957,6 @@ struct DwcConvertFuncToLlvmPass
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
-
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
@@ -2052,9 +2083,13 @@ struct DwcConvertMathToLlvmPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. LLVM calls need the upstream ConvertMathToLLVM
-    // pass elsewhere in the tree so this pass only accepts math ops at typed
-    // shapes.
+    RewritePatternSet patterns(&getContext());
+    LLVMTypeConverter converter(&getContext());
+    populateMathToLLVMConversionPatterns(converter, patterns);
+    LLVMConversionTarget target(getContext());
+    if (failed(applyPartialConversion(getOperation(), target,
+                                      std::move(patterns))))
+      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
@@ -2072,7 +2107,6 @@ struct DwcConvertMathToLlvmPass
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
-
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
