@@ -13,7 +13,9 @@ add_mlir_dialect_library(MLIRDwcTransforms
   LINK_LIBS PUBLIC
   MLIRDiveVmDialect
   MLIRFuncDialect
+  MLIRMathToLibm
   MLIRPass
+  MLIRSCFToControlFlow
   MLIRTransformUtils
   )
 

@@ -21,6 +21,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Conversion/MathToLibm/MathToLibm.h"
+#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
@@ -2006,9 +2008,10 @@ struct DwcConvertMathToLibmPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. libm calls need the upstream ConvertMathToLibm
-    // pass elsewhere in the tree so this pass only accepts math ops at typed
-    // shapes.
+    RewritePatternSet patterns(&getContext());
+    populateMathToLibmConversionPatterns(patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
@@ -2026,7 +2029,6 @@ struct DwcConvertMathToLibmPass
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
-
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
@@ -2205,9 +2207,10 @@ struct DwcConvertScfToCfPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. scf to cf uses the upstream ConvertScfToCf
-    // pass elsewhere in the tree so this pass only accepts scf ops at typed
-    // shapes and leaves lowering to that pass.
+    RewritePatternSet patterns(&getContext());
+    populateSCFToControlFlowConversionPatterns(patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
+      return signalPassFailure();
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
@@ -2225,7 +2228,6 @@ struct DwcConvertScfToCfPass
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
-
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
@@ -5216,32 +5218,36 @@ struct
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("is not immutable, try removing mutable variables in your "
-                  "model since mutable variables are currently not supported "
-                  "through this converter.marked",
-                  builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("is not immutable, try removing mutable variables in your "
-                  "model since mutable variables are currently not supported "
-                  "through this converter.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
