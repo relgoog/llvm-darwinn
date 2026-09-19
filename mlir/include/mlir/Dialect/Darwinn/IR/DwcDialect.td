@@ -176,4 +176,25 @@ def Dwc_ActivationFunctionEnum : Dwc_I32Enum<
   ]>;
 def Dwc_ActivationFunctionAttr : Dwc_I32EnumAttr<"activation_function", Dwc_ActivationFunctionEnum>;
 
+def Dwc_CellOperationMac : I32EnumAttrCase<"Mac", 0, "MAC">;
+def Dwc_CellOperationEnum : Dwc_I32Enum<
+  "CellOperation", "DWC cell operation", [
+    Dwc_CellOperationMac
+  ]>;
+def Dwc_CellOperationAttr : Dwc_I32EnumAttr<"cell_operation", Dwc_CellOperationEnum>;
+
+def Dwc_ClassificationTypeSoftmax : I32EnumAttrCase<"Softmax", 0, "SOFTMAX">;
+def Dwc_ClassificationTypeEnum : Dwc_I32Enum<
+  "ClassificationType", "DWC classification type", [
+    Dwc_ClassificationTypeSoftmax
+  ]>;
+def Dwc_ClassificationTypeAttr : Dwc_I32EnumAttr<"classification_type", Dwc_ClassificationTypeEnum>;
+
+def Dwc_PerZOutScalePaddingNone : I32EnumAttrCase<"None", 0, "NONE">;
+def Dwc_PerZOutScalePaddingEnum : Dwc_I32Enum<
+  "PerZOutScalePadding", "DWC per-z-out scale padding", [
+    Dwc_PerZOutScalePaddingNone
+  ]>;
+def Dwc_PerZOutScalePaddingAttr : Dwc_I32EnumAttr<"per_z_out_scale_padding", Dwc_PerZOutScalePaddingEnum>;
+
 #endif // DWC_DIALECT
