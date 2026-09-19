@@ -503,3 +503,621 @@ func.func @test_unsorted_segment_reduce(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   %0 = "dwc.unsorted_segment_reduce"(%arg0) {num_segments = "x", op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// RUN: mlir-opt %s --verify-each | FileCheck %s
+
+// -----
+// CHECK-LABEL: abs
+func.func @test_abs(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.abs
+  %0 = "dwc.abs"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: arange
+func.func @test_arange(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.arange
+  %0 = "dwc.arange"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: attention
+func.func @test_attention(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.attention
+  %0 = "dwc.attention"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: attention_non_linear_function
+func.func @test_attention_non_linear_function(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.attention_non_linear_function
+  %0 = "dwc.attention_non_linear_function"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: batch_to_space
+func.func @test_batch_to_space(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.batch_to_space
+  %0 = "dwc.batch_to_space"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: bit_select
+func.func @test_bit_select(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.bit_select
+  %0 = "dwc.bit_select"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: broadcast
+func.func @test_broadcast(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.broadcast
+  %0 = "dwc.broadcast"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: cbrt
+func.func @test_cbrt(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.cbrt
+  %0 = "dwc.cbrt"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: clamp
+func.func @test_clamp(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.clamp
+  %0 = "dwc.clamp"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: collective_permute
+func.func @test_collective_permute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.collective_permute
+  %0 = "dwc.collective_permute"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: composite
+func.func @test_composite(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.composite
+  %0 = "dwc.composite"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: const_none
+func.func @test_const_none(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.const_none
+  %0 = "dwc.const_none"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: convolution_sub_channel
+func.func @test_convolution_sub_channel(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.convolution_sub_channel
+  %0 = "dwc.convolution_sub_channel"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: cost_volume
+func.func @test_cost_volume(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.cost_volume
+  %0 = "dwc.cost_volume"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: count_leading_zeros
+func.func @test_count_leading_zeros(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.count_leading_zeros
+  %0 = "dwc.count_leading_zeros"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: custom_compute
+func.func @test_custom_compute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.custom_compute
+  %0 = "dwc.custom_compute"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: declare_tensor
+func.func @test_declare_tensor(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.declare_tensor
+  %0 = "dwc.declare_tensor"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: depth_to_space
+func.func @test_depth_to_space(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.depth_to_space
+  %0 = "dwc.depth_to_space"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: depthwise_convolution
+func.func @test_depthwise_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.depthwise_convolution
+  %0 = "dwc.depthwise_convolution"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: device_launch
+func.func @test_device_launch(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.device_launch
+  %0 = "dwc.device_launch"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dma_op_gather
+func.func @test_dma_op_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.dma_op_gather
+  %0 = "dwc.dma_op_gather"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dynamic_broadcast
+func.func @test_dynamic_broadcast(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.dynamic_broadcast
+  %0 = "dwc.dynamic_broadcast"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dynamic_quantize
+func.func @test_dynamic_quantize(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.dynamic_quantize
+  %0 = "dwc.dynamic_quantize"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: ensure_shape
+func.func @test_ensure_shape(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.ensure_shape
+  %0 = "dwc.ensure_shape"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: extern_call
+func.func @test_extern_call(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.extern_call
+  %0 = "dwc.extern_call"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: fast_walsh_hadamard_transform
+func.func @test_fast_walsh_hadamard_transform(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.fast_walsh_hadamard_transform
+  %0 = "dwc.fast_walsh_hadamard_transform"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: fully_connected_sub_byte_param
+func.func @test_fully_connected_sub_byte_param(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.fully_connected_sub_byte_param
+  %0 = "dwc.fully_connected_sub_byte_param"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: fully_connected_sub_channel
+func.func @test_fully_connected_sub_channel(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.fully_connected_sub_channel
+  %0 = "dwc.fully_connected_sub_channel"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: functional_if
+func.func @test_functional_if(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.functional_if
+  %0 = "dwc.functional_if"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: functional_while
+func.func @test_functional_while(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.functional_while
+  %0 = "dwc.functional_while"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: gather_operation
+func.func @test_gather_operation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.gather_operation
+  %0 = "dwc.gather_operation"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: generic_move
+func.func @test_generic_move(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.generic_move
+  %0 = "dwc.generic_move"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: generic_scatter
+func.func @test_generic_scatter(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.generic_scatter
+  %0 = "dwc.generic_scatter"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: hib_gather
+func.func @test_hib_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.hib_gather
+  %0 = "dwc.hib_gather"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: hib_gather_filter
+func.func @test_hib_gather_filter(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.hib_gather_filter
+  %0 = "dwc.hib_gather_filter"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: hosted_tensor
+func.func @test_hosted_tensor(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.hosted_tensor
+  %0 = "dwc.hosted_tensor"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: image_interpolation
+func.func @test_image_interpolation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.image_interpolation
+  %0 = "dwc.image_interpolation"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: index_unpool
+func.func @test_index_unpool(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.index_unpool
+  %0 = "dwc.index_unpool"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: interleave
+func.func @test_interleave(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.interleave
+  %0 = "dwc.interleave"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: is_finite
+func.func @test_is_finite(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.is_finite
+  %0 = "dwc.is_finite"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: mask_indices
+func.func @test_mask_indices(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.mask_indices
+  %0 = "dwc.mask_indices"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: matrix_multiply_sub_channel
+func.func @test_matrix_multiply_sub_channel(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.matrix_multiply_sub_channel
+  %0 = "dwc.matrix_multiply_sub_channel"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: multinomial
+func.func @test_multinomial(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.multinomial
+  %0 = "dwc.multinomial"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: negate
+func.func @test_negate(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.negate
+  %0 = "dwc.negate"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: normalization
+func.func @test_normalization(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.normalization
+  %0 = "dwc.normalization"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: one_hot_tpu
+func.func @test_one_hot_tpu(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.one_hot_tpu
+  %0 = "dwc.one_hot_tpu"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: pack_bits
+func.func @test_pack_bits(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.pack_bits
+  %0 = "dwc.pack_bits"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: pooling
+func.func @test_pooling(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.pooling
+  %0 = "dwc.pooling"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: probe_subtensor
+func.func @test_probe_subtensor(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.probe_subtensor
+  %0 = "dwc.probe_subtensor"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: reduce_precision
+func.func @test_reduce_precision(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.reduce_precision
+  %0 = "dwc.reduce_precision"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: reduce_window
+func.func @test_reduce_window(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.reduce_window
+  %0 = "dwc.reduce_window"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: resampler
+func.func @test_resampler(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.resampler
+  %0 = "dwc.resampler"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: reverse
+func.func @test_reverse(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.reverse
+  %0 = "dwc.reverse"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: rkhy_add_pool
+func.func @test_rkhy_add_pool(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.rkhy_add_pool
+  %0 = "dwc.rkhy_add_pool"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: rkhy_conv_d2s
+func.func @test_rkhy_conv_d2s(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.rkhy_conv_d2s
+  %0 = "dwc.rkhy_conv_d2s"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: rkhy_custom_padding
+func.func @test_rkhy_custom_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.rkhy_custom_padding
+  %0 = "dwc.rkhy_custom_padding"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: rkhy_fused_conv
+func.func @test_rkhy_fused_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.rkhy_fused_conv
+  %0 = "dwc.rkhy_fused_conv"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: rkhy_fused_norm
+func.func @test_rkhy_fused_norm(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.rkhy_fused_norm
+  %0 = "dwc.rkhy_fused_norm"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: roll
+func.func @test_roll(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.roll
+  %0 = "dwc.roll"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: scalar_core_constant
+func.func @test_scalar_core_constant(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.scalar_core_constant
+  %0 = "dwc.scalar_core_constant"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: scatter_operation
+func.func @test_scatter_operation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.scatter_operation
+  %0 = "dwc.scatter_operation"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: shift_left
+func.func @test_shift_left(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.shift_left
+  %0 = "dwc.shift_left"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: shift_right_logical
+func.func @test_shift_right_logical(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.shift_right_logical
+  %0 = "dwc.shift_right_logical"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: space_to_batch
+func.func @test_space_to_batch(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.space_to_batch
+  %0 = "dwc.space_to_batch"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: space_to_depth
+func.func @test_space_to_depth(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.space_to_depth
+  %0 = "dwc.space_to_depth"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: sparse_fully_connected_sub_byte_param
+func.func @test_sparse_fully_connected_sub_byte_param(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.sparse_fully_connected_sub_byte_param
+  %0 = "dwc.sparse_fully_connected_sub_byte_param"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: sparse_parameter
+func.func @test_sparse_parameter(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.sparse_parameter
+  %0 = "dwc.sparse_parameter"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: spill
+func.func @test_spill(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.spill
+  %0 = "dwc.spill"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: statistical_top_k
+func.func @test_statistical_top_k(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.statistical_top_k
+  %0 = "dwc.statistical_top_k"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: tensor_ls_gather
+func.func @test_tensor_ls_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.tensor_ls_gather
+  %0 = "dwc.tensor_ls_gather"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: tensor_ls_scatter
+func.func @test_tensor_ls_scatter(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.tensor_ls_scatter
+  %0 = "dwc.tensor_ls_scatter"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: tensor_ls_scatter_operation
+func.func @test_tensor_ls_scatter_operation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.tensor_ls_scatter_operation
+  %0 = "dwc.tensor_ls_scatter_operation"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: tensor_op_gather
+func.func @test_tensor_op_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.tensor_op_gather
+  %0 = "dwc.tensor_op_gather"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: top_k
+func.func @test_top_k(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.top_k
+  %0 = "dwc.top_k"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: transposed_convolution_sub_channel
+func.func @test_transposed_convolution_sub_channel(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.transposed_convolution_sub_channel
+  %0 = "dwc.transposed_convolution_sub_channel"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: truncate_floats
+func.func @test_truncate_floats(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.truncate_floats
+  %0 = "dwc.truncate_floats"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: uniform_random_number_generation
+func.func @test_uniform_random_number_generation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.uniform_random_number_generation
+  %0 = "dwc.uniform_random_number_generation"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}

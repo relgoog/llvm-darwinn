@@ -570,3 +570,311 @@ LogicalResult dwc::UnsortedSegmentReduceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.unsorted_segment_reduce' to have attribute 'op_type'");
   return success();
 }
+
+LogicalResult dwc::AbsOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ArangeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::AttentionOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::AttentionNonLinearFunctionOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::BatchToSpaceOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::BitSelectOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::BroadcastOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CbrtOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ClampOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CollectivePermuteOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CompositeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ConstNoneOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ConvolutionSubChannelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CostVolumeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CountLeadingZerosOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::CustomComputeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DeclareTensorOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DepthToSpaceOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DepthwiseConvolutionOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DeviceLaunchOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DmaOpGatherOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicBroadcastOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::DynamicQuantizeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::EnsureShapeOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ExternCallOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FastWalshHadamardTransformOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FullyConnectedSubByteParamOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FullyConnectedSubChannelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FunctionalIfOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::FunctionalWhileOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::GatherOperationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::GenericMoveOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::GenericScatterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::HibGatherOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::HibGatherFilterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::HostedTensorOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ImageInterpolationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IndexUnpoolOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::InterleaveOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::IsFiniteOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MaskIndicesOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MatrixMultiplySubChannelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::MultinomialOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::NegateOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::NormalizationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::OneHotTpuOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PackBitsOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::PoolingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ProbeSubtensorOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ReducePrecisionOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ReduceWindowOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ResamplerOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ReverseOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RkhyAddPoolOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RkhyConvD2sOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RkhyCustomPaddingOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RkhyFusedConvOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RkhyFusedNormOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::RollOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ScalarCoreConstantOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ScatterOperationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShiftLeftOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::ShiftRightLogicalOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SpaceToBatchOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SpaceToDepthOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SparseFullyConnectedSubByteParamOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SparseParameterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::SpillOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::StatisticalTopKOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TensorLsGatherOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TensorLsScatterOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TensorLsScatterOperationOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TensorOpGatherOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TopKOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TransposedConvolutionSubChannelOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::TruncateFloatsOp::verify() {
+  return success();
+}
+
+LogicalResult dwc::UniformRandomNumberGenerationOp::verify() {
+  return success();
+}
