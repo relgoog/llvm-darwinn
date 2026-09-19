@@ -133,6 +133,59 @@ def Darwinn_MemSpaceAttr : Darwinn_Attr<"MemSpace", "mem_space"> {
   let summary = "Darwinn mem_space attribute.";
 }
 
+def Darwinn_FenceAttr : Darwinn_Attr<"Fence", "fence"> {
+  let summary = "Darwinn fence attribute.";
+}
+
+def Darwinn_FilterComparisonAttr : Darwinn_Attr<"FilterComparison", "filter_cmp"> {
+  let summary = "Darwinn filter_cmp attribute.";
+}
+
+def Darwinn_FilterForHibGatherAttr : Darwinn_Attr<"FilterForHibGather", "filter_for_hib_gather"> {
+  let summary = "Darwinn filter_for_hib_gather attribute.";
+}
+
+def Darwinn_FilterOutputAttr : Darwinn_Attr<"FilterOutput", "filter_output"> {
+  let summary = "Darwinn filter_output attribute.";
+}
+
+def Darwinn_InnerOperationAttr : Darwinn_Attr<"InnerOperation", "inner_op"> {
+  let summary = "Darwinn inner_op attribute.";
+}
+
+def Darwinn_InterpolateMethodAttr : Darwinn_Attr<"InterpolateMethod", "interpolate_method"> {
+  let summary = "Darwinn interpolate_method attribute.";
+}
+
+def Darwinn_LinearFunctionAttr : Darwinn_Attr<"LinearFunction", "linear_func"> {
+  let summary = "Darwinn linear_func attribute.";
+}
+
+def Darwinn_MemorySpaceAttr : Darwinn_Attr<"MemorySpace", "memory_space"> {
+  let summary = "Darwinn memory_space attribute.";
+}
+
+def Darwinn_NluE8M0RoundingAttr : Darwinn_Attr<"NluE8M0Rounding", "nlu_e8m0_rounding"> {
+  let summary = "Darwinn nlu_e8m0_rounding attribute.";
+}
+
+def Darwinn_NluFunctionAttr : Darwinn_Attr<"NluFunction", "nlu_func"> {
+  let summary = "Darwinn nlu_func attribute.";
+}
+
+def Darwinn_NluPreProcessAttr : Darwinn_Attr<"NluPreProcess", "nlu_preprocess"> {
+  let summary = "Darwinn nlu_preprocess attribute.";
+}
+
+def Darwinn_NluPredicateAttr : Darwinn_Attr<"NluPredicate", "nlu_predicate"> {
+  let summary = "Darwinn nlu_predicate attribute.";
+}
+
+def Darwinn_RkHYCustomPaddingAttr : Darwinn_Attr<"RkHYCustomPadding", "rkhy_custom_padding"> {
+  let summary = "Darwinn rkhy_custom_padding attribute.";
+}
+
+
 //===----------------------------------------------------------------------===//
 // Darwinn Types.
 //===----------------------------------------------------------------------===//
