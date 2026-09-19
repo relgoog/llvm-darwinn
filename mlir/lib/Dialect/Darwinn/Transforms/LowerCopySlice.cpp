@@ -19,13 +19,6 @@ void populateLowerCopySlicePatterns(RewritePatternSet &patterns);
 } // namespace darwinn
 } // namespace mlir
 
-namespace mlir {
-namespace darwinn {
-#define GEN_PASS_DEF_DWCLOWERCOPYSLICEPASS
-#include "DwcPasses.h.inc"
-} // namespace darwinn
-} // namespace mlir
-
 using namespace mlir;
 
 namespace {
@@ -150,28 +143,9 @@ struct GatherLowering : public RewritePattern {
   }
 };
 
-struct DwcLowerCopySlicePass
-    : public darwinn::impl::DwcLowerCopySlicePassBase<DwcLowerCopySlicePass> {
-  using Base::Base;
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
-  }
-
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    if (failed(applyPatternsGreedily(getOperation(),
-                                            std::move(patterns))))
-      signalPassFailure();
-  }
-};
-
 } // namespace
 
-void mlir::darwinn::populateLowerCopySlicePatterns(
-    RewritePatternSet &patterns) {
+void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
   MLIRContext *ctx = patterns.getContext();
   patterns.add<CopyOpLowering>(ctx);
   patterns.add<DynamicSliceLowering>("darwinn.dynamic_slice",

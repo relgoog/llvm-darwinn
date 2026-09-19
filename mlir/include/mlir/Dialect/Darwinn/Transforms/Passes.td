@@ -431,8 +431,8 @@ def DwcDarwinnBundlingPass : Pass<"darwinn-bundling", "func::FuncOp"> {
   }];
 }
 
-def DwcDarwinnConvertPass : Pass<"darwinn-convert", "func::FuncOp"> {
-  let summary = "DWC pass darwinn-convert";
+def DwcDarwinnConvertPass : Pass<"darwinn.convert", "func::FuncOp"> {
+  let summary = "DWC pass darwinn.convert";
   let description = [{
     Seen at 0xd68ca7 in task3_passes.tsv, this pass lowers darwinn.convert, darwinn.cast_in and
     darwinn.cast_out to dive_vm.cast with applyDwcLowerConvertTrunc. It keeps one-operand one-result ops
@@ -441,8 +441,8 @@ def DwcDarwinnConvertPass : Pass<"darwinn-convert", "func::FuncOp"> {
   }];
 }
 
-def DwcDarwinnMathJoinPass : Pass<"darwinn-math-join", "func::FuncOp"> {
-  let summary = "DWC pass darwinn-math-join";
+def DwcDarwinnMathJoinPass : Pass<"darwinn.math.join", "func::FuncOp"> {
+  let summary = "DWC pass darwinn.math.join";
   let description = [{
     Seen at 0xdc9452 in task3_passes.tsv, this pass lowers darwinn.tgc_elementwise_add,
     darwinn.tgc_elementwise_mul and darwinn.tgc_elementwise_sub to arith addi, muli and subi or addf,
@@ -451,8 +451,8 @@ def DwcDarwinnMathJoinPass : Pass<"darwinn-math-join", "func::FuncOp"> {
   }];
 }
 
-def DwcDarwinnSparsityPass : Pass<"darwinn-sparsity", "func::FuncOp"> {
-  let summary = "DWC pass darwinn-sparsity";
+def DwcDarwinnSparsityPass : Pass<"darwinn.sparsity", "func::FuncOp"> {
+  let summary = "DWC pass darwinn.sparsity";
   let description = [{
     Seen at 0xd5a035 in task3_passes.tsv, this pass folds same-type one-operand one-result
     `darwinn.sparsity` identities with replaceAllUsesWith and erase. It then runs
@@ -1624,35 +1624,11 @@ def DwcWrapUpDiveProgramPass : Pass<"wrap-up-dive-program", "func::FuncOp"> {
   }];
 }
 
-def DwcLowerCopySlicePass : Pass<"lower-copy-slice", "func::FuncOp"> {
-  let summary = "Lower darwinn copy, slice and gather ops to dive_vm";
-  let description = [{
-    Lowers `darwinn.copy_op` to `dive_vm.copy` after checking the source
-    and destination element types agree and any static element counts match,
-    lowers the `darwinn.dynamic_slice` family to `dive_vm.address_of_activation`
-    feeding `dive_vm.extract_slice` or `dive_vm.insert_slice` with slice-offset
-    generator attributes (mirroring the SliceOffsetGenerator plus
-    GetContinuousSlice fast path in the InsertSlice and ExtractSlice kernels),
-    and lowers the `darwinn.gather` family to `dive_vm.gather` with
-    out-of-bounds zero-fill (mirroring the Gather kernel).
-  }];
-}
-
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
     Seen at 0xdded02 in task3_passes.tsv, this pass applies populateLowerCopySlicePatterns greedily and
     runs applyLocalCopySliceLowering, folding same-type darwinn.copy_op identities.
-  }];
-}
-
-def DwcLowerConvertPass : Pass<"lower-convert", "func::FuncOp"> {
-  let summary = "Lower darwinn convert and cast ops to dive_vm";
-  let description = [{
-    Lowers `darwinn.convert`, `darwinn.cast_in`, and `darwinn.cast_out` to
-    the `dive_vm` elementwise convert. float-to-int truncates toward zero,
-    int-to-float rounds to nearest even, and narrow stores keep the low
-    bits. Same-type converts fold away. Patterns live in LowerConvert.cpp.
   }];
 }
 

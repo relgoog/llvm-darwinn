@@ -104,27 +104,3 @@ void populateLowerConvertPatterns(RewritePatternSet &patterns) {
 } // namespace darwinn
 } // namespace mlir
 
-namespace mlir {
-namespace darwinn {
-#define GEN_PASS_DECL
-#define GEN_PASS_DEF_DWCLOWERCONVERTPASS
-#include "DwcPasses.h.inc"
-} // namespace darwinn
-} // namespace mlir
-
-namespace {
-struct DwcLowerConvertPass
-    : public mlir::darwinn::impl::DwcLowerConvertPassBase<DwcLowerConvertPass> {
-  using Base::Base;
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
-  }
-
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    mlir::darwinn::populateLowerConvertPatterns(patterns);
-    (void)applyPatternsGreedily(getOperation(), std::move(patterns));
-  }
-};
-} // namespace
