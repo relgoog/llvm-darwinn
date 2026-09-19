@@ -70,7 +70,7 @@ def DwcAllowBf16AndF16TypeLegalizationPass : Pass<"allow-bf16-and-f16-type-legal
   }];
 }
 
-def DwcArithAssertLowerPass : Pass<"arith-assert-lower", "func::FuncOp"> {
+def DwcArithAssertLowerPass : Pass<"arith assert lower", "func::FuncOp"> {
   let summary = "DWC pass arith-assert-lower";
   let description = [{
     Seen at 0xdaad9b in task3_passes.tsv, this pass applies populateLowerCopySlicePatterns and
@@ -1047,7 +1047,7 @@ def DwcLegalizeTestUsingLayerirFlowPass : Pass<"legalize-test-using-layerir-flow
   }];
 }
 
-def DwcLegalizeTfXlacallmoduleOpToStablehloPass : Pass<"legalize-tf-xlacallmodule-op-to-stablehlo", "func::FuncOp"> {
+def DwcLegalizeTfXlacallmoduleOpToStablehloPass : Pass<"Legalize TF_XlaCallModule Op to stablehlo", "func::FuncOp"> {
   let summary = "DWC pass legalize-tf-xlacallmodule-op-to-stablehlo";
   let description = [{
     Seen at 0xdbc2d1 in task3_passes.tsv, this pass folds same-type one-operand one-result tf dialect
