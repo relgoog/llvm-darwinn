@@ -1644,6 +1644,20 @@ def DwcSimpleOutputSlicingPass : Pass<"simple-output-slicing", "func::FuncOp"> {
   }];
 }
 
+def DwcSliceOperandsPass : Pass<"slice-operands", "func::FuncOp"> {
+  let summary = "DWC pass slice-operands";
+  let description = [{
+    Blob-evidenced lisa pass. Slice operands. Attaches operand slicing metadata to multi-operand ops.
+  }];
+}
+
+def DwcSliceGranularityAssignmentPass : Pass<"slice-granularity-assignment", "func::FuncOp"> {
+  let summary = "DWC pass slice-granularity-assignment";
+  let description = [{
+    Blob-evidenced lisa pass. Slice granularity assignment. Assigns slicing granularity levels per operand.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

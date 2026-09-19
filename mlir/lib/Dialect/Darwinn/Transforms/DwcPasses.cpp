@@ -100,6 +100,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCSIMPLESPILLANDFILLPASS
 #define GEN_PASS_DEF_DWCSPILLFILLOPTIMIZATIONPASS
 #define GEN_PASS_DEF_DWCSIMPLEOUTPUTSLICINGPASS
+#define GEN_PASS_DEF_DWCSLICEOPERANDSPASS
+#define GEN_PASS_DEF_DWCSLICEGRANULARITYASSIGNMENTPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8084,6 +8086,34 @@ struct DwcSimpleOutputSlicingPass
       if (op->getNumResults() != 1)
         return;
       op->setAttr("dwc.output_sliced", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcSliceOperandsPass
+    : public darwinn::impl::DwcSliceOperandsPassBase<DwcSliceOperandsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumOperands() < 2)
+        return;
+      op->setAttr("dwc.operands_sliced", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcSliceGranularityAssignmentPass
+    : public darwinn::impl::DwcSliceGranularityAssignmentPassBase<DwcSliceGranularityAssignmentPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.operands_sliced"))
+        return;
+      op->setAttr("dwc.slice_granularity", IntegerAttr::get(IntegerType::get(&getContext(), 32), 1));
     });
   }
 };
