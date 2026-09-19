@@ -118,6 +118,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCLOWERSYNCHRONIZEDOPSTOTENSOROPPASS
 #define GEN_PASS_DEF_DWCMATERIALIZECASTDATATRANSFERPASS
 #define GEN_PASS_DEF_DWCQUANTIZEDTOINTEGERTYPECONVERSIONPASS
+#define GEN_PASS_DEF_DWCVECTORIZATIONPASS
+#define GEN_PASS_DEF_DWCWIDEREGISTERREUSEPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8368,6 +8370,34 @@ struct DwcQuantizedToIntegerTypeConversionPass
       if (op->getDialect() == nullptr || op->getDialect()->getNamespace() != "darwinn")
         return;
       op->setAttr("dwc.quant_converted", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcVectorizationPass
+    : public darwinn::impl::DwcVectorizationPassBase<DwcVectorizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      op->setAttr("dwc.vectorized", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcWideRegisterReusePass
+    : public darwinn::impl::DwcWideRegisterReusePassBase<DwcWideRegisterReusePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.vectorized"))
+        return;
+      op->setAttr("dwc.wide_reused", UnitAttr::get(&getContext()));
     });
   }
 };

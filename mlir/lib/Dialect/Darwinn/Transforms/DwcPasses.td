@@ -1770,6 +1770,20 @@ def DwcQuantizedToIntegerTypeConversionPass : Pass<"quantized-to-integer-type-co
   }];
 }
 
+def DwcVectorizationPass : Pass<"vectorization", "func::FuncOp"> {
+  let summary = "DWC pass vectorization";
+  let description = [{
+    Blob-evidenced lisa pass. Vectorization. Vectorizes scalar elementwise chains.
+  }];
+}
+
+def DwcWideRegisterReusePass : Pass<"wide-register-reuse", "func::FuncOp"> {
+  let summary = "DWC pass wide-register-reuse";
+  let description = [{
+    Blob-evidenced lisa pass. Wide register reuse. Reuses wide registers across chained ops.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
