@@ -1516,6 +1516,8 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveVm_PutBits";
       else if (op->getName().getStringRef() == "dive_vm.dvfs")
         callee = "DiveVm_UpdateDvfsHint";
+      else if (op->getName().getStringRef() == "dive_vm.shape_of_activation")
+        callee = "DiveVm_GetShapeOfActivation";
       else if (op->getName().getStringRef() == "dive_vm.reduction") {
         op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
         return signalPassFailure();
@@ -1797,6 +1799,8 @@ struct DwcConvertDiveVmToMemrefPass
         callee = "DiveVm_PutBits";
       else if (op->getName().getStringRef() == "dive_vm.dvfs")
         callee = "DiveVm_UpdateDvfsHint";
+      else if (op->getName().getStringRef() == "dive_vm.shape_of_activation")
+        callee = "DiveVm_GetShapeOfActivation";
       else if (op->getName().getStringRef() == "dive_vm.reduction") {
         op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
         return signalPassFailure();

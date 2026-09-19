@@ -1704,7 +1704,7 @@ def DiveVm_SetDtcModeOp : DiveVm_Op<"set_dtc_mode"> {
 def DiveVm_ShapeOfActivationOp : DiveVm_Op<"shape_of_activation"> {
   let summary = "DiveVM shape_of_activation operation.";
   let description = [{
-    Verifier accepts any operand count. Descriptor op carrying indices or metadata with no kernel shape evidenced. No callee symbol for dive_vm.shape_of_activation evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.shape_of_activation to DiveVm_GetShapeOfActivation, evidenced as a defined function in the embedded vm_utility bitcode modules.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
