@@ -129,6 +129,8 @@ LogicalResult dwc::ClassifierOp::verify() {
     return (*this)->emitOpError("attribute 'axis' expects IntegerAttr");
   if (!llvm::isa<FloatAttr>((*this)->getAttr("beta")))
     return (*this)->emitOpError("attribute 'beta' expects FloatAttr");
+  if (!llvm::isa<ClassificationTypeAttr>((*this)->getAttr("op_type")))
+    return (*this)->emitOpError("attribute 'op_type' expects ClassificationTypeAttr");
   return success();
 }
 
@@ -244,6 +246,8 @@ LogicalResult dwc::CumulativeOp::verify() {
     return (*this)->emitOpError("attribute 'axis' expects IntegerAttr");
   if (!llvm::isa<BoolAttr>((*this)->getAttr("exclusive")))
     return (*this)->emitOpError("attribute 'exclusive' expects BoolAttr");
+  if (!llvm::isa<CumulativeOpTypeAttr>((*this)->getAttr("op_type")))
+    return (*this)->emitOpError("attribute 'op_type' expects CumulativeOpTypeAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
@@ -688,6 +692,10 @@ LogicalResult dwc::ReductionOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.reduction' to have attribute 'op_type'");
   if (!llvm::isa<ElementsAttr>((*this)->getAttr("dimensions")))
     return (*this)->emitOpError("attribute 'dimensions' expects ElementsAttr");
+  if (!llvm::isa<SimpleActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects SimpleActivationFunctionAttr");
+  if (!llvm::isa<ReductionTypeAttr>((*this)->getAttr("op_type")))
+    return (*this)->emitOpError("attribute 'op_type' expects ReductionTypeAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
@@ -779,6 +787,8 @@ LogicalResult dwc::RsqrtOp::verify() {
 LogicalResult dwc::ScalarOp::verify() {
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.scalar' to have attribute 'op_type'");
+  if (!llvm::isa<ScalarOpTypeAttr>((*this)->getAttr("op_type")))
+    return (*this)->emitOpError("attribute 'op_type' expects ScalarOpTypeAttr");
   return success();
 }
 
@@ -978,6 +988,8 @@ LogicalResult dwc::UnsortedSegmentReduceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.unsorted_segment_reduce' to have attribute 'op_type'");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("num_segments")))
     return (*this)->emitOpError("attribute 'num_segments' expects IntegerAttr");
+  if (!llvm::isa<ReductionTypeAttr>((*this)->getAttr("op_type")))
+    return (*this)->emitOpError("attribute 'op_type' expects ReductionTypeAttr");
   return success();
 }
 

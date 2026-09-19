@@ -52,7 +52,7 @@ func.func @test_ceil(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: classifier
 func.func @test_classifier(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.classifier
-  %0 = "dwc.classifier"(%arg0) {axis = 1 : i64, beta = 1.0 : f32, op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.classifier"(%arg0) {axis = 1 : i64, beta = 1.0 : f32, op_type = #dwc.classification_type<SOFTMAX>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -108,7 +108,7 @@ func.func @test_cos(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: cumulative
 func.func @test_cumulative(%arg0: tensor<4xi32>) -> tensor<4xi32> {
   // CHECK: dwc.cumulative
-  %0 = "dwc.cumulative"(%arg0) {axis = 0 : i64, exclusive = true, op_type = "x"} : (tensor<4xi32>) -> tensor<4xi32>
+  %0 = "dwc.cumulative"(%arg0) {axis = 0 : i64, exclusive = true, op_type = #dwc.cumulative_op_type<SUM>} : (tensor<4xi32>) -> tensor<4xi32>
   return %0 : tensor<4xi32>
 }
 
@@ -340,7 +340,7 @@ func.func @test_pseudo_split(%arg0: tensor<i32>, %arg1: tensor<4xf32>) -> tensor
 // CHECK-LABEL: reduction
 func.func @test_reduction(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.reduction
-  %0 = "dwc.reduction"(%arg0) {activation_function = "x", dimensions = dense<[0]> : tensor<1xi64>, op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.reduction"(%arg0) {activation_function = #dwc.simple_activation_function<NONE>, dimensions = dense<[0]> : tensor<1xi64>, op_type = #dwc.reduction_type<SUM>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -396,7 +396,7 @@ func.func @test_rsqrt(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: scalar
 func.func @test_scalar(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.scalar
-  %0 = "dwc.scalar"(%arg0) {op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.scalar"(%arg0) {op_type = #dwc.scalar_op_type<IDENTITY>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -500,7 +500,7 @@ func.func @test_transposed_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: unsorted_segment_reduce
 func.func @test_unsorted_segment_reduce(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.unsorted_segment_reduce
-  %0 = "dwc.unsorted_segment_reduce"(%arg0) {num_segments = 4 : i64, op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.unsorted_segment_reduce"(%arg0) {num_segments = 4 : i64, op_type = #dwc.reduction_type<SUM>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
