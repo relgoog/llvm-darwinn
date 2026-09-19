@@ -23,9 +23,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Visitors.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/PatternMatch.h"
@@ -292,6 +297,308 @@ static LogicalResult applyLocalConvertLowering(func::FuncOp func) {
   return success();
 }
 
+static Type dwcLowerElementOf(Type type) {
+  if (auto shaped = dyn_cast<ShapedType>(type))
+    return shaped.getElementType();
+  return type;
+}
+
+static bool dwcLowerIsNumericElement(Type src, Type dst) {
+  if (src == dst)
+    return true;
+  return isa<IntegerType, FloatType>(src) && isa<IntegerType, FloatType>(dst);
+}
+
+static bool dwcLowerSameRankedShape(Type src, Type dst) {
+  auto srcRanked = dyn_cast<RankedTensorType>(src);
+  auto dstRanked = dyn_cast<RankedTensorType>(dst);
+  if (!srcRanked || !dstRanked)
+    return true;
+  return srcRanked.getShape() == dstRanked.getShape();
+}
+
+static bool dwcLowerHasSameElementType(Type a, Type b) {
+  auto tensorA = dyn_cast<TensorType>(a);
+  auto tensorB = dyn_cast<TensorType>(b);
+  if (!tensorA || !tensorB)
+    return true;
+  return tensorA.getElementType() == tensorB.getElementType();
+}
+
+static Operation *makeDwcLowerVmOp(OpBuilder &builder, Location loc,
+                                   StringRef name, ValueRange operands,
+                                   TypeRange results,
+                                   ArrayRef<NamedAttribute> attrs) {
+  OperationState state(loc, name, operands, results, attrs);
+  Operation *op = Operation::create(state);
+  builder.insert(op);
+  return op;
+}
+
+static LogicalResult forwardDwcLowerOp(OpBuilder &builder, Operation *op,
+                                       StringRef target, unsigned &lowered,
+                                       StringRef extraUnitAttr = "") {
+  if (failed(checkDwcConvertibleTypes(op)))
+    return failure();
+  SmallVector<Value> operands;
+  for (Value v : op->getOperands())
+    operands.push_back(v);
+  SmallVector<Type> results;
+  for (Type t : op->getResultTypes())
+    results.push_back(t);
+  SmallVector<NamedAttribute> attrs;
+  for (auto attr : op->getAttrs())
+    attrs.push_back(attr);
+  if (!extraUnitAttr.empty())
+    attrs.push_back(builder.getNamedAttr(extraUnitAttr, builder.getUnitAttr()));
+  builder.setInsertionPoint(op);
+  Operation *next = makeDwcLowerVmOp(builder, op->getLoc(), target,
+                                     ValueRange(operands), TypeRange(results),
+                                     attrs);
+  for (unsigned i = 0, e = op->getNumResults(); i < e; ++i)
+    op->getResult(i).replaceAllUsesWith(next->getResult(i));
+  op->erase();
+  ++lowered;
+  return success();
+}
+
+static LogicalResult forwardDwcLowerTo(func::FuncOp func,
+                                       std::initializer_list<StringRef> sources,
+                                       StringRef target, unsigned &lowered,
+                                       StringRef extraUnitAttr = "") {
+  OpBuilder builder(func.getOperation()->getContext());
+  SmallVector<Operation *> targets;
+  func.getOperation()->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    for (StringRef src : sources) {
+      if (name == src) {
+        targets.push_back(op);
+        break;
+      }
+    }
+  });
+  for (Operation *op : targets)
+    if (failed(forwardDwcLowerOp(builder, op, target, lowered, extraUnitAttr)))
+      return failure();
+  return success();
+}
+
+static LogicalResult applyDwcLowerGatherOob(func::FuncOp func,
+                                            unsigned &lowered) {
+  OpBuilder builder(func.getOperation()->getContext());
+  SmallVector<Operation *> targets;
+  func.getOperation()->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if (name == "darwinn.gather" || name == "darwinn.gather_copy" ||
+        name == "darwinn.hib_gather")
+      targets.push_back(op);
+  });
+  for (Operation *op : targets) {
+    if (op->getNumResults() != 1 || op->getNumOperands() < 2)
+      continue;
+    Value indices = op->getOperand(1);
+    if (auto idxTy = dyn_cast<RankedTensorType>(indices.getType()))
+      if (!idxTy.getElementType().isIntOrIndex())
+        continue;
+    if (failed(forwardDwcLowerOp(builder, op, "dive_vm.gather", lowered,
+                                 "oob_zero_fill")))
+      return failure();
+  }
+  return success();
+}
+
+static LogicalResult applyDwcLowerScatterInline(func::FuncOp func,
+                                                unsigned &lowered) {
+  return forwardDwcLowerTo(func, {"darwinn.scatter"}, "dive_vm.scatter_nd",
+                           lowered, "oob_zero_fill");
+}
+
+static LogicalResult applyDwcLowerSelectInline(func::FuncOp func,
+                                               unsigned &lowered) {
+  return forwardDwcLowerTo(func, {"darwinn.select"}, "dive_vm.select",
+                           lowered);
+}
+
+static LogicalResult applyDwcLowerTopKInline(func::FuncOp func,
+                                             unsigned &lowered) {
+  return forwardDwcLowerTo(func, {"darwinn.index_filter"}, "dive_vm.top_k",
+                           lowered);
+}
+
+static LogicalResult applyDwcLowerPadInline(func::FuncOp func,
+                                            unsigned &lowered) {
+  return forwardDwcLowerTo(func,
+                           {"darwinn.rkhy_custom_padding",
+                            "darwinn.mesh_pad_slice"},
+                           "dive_vm.pad", lowered);
+}
+
+static LogicalResult applyDwcLowerArgmaxInline(func::FuncOp func,
+                                               unsigned &lowered) {
+  return forwardDwcLowerTo(func, {"darwinn.mask_indices"},
+                           "dive_vm.mask_indices", lowered);
+}
+
+static LogicalResult applyDwcLowerCopyLike(func::FuncOp func,
+                                           unsigned &lowered) {
+  OpBuilder builder(func.getOperation()->getContext());
+  SmallVector<Operation *> targets;
+  func.getOperation()->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if (name == "darwinn.copy_op" || name == "darwinn.copy_from_host" ||
+        name == "darwinn.copy_using_wide")
+      targets.push_back(op);
+  });
+  for (Operation *op : targets) {
+    if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+      continue;
+    Value src = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    if (!dwcLowerHasSameElementType(src.getType(), dstTy))
+      continue;
+    if (auto srcRanked = dyn_cast<RankedTensorType>(src.getType()))
+      if (auto dstRanked = dyn_cast<RankedTensorType>(dstTy))
+        if (srcRanked.hasStaticShape() && dstRanked.hasStaticShape() &&
+            srcRanked.getNumElements() != dstRanked.getNumElements())
+          continue;
+    if (failed(checkDwcConvertibleTypes(op)))
+      return failure();
+    SmallVector<Value> operands{src};
+    SmallVector<Type> results{dstTy};
+    SmallVector<NamedAttribute> attrs;
+    for (auto attr : op->getAttrs())
+      attrs.push_back(attr);
+    builder.setInsertionPoint(op);
+    Operation *copy = makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.copy",
+                                       ValueRange(operands), TypeRange(results),
+                                       attrs);
+    op->getResult(0).replaceAllUsesWith(copy->getResult(0));
+    op->erase();
+    ++lowered;
+  }
+  return success();
+}
+
+static LogicalResult applyDwcLowerConvertTrunc(func::FuncOp func,
+                                               unsigned &lowered) {
+  OpBuilder builder(func.getOperation()->getContext());
+  SmallVector<Operation *> targets;
+  func.getOperation()->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if (name == "darwinn.convert" || name == "darwinn.cast_in" ||
+        name == "darwinn.cast_out")
+      targets.push_back(op);
+  });
+  for (Operation *op : targets) {
+    if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+      continue;
+    Value input = op->getOperand(0);
+    Type resultType = op->getResult(0).getType();
+    if (!dwcLowerSameRankedShape(input.getType(), resultType))
+      continue;
+    if (!dwcLowerIsNumericElement(dwcLowerElementOf(input.getType()),
+                                  dwcLowerElementOf(resultType)))
+      continue;
+    if (failed(checkDwcConvertibleTypes(op)))
+      return failure();
+    builder.setInsertionPoint(op);
+    if (input.getType() == resultType) {
+      op->getResult(0).replaceAllUsesWith(input);
+      op->erase();
+      ++lowered;
+      continue;
+    }
+    SmallVector<Value> operands{input};
+    SmallVector<Type> results{resultType};
+    SmallVector<NamedAttribute> empty;
+    Operation *cast = makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.cast",
+                                       ValueRange(operands), TypeRange(results),
+                                       empty);
+    op->getResult(0).replaceAllUsesWith(cast->getResult(0));
+    op->erase();
+    ++lowered;
+  }
+  return success();
+}
+
+static LogicalResult applyDwcLowerConstInline(func::FuncOp func,
+                                              unsigned &lowered) {
+  OpBuilder builder(func.getOperation()->getContext());
+  SmallVector<Operation *> targets;
+  func.getOperation()->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if (name == "arith.constant" || name == "darwinn.constant_generator")
+      targets.push_back(op);
+  });
+  for (Operation *op : targets) {
+    if (op->getNumResults() != 1)
+      continue;
+    if (Attribute value = op->getAttr("value"))
+      if (!isa<DenseElementsAttr>(value)) {
+        op->emitError("only DenseElementsAttr constants lower to dive_vm");
+        return failure();
+      }
+    if (failed(checkDwcConvertibleTypes(op)))
+      return failure();
+    SmallVector<Value> operands;
+    SmallVector<Type> results{op->getResult(0).getType()};
+    SmallVector<NamedAttribute> attrs;
+    for (auto attr : op->getAttrs())
+      attrs.push_back(attr);
+    builder.setInsertionPoint(op);
+    Operation *next = makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.const",
+                                       ValueRange(operands), TypeRange(results),
+                                       attrs);
+    op->getResult(0).replaceAllUsesWith(next->getResult(0));
+    op->erase();
+    ++lowered;
+  }
+  return success();
+}
+
+static LogicalResult applyDwcLowerScalarArith(func::FuncOp func,
+                                              unsigned &lowered) {
+  OpBuilder builder(func.getOperation()->getContext());
+  SmallVector<Operation *> targets;
+  func.getOperation()->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if (name == "darwinn.tgc_elementwise_add" ||
+        name == "darwinn.tgc_elementwise_mul" ||
+        name == "darwinn.tgc_elementwise_sub")
+      targets.push_back(op);
+  });
+  for (Operation *op : targets) {
+    if (op->getNumOperands() != 2 || op->getNumResults() != 1)
+      continue;
+    Type resultType = op->getResult(0).getType();
+    if (!dwcLowerSameRankedShape(op->getOperand(0).getType(), resultType) ||
+        !dwcLowerSameRankedShape(op->getOperand(1).getType(), resultType))
+      continue;
+    StringRef name = op->getName().getStringRef();
+    StringRef target;
+    if (isa<IntegerType>(dwcLowerElementOf(resultType))) {
+      if (name == "darwinn.tgc_elementwise_add")
+        target = "arith.addi";
+      else if (name == "darwinn.tgc_elementwise_mul")
+        target = "arith.muli";
+      else
+        target = "arith.subi";
+    } else if (isa<FloatType>(dwcLowerElementOf(resultType))) {
+      if (name == "darwinn.tgc_elementwise_add")
+        target = "arith.addf";
+      else if (name == "darwinn.tgc_elementwise_mul")
+        target = "arith.mulf";
+      else
+        target = "arith.subf";
+    } else {
+      continue;
+    }
+    if (failed(forwardDwcLowerOp(builder, op, target, lowered)))
+      return failure();
+  }
+  return success();
+}
+
 // TSV row: "(ackr-model-converter" at 0xdac24f.
 struct DwcAckrModelConverterPass : public darwinn::impl::DwcAckrModelConverterPassBase<DwcAckrModelConverterPass> {
   using Base::Base;
@@ -544,11 +851,7 @@ struct DwcChloLegalizeToHloPass : public darwinn::impl::DwcChloLegalizeToHloPass
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "chlo" && ns != "mhlo") {
+      if (ns != "chlo" && ns != "mhlo") {
         op->emitError() << "chlo-legalize-to-hlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -827,26 +1130,60 @@ struct DwcConvertDiveVmToLlvmPass : public darwinn::impl::DwcConvertDiveVmToLlvm
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op LLVM emission waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    MLIRContext *ctx = root->getContext();
+    OpBuilder builder(ctx);
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("convert-dive-vm-to-llvm needs a parent module");
+      return signalPassFailure();
+    }
+    SmallVector<Operation *> vmOps;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("dive_vm.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
+      if (dialect && dialect->getNamespace() == "dive_vm")
+        vmOps.push_back(op);
     });
-    if (failedConvert)
-      return signalPassFailure();
+    unsigned lowered = 0;
+    for (Operation *op : vmOps) {
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      if (op->getNumResults() > 1) {
+        op->emitError("unsupported multi-result dive_vm op in convert-dive-vm-to-llvm");
+        return signalPassFailure();
+      }
+      StringRef name = op->getName().getStringRef();
+      StringRef callee;
+      if (name == "dive_vm.add")
+        callee = "DiveRuntime_Log";
+      else if (name == "dive_vm.copy")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+      else if (name == "dive_vm.gather")
+        callee = "DiveVm_HIBGatherEditE32";
+      else if (name == "dive_vm.legacy_scalar")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else {
+        op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
+        return signalPassFailure();
+      }
+      SmallVector<Type> paramTypes;
+      for (Value v : op->getOperands())
+        paramTypes.push_back(v.getType());
+      Type resultType = op->getNumResults() ? op->getResult(0).getType()
+                                            : LLVM::LLVMVoidType::get(ctx);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp =
+          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      if (failed(calleeOp))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      auto call =
+          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      if (op->getNumResults())
+        op->getResult(0).replaceAllUsesWith(call.getResult());
+      op->erase();
+      ++lowered;
+    }
     root->setAttr("dive_vm.lowered_count",
                   builder.getI64IntegerAttr(lowered));
   }
@@ -859,23 +1196,58 @@ struct DwcConvertDiveVmToMemrefPass : public darwinn::impl::DwcConvertDiveVmToMe
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    MLIRContext *ctx = root->getContext();
+    OpBuilder builder(ctx);
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("convert-dive-vm-to-memref needs a parent module");
+      return signalPassFailure();
+    }
+    SmallVector<Operation *> vmOps;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("dive_vm.lowered_to_memref", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
+      if (dialect && dialect->getNamespace() == "dive_vm")
+        vmOps.push_back(op);
     });
-    if (failedConvert)
-      return signalPassFailure();
+    unsigned lowered = 0;
+    for (Operation *op : vmOps) {
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      if (op->getNumResults() > 1) {
+        op->emitError("unsupported multi-result dive_vm op in convert-dive-vm-to-memref");
+        return signalPassFailure();
+      }
+      StringRef name = op->getName().getStringRef();
+      StringRef callee;
+      if (name == "dive_vm.add")
+        callee = "DiveRuntime_Log";
+      else if (name == "dive_vm.copy")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+      else if (name == "dive_vm.gather")
+        callee = "DiveVm_HIBGatherEditE32";
+      else if (name == "dive_vm.legacy_scalar")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else {
+        op->emitError("unsupported dive_vm op in convert-dive-vm-to-memref");
+        return signalPassFailure();
+      }
+      SmallVector<Type> paramTypes;
+      for (Value v : op->getOperands())
+        paramTypes.push_back(v.getType());
+      Type resultType = op->getNumResults() ? op->getResult(0).getType()
+                                            : LLVM::LLVMVoidType::get(ctx);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp =
+          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      if (failed(calleeOp))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      auto call =
+          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      if (op->getNumResults())
+        op->getResult(0).replaceAllUsesWith(call.getResult());
+      op->erase();
+      ++lowered;
+    }
     root->setAttr("dive_vm.lowered_count",
                   builder.getI64IntegerAttr(lowered));
   }
@@ -1352,23 +1724,52 @@ struct DwcConvertTpuOffloadToDiveVmPass : public darwinn::impl::DwcConvertTpuOff
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    MLIRContext *ctx = root->getContext();
+    OpBuilder builder(ctx);
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("convert-tpu-offload-to-dive-vm needs a parent module");
+      return signalPassFailure();
+    }
+    SmallVector<Operation *> offloadOps;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "edgetpu")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("edgetpu.lowered_to_dive_vm", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
+      if (dialect && dialect->getNamespace() == "edgetpu")
+        offloadOps.push_back(op);
     });
-    if (failedConvert)
-      return signalPassFailure();
+    unsigned lowered = 0;
+    for (Operation *op : offloadOps) {
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      if (op->getNumResults() > 1) {
+        op->emitError("unsupported multi-result edgetpu op in convert-tpu-offload-to-dive-vm");
+        return signalPassFailure();
+      }
+      StringRef opName = op->getName().getStringRef();
+      StringRef callee;
+      if (opName.contains("convolution"))
+        callee = "DiveTpu_EnqueueInstructions";
+      else if (opName.contains("matrix_multiply") || opName.contains("fully_connected"))
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else
+        callee = "DiveTpu_EnqueueInstructions";
+      SmallVector<Type> paramTypes;
+      for (Value v : op->getOperands())
+        paramTypes.push_back(v.getType());
+      Type resultType = op->getNumResults() ? op->getResult(0).getType()
+                                            : LLVM::LLVMVoidType::get(ctx);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp =
+          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      if (failed(calleeOp))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      auto call =
+          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      if (op->getNumResults())
+        op->getResult(0).replaceAllUsesWith(call.getResult());
+      op->erase();
+      ++lowered;
+    }
     root->setAttr("edgetpu.lowered_count",
                   builder.getI64IntegerAttr(lowered));
   }
@@ -1381,27 +1782,57 @@ struct DwcConvertTpuOffloadToLlvmPass : public darwinn::impl::DwcConvertTpuOfflo
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    MLIRContext *ctx = root->getContext();
+    OpBuilder builder(ctx);
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("convert-tpu-offload-to-llvm needs a parent module");
+      return signalPassFailure();
+    }
+    SmallVector<Operation *> offloadOps;
     root->walk([&](Operation *op) {
-      bool isOffload = op->getName().getStringRef() == "dive_vm.tpu_offload";
+      StringRef opName = op->getName().getStringRef();
+      bool isOffload = opName == "dive_vm.tpu_offload";
       Dialect *dialect = op->getDialect();
       if (!isOffload && dialect &&
           dialect->getNamespace() == "edgetpu")
         isOffload = true;
-      if (!isOffload)
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("tpu_offload.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
+      if (isOffload)
+        offloadOps.push_back(op);
     });
-    if (failedConvert)
-      return signalPassFailure();
+    unsigned lowered = 0;
+    for (Operation *op : offloadOps) {
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      if (op->getNumResults() > 1) {
+        op->emitError("unsupported multi-result offload op in convert-tpu-offload-to-llvm");
+        return signalPassFailure();
+      }
+      StringRef opName = op->getName().getStringRef();
+      StringRef callee;
+      if (opName == "dive_vm.tpu_offload")
+        callee = "DiveRuntime_ExecuteChildModel";
+      else if (opName.contains("matrix_multiply") || opName.contains("fully_connected"))
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else
+        callee = "DiveTpu_EnqueueInstructions";
+      SmallVector<Type> paramTypes;
+      for (Value v : op->getOperands())
+        paramTypes.push_back(v.getType());
+      Type resultType = op->getNumResults() ? op->getResult(0).getType()
+                                            : LLVM::LLVMVoidType::get(ctx);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp =
+          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      if (failed(calleeOp))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      auto call =
+          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      if (op->getNumResults())
+        op->getResult(0).replaceAllUsesWith(call.getResult());
+      op->erase();
+      ++lowered;
+    }
     root->setAttr("tpu_offload.lowered_count",
                   builder.getI64IntegerAttr(lowered));
   }
@@ -1472,23 +1903,50 @@ struct DwcConvertTpuOffloadToLlvmSymbolPass : public darwinn::impl::DwcConvertTp
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    MLIRContext *ctx = root->getContext();
+    OpBuilder builder(ctx);
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("ConvertTpuOffloadToLlvm needs a parent module");
+      return signalPassFailure();
+    }
+    SmallVector<Operation *> offloadOps;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "edgetpu")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("tpu_offload.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
+      if (dialect && dialect->getNamespace() == "edgetpu")
+        offloadOps.push_back(op);
     });
-    if (failedConvert)
-      return signalPassFailure();
+    unsigned lowered = 0;
+    for (Operation *op : offloadOps) {
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      if (op->getNumResults() > 1) {
+        op->emitError("unsupported multi-result edgetpu op in ConvertTpuOffloadToLlvm");
+        return signalPassFailure();
+      }
+      StringRef opName = op->getName().getStringRef();
+      StringRef callee;
+      if (opName.contains("matrix_multiply") || opName.contains("fully_connected"))
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else
+        callee = "DiveTpu_EnqueueInstructions";
+      SmallVector<Type> paramTypes;
+      for (Value v : op->getOperands())
+        paramTypes.push_back(v.getType());
+      Type resultType = op->getNumResults() ? op->getResult(0).getType()
+                                            : LLVM::LLVMVoidType::get(ctx);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp =
+          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      if (failed(calleeOp))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      auto call =
+          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      if (op->getNumResults())
+        op->getResult(0).replaceAllUsesWith(call.getResult());
+      op->erase();
+      ++lowered;
+    }
     root->setAttr("tpu_offload.lowered_count",
                   builder.getI64IntegerAttr(lowered));
   }
@@ -1702,10 +2160,13 @@ struct DwcDiveProgramTpuPass : public darwinn::impl::DwcDiveProgramTpuPassBase<D
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Grouping decides packet membership and order only. Each packet then gets
+    // one LLVM global holding ordered dispatch function references plus one
+    // DiveRuntime_ExecuteChildModel call. No binary packet layout is invented.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
+    MLIRContext *ctx = root->getContext();
+    OpBuilder builder(ctx);
     std::map<std::string, SmallVector<Operation *>> groups;
     root->walk([&](Operation *op) {
       if (op->getName().getStringRef() != "dive_vm.tpu_offload")
@@ -1728,6 +2189,77 @@ struct DwcDiveProgramTpuPass : public darwinn::impl::DwcDiveProgramTpuPassBase<D
     }
     root->setAttr("tpu.packet_count", builder.getI64IntegerAttr(packet));
     root->setAttr("tpu.packet_order", builder.getArrayAttr(order));
+
+    if (groups.empty())
+      return;
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("dive-program-tpu needs a parent module");
+      return signalPassFailure();
+    }
+
+    Type ptrTy = LLVM::LLVMPointerType::get(ctx);
+    Type i64Ty = builder.getI64Type();
+    Type voidTy = LLVM::LLVMVoidType::get(ctx);
+    FailureOr<LLVM::LLVMFuncOp> dispatchFn = LLVM::lookupOrCreateFn(
+        builder, moduleOp, "DiveRuntime_ExecuteChildModel", {ptrTy, i64Ty},
+        voidTy);
+    if (failed(dispatchFn))
+      return signalPassFailure();
+
+    struct Packet {
+      LLVM::GlobalOp global;
+      Type arrayTy;
+      uint64_t count;
+    };
+    SmallVector<Packet> packets;
+    unsigned id = 0;
+    for (auto &entry : groups) {
+      uint64_t n = entry.second.size();
+      Type arrayTy = LLVM::LLVMArrayType::get(ptrTy, n);
+      std::string name = "tpu_packet_" + std::to_string(id++);
+      while (SymbolTable::lookupSymbolIn(moduleOp, name))
+        name += "_";
+      OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToStart(moduleOp.getBody());
+      LLVM::GlobalOp global = LLVM::GlobalOp::create(
+          builder, func.getLoc(), arrayTy, /*isConstant=*/true,
+          LLVM::Linkage::Internal, name, /*value=*/Attribute(),
+          /*alignment=*/0);
+      Block *init = builder.createBlock(&global.getInitializerRegion());
+      builder.setInsertionPointToStart(init);
+      Value table = LLVM::PoisonOp::create(builder, func.getLoc(), arrayTy);
+      for (uint64_t i = 0; i < n; ++i) {
+        Value fnPtr = LLVM::AddressOfOp::create(
+            builder, func.getLoc(), ptrTy, dispatchFn->getSymNameAttr());
+        SmallVector<int64_t> pos{static_cast<int64_t>(i)};
+        table = LLVM::InsertValueOp::create(builder, func.getLoc(), table,
+                                            fnPtr, pos);
+      }
+      LLVM::ReturnOp::create(builder, func.getLoc(),
+                             ArrayRef<Value>({table}));
+      packets.push_back({global, arrayTy, n});
+    }
+
+    if (func.getBody().empty())
+      return;
+    Block &entryBlock = func.getBody().front();
+    if (Operation *term = entryBlock.getTerminator())
+      builder.setInsertionPoint(term);
+    else
+      builder.setInsertionPointToEnd(&entryBlock);
+    for (auto &item : packets) {
+      Value base = LLVM::AddressOfOp::create(
+          builder, func.getLoc(), ptrTy, item.global.getSymNameAttr());
+      Value table = LLVM::GEPOp::create(builder, func.getLoc(), ptrTy,
+                                        item.arrayTy, base,
+                                        ArrayRef<LLVM::GEPArg>{0, 0});
+      Value count = LLVM::ConstantOp::create(
+          builder, func.getLoc(), i64Ty,
+          builder.getI64IntegerAttr(static_cast<int64_t>(item.count)));
+      SmallVector<Value> args{table, count};
+      LLVM::CallOp::create(builder, func.getLoc(), *dispatchFn, args);
+    }
   }
 };
 
@@ -1990,10 +2522,7 @@ struct DwcDwcLegalizePass : public darwinn::impl::DwcDwcLegalizePassBase<DwcDwcL
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "dwc-legalize rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2026,10 +2555,7 @@ struct DwcDwcLegalizeHloPass : public darwinn::impl::DwcDwcLegalizeHloPassBase<D
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "mhlo") {
+      if (ns != "mhlo") {
         op->emitError() << "dwc-legalize-hlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2062,11 +2588,7 @@ struct DwcDwcLegalizeHloToTfPass : public darwinn::impl::DwcDwcLegalizeHloToTfPa
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "mhlo" && ns != "tf") {
+      if (ns != "mhlo" && ns != "tf") {
         op->emitError() << "dwc-legalize-hlo-to-tf rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2099,10 +2621,7 @@ struct DwcDwcLegalizeIntAndQuantTypesPass : public darwinn::impl::DwcDwcLegalize
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "quant") {
+      if (ns != "quant") {
         op->emitError() << "dwc-legalize-int-and-quant-types rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2135,10 +2654,7 @@ struct DwcDwcLegalizeInt64ConstantsPass : public darwinn::impl::DwcDwcLegalizeIn
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "dwc-legalize-int64-constants rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2171,10 +2687,7 @@ struct DwcDwcLegalizePassPass : public darwinn::impl::DwcDwcLegalizePassPassBase
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "dwc-legalize-pass rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2207,10 +2720,7 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass : public darwinn::im
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "stablehlo") {
+      if (ns != "stablehlo") {
         op->emitError() << "dwc-legalize-stablehlo-annotate-materialize-policy rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2243,10 +2753,7 @@ struct DwcDwcLegalizeStablehloCompositePass : public darwinn::impl::DwcDwcLegali
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "stablehlo") {
+      if (ns != "stablehlo") {
         op->emitError() << "dwc-legalize-stablehlo-composite rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2279,10 +2786,7 @@ struct DwcDwcLegalizeTfPipelinePass : public darwinn::impl::DwcDwcLegalizeTfPipe
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "tf") {
+      if (ns != "tf") {
         op->emitError() << "dwc-legalize-tf-pipeline rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2315,10 +2819,7 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass : public darwinn::impl::DwcDwcLegal
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "tfl") {
+      if (ns != "tfl") {
         op->emitError() << "dwc-legalize-tfl-cudaemu-custom-ops rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2351,10 +2852,7 @@ struct DwcDwcLegalizeTflMultinomialPass : public darwinn::impl::DwcDwcLegalizeTf
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "tfl") {
+      if (ns != "tfl") {
         op->emitError() << "dwc-legalize-tfl-multinomial rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2387,10 +2885,7 @@ struct DwcDwcLegalizeTflVariableTensorsPass : public darwinn::impl::DwcDwcLegali
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "tfl") {
+      if (ns != "tfl") {
         op->emitError() << "dwc-legalize-tfl-variable-tensors rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -2423,10 +2918,7 @@ struct DwcDwcLegalizeUint32TypesPass : public darwinn::impl::DwcDwcLegalizeUint3
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "dwc-legalize-uint32-types rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3366,10 +3858,7 @@ struct DwcLegalizePass : public darwinn::impl::DwcLegalizePassBase<DwcLegalizePa
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "legalize rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3402,10 +3891,7 @@ struct DwcLegalizeAffinePass : public darwinn::impl::DwcLegalizeAffinePassBase<D
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "affine") {
+      if (ns != "affine") {
         op->emitError() << "legalize-affine rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3438,10 +3924,7 @@ struct DwcLegalizeDwcPass : public darwinn::impl::DwcLegalizeDwcPassBase<DwcLega
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "legalize-dwc rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3474,10 +3957,7 @@ struct DwcLegalizeDwcInputOutputOpsPass : public darwinn::impl::DwcLegalizeDwcIn
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "legalize-dwc-input-output-ops rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3510,10 +3990,7 @@ struct DwcLegalizeDwgTensorPass : public darwinn::impl::DwcLegalizeDwgTensorPass
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "dwg") {
+      if (ns != "dwg") {
         op->emitError() << "legalize-dwg-tensor rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3546,10 +4023,7 @@ struct DwcLegalizeQuantTypesPass : public darwinn::impl::DwcLegalizeQuantTypesPa
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "quant") {
+      if (ns != "quant") {
         op->emitError() << "legalize-quant-types rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3582,10 +4056,7 @@ struct DwcLegalizeScfPass : public darwinn::impl::DwcLegalizeScfPassBase<DwcLega
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "scf") {
         op->emitError() << "legalize-scf rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3618,10 +4089,7 @@ struct DwcLegalizeShapeOpsPass : public darwinn::impl::DwcLegalizeShapeOpsPassBa
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "shape") {
+      if (ns != "shape") {
         op->emitError() << "legalize-shape-ops rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3654,10 +4122,7 @@ struct DwcLegalizeTestUsingLayerirFlowPass : public darwinn::impl::DwcLegalizeTe
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "legalize-test-using-layerir-flow rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3719,10 +4184,7 @@ struct DwcLegalizeThreadObliviousOpPassPass : public darwinn::impl::DwcLegalizeT
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "darwinn") {
         op->emitError() << "legalize-thread-oblivious-op-pass rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -3755,10 +4217,7 @@ struct DwcLegalizeTypesForDiveVmTensorPass : public darwinn::impl::DwcLegalizeTy
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm") {
+      if (ns != "dive_vm") {
         op->emitError() << "legalize-types-for-dive-vm-tensor rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -4016,10 +4475,7 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass : public darwinn::impl::DwcMhloLega
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "mhlo") {
+      if (ns != "mhlo") {
         op->emitError() << "mhlo-legalize-einsum-to-dot-general rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -4811,10 +5267,7 @@ struct DwcStablehloLegalizeCompositeToCallPass : public darwinn::impl::DwcStable
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "stablehlo") {
+      if (ns != "stablehlo") {
         op->emitError() << "stablehlo-legalize-composite-to-call rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -4846,11 +5299,7 @@ struct DwcStablehloLegalizeToHloPass : public darwinn::impl::DwcStablehloLegaliz
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "stablehlo" && ns != "mhlo") {
+      if (ns != "stablehlo" && ns != "mhlo") {
         op->emitError() << "stablehlo-legalize-to-hlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -4882,11 +5331,7 @@ struct DwcStablehloLegalizeToVhloPass : public darwinn::impl::DwcStablehloLegali
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "stablehlo" && ns != "vhlo") {
+      if (ns != "stablehlo" && ns != "vhlo") {
         op->emitError() << "stablehlo-legalize-to-vhlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -4918,11 +5363,7 @@ struct DwcStablehloLegalizeVhloPass : public darwinn::impl::DwcStablehloLegalize
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "stablehlo" && ns != "vhlo") {
+      if (ns != "stablehlo" && ns != "vhlo") {
         op->emitError() << "stablehlo-legalize-vhlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -4983,11 +5424,7 @@ struct DwcTfLegalizeHloPass : public darwinn::impl::DwcTfLegalizeHloPassBase<Dwc
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tf" && ns != "mhlo") {
+      if (ns != "tf" && ns != "mhlo") {
         op->emitError() << "tf-legalize-hlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5048,11 +5485,7 @@ struct DwcTflLegalizeChloPass : public darwinn::impl::DwcTflLegalizeChloPassBase
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tfl" && ns != "chlo") {
+      if (ns != "tfl" && ns != "chlo") {
         op->emitError() << "tfl-legalize-chlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5084,11 +5517,7 @@ struct DwcTflLegalizeHashtablesTfPass : public darwinn::impl::DwcTflLegalizeHash
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tfl" && ns != "tf") {
+      if (ns != "tfl" && ns != "tf") {
         op->emitError() << "tfl-legalize-hashtables-tf rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5120,11 +5549,7 @@ struct DwcTflLegalizeHloPass : public darwinn::impl::DwcTflLegalizeHloPassBase<D
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tfl" && ns != "mhlo") {
+      if (ns != "tfl" && ns != "mhlo") {
         op->emitError() << "tfl-legalize-hlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5156,10 +5581,7 @@ struct DwcTflLegalizeTensorlistPass : public darwinn::impl::DwcTflLegalizeTensor
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" && ns != "tfl") {
+      if (ns != "tfl") {
         op->emitError() << "tfl-legalize-tensorlist rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5191,11 +5613,7 @@ struct DwcTflLegalizeTfPass : public darwinn::impl::DwcTflLegalizeTfPassBase<Dwc
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tfl" && ns != "tf") {
+      if (ns != "tfl" && ns != "tf") {
         op->emitError() << "tfl-legalize-tf rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5227,11 +5645,7 @@ struct DwcTflLegalizeTfWhilePass : public darwinn::impl::DwcTflLegalizeTfWhilePa
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tfl" && ns != "tf") {
+      if (ns != "tfl" && ns != "tf") {
         op->emitError() << "tfl-legalize-tf-while rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5263,11 +5677,7 @@ struct DwcTflLegalizeVariablesTfPass : public darwinn::impl::DwcTflLegalizeVaria
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "tfl" && ns != "tf") {
+      if (ns != "tfl" && ns != "tf") {
         op->emitError() << "tfl-legalize-variables-tf rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5408,11 +5818,7 @@ struct DwcVhloLegalizeStablehloPass : public darwinn::impl::DwcVhloLegalizeStabl
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "vhlo" && ns != "stablehlo") {
+      if (ns != "vhlo" && ns != "stablehlo") {
         op->emitError() << "vhlo-legalize-stablehlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
@@ -5444,11 +5850,7 @@ struct DwcVhloLegalizeToStablehloPass : public darwinn::impl::DwcVhloLegalizeToS
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu" &&
-          ns != "func" && ns != "arith" && ns != "tensor" &&
-          ns != "memref" && ns != "scf" && ns != "cf" &&
-          ns != "builtin" && ns != "llvm" &&
-          ns != "vhlo" && ns != "stablehlo") {
+      if (ns != "vhlo" && ns != "stablehlo") {
         op->emitError() << "vhlo-legalize-to-stablehlo rejects operation from dialect "
                         << ns;
         failedLegal = true;
