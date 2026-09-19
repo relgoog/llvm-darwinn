@@ -83,7 +83,7 @@ def Dwc_CastOp : Dwc_Op<"cast"> {
 def Dwc_CeilOp : Dwc_Op<"ceil"> {
   let summary = "DWC ceil operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -167,7 +167,7 @@ def Dwc_ConvolutionV2Op : Dwc_Op<"convolution_v2"> {
 def Dwc_CosOp : Dwc_Op<"cos"> {
   let summary = "DWC cos operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -251,7 +251,7 @@ def Dwc_DynamicUpdateSliceOp : Dwc_Op<"dynamic_update_slice"> {
 def Dwc_ErfOp : Dwc_Op<"erf"> {
   let summary = "DWC erf operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -275,7 +275,7 @@ def Dwc_ExpOp : Dwc_Op<"exp"> {
 def Dwc_Expm1Op : Dwc_Op<"expm1"> {
   let summary = "DWC expm1 operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -383,7 +383,7 @@ def Dwc_GenericDotOp : Dwc_Op<"generic_dot"> {
 def Dwc_Log1pOp : Dwc_Op<"log1p"> {
   let summary = "DWC log1p operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -395,7 +395,7 @@ def Dwc_Log1pOp : Dwc_Op<"log1p"> {
 def Dwc_LogisticOp : Dwc_Op<"logistic"> {
   let summary = "DWC logistic operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
