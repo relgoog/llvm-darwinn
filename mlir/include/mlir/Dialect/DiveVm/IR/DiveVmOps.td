@@ -486,7 +486,7 @@ def DiveVm_CopyOp : DiveVm_Op<"copy"> {
 def DiveVm_CopyImmOp : DiveVm_Op<"copy_imm"> {
   let summary = "DiveVM copy_imm operation.";
   let description = [{
-    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.copy_imm to _ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi. No darwinn lowering forwarding to dive_vm.copy_imm evidenced.
+    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.copy_imm to DiveVm_MemCpy. No darwinn lowering forwarding to dive_vm.copy_imm evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1102,7 +1102,7 @@ def DiveVm_LiveTensorOp : DiveVm_Op<"live_tensor"> {
 def DiveVm_LoadOp : DiveVm_Op<"load"> {
   let summary = "DiveVM load operation.";
   let description = [{
-    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.load to _ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi. No darwinn lowering forwarding to dive_vm.load evidenced.
+    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.load to DiveVm_MemCpy. No darwinn lowering forwarding to dive_vm.load evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1116,7 +1116,7 @@ def DiveVm_LoadOp : DiveVm_Op<"load"> {
 def DiveVm_LoadIndirectOp : DiveVm_Op<"load_indirect"> {
   let summary = "DiveVM load_indirect operation.";
   let description = [{
-    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.load_indirect to _ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi. No darwinn lowering forwarding to dive_vm.load_indirect evidenced.
+    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.load_indirect to DiveVm_MemCpy. No darwinn lowering forwarding to dive_vm.load_indirect evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1746,7 +1746,7 @@ def DiveVm_SignOp : DiveVm_Op<"sign"> {
 def DiveVm_StoreOp : DiveVm_Op<"store"> {
   let summary = "DiveVM store operation.";
   let description = [{
-    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.store to _ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi. No darwinn lowering forwarding to dive_vm.store evidenced.
+    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.store to DiveVm_MemCpy. No darwinn lowering forwarding to dive_vm.store evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1760,7 +1760,7 @@ def DiveVm_StoreOp : DiveVm_Op<"store"> {
 def DiveVm_StoreIndirectOp : DiveVm_Op<"store_indirect"> {
   let summary = "DiveVM store_indirect operation.";
   let description = [{
-    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.store_indirect to _ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi. No darwinn lowering forwarding to dive_vm.store_indirect evidenced.
+    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.store_indirect to DiveVm_MemCpy. No darwinn lowering forwarding to dive_vm.store_indirect evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

@@ -1427,7 +1427,7 @@ struct DwcConvertDiveVmToLlvmPass
       else if (op->getName().getStringRef() == "dive_vm.load" || op->getName().getStringRef() == "dive_vm.store" ||
                op->getName().getStringRef() == "dive_vm.load_indirect" ||
                op->getName().getStringRef() == "dive_vm.store_indirect" || op->getName().getStringRef() == "dive_vm.copy_imm")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+        callee = "DiveVm_MemCpy";
       else if (op->getName().getStringRef() == "dive_vm.fill")
         callee = "_ZN7silicon4dive7kernels4FillERKNS0_"
                  "11interpreter14ResolvedTensorERS3_";
@@ -1710,7 +1710,7 @@ struct DwcConvertDiveVmToMemrefPass
       else if (op->getName().getStringRef() == "dive_vm.load" || op->getName().getStringRef() == "dive_vm.store" ||
                op->getName().getStringRef() == "dive_vm.load_indirect" ||
                op->getName().getStringRef() == "dive_vm.store_indirect" || op->getName().getStringRef() == "dive_vm.copy_imm")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+        callee = "DiveVm_MemCpy";
       else if (op->getName().getStringRef() == "dive_vm.fill")
         callee = "_ZN7silicon4dive7kernels4FillERKNS0_"
                  "11interpreter14ResolvedTensorERS3_";
