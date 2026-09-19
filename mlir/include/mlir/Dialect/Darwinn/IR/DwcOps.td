@@ -287,7 +287,7 @@ def Dwc_Expm1Op : Dwc_Op<"expm1"> {
 def Dwc_FloorOp : Dwc_Op<"floor"> {
   let summary = "DWC floor operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, i32, f16, bf16, or f32 operand per the blob constraints excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
