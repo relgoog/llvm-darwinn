@@ -1728,6 +1728,13 @@ def DwcRedistributeOptimizationPass : Pass<"redistribute-optimization", "func::F
   }];
 }
 
+def DwcReplaceReshapeWithRedistributePass : Pass<"replace-reshape-with-redistribute", "func::FuncOp"> {
+  let summary = "DWC pass replace-reshape-with-redistribute";
+  let description = [{
+    Blob-evidenced lisa pass. Replace reshape with redistribute. Rewrites reshape ops into redistribute form.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

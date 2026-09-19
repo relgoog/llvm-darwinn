@@ -112,6 +112,7 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCPREEMPTIONPOINTSINSERTIONPASS
 #define GEN_PASS_DEF_DWCLATESIMPLESHARDINGPASS
 #define GEN_PASS_DEF_DWCREDISTRIBUTEOPTIMIZATIONPASS
+#define GEN_PASS_DEF_DWCREPLACERESHAPEWITHREDISTRIBUTEPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8280,6 +8281,21 @@ struct DwcRedistributeOptimizationPass
     });
   }
 };
+
+struct DwcReplaceReshapeWithRedistributePass
+    : public darwinn::impl::DwcReplaceReshapeWithRedistributePassBase<DwcReplaceReshapeWithRedistributePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.reshape")
+        return;
+      op->setAttr("dwc.redistributed", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
 
 } // namespace
 
