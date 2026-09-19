@@ -686,6 +686,10 @@ LogicalResult dwc::PaddingOp::verify() {
     return (*this)->emitOpError("attribute 'post_padding' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("pre_padding")))
     return (*this)->emitOpError("attribute 'pre_padding' expects IntegerAttr");
+  if (auto floatValue = llvm::dyn_cast<FloatAttr>((*this)->getAttr("padding_value"))) {
+    if (!floatValue.getType().isF32())
+      return (*this)->emitOpError("attribute 'padding_value' expects 32-bit float");
+  }
   for (const char *name : {"post_padding", "pre_padding"}) {
     if (!llvm::cast<IntegerAttr>((*this)->getAttr(name)).getType().isSignlessInteger(32))
       return (*this)->emitOpError("attribute '") << name << "' expects 32-bit signless integer";
@@ -823,6 +827,8 @@ LogicalResult dwc::RescalingOp::verify() {
     return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects PerZOutScalePaddingAttr");
   if (llvm::cast<PerZOutScalePaddingAttr>((*this)->getAttr("per_z_out_scales_padding")).getValue() != PerZOutScalePadding::None)
     return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects NONE");
+  if (!llvm::cast<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales")).empty())
+    return (*this)->emitOpError("attribute 'output_activation_per_z_out_scales' expects empty array");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type>(element))
