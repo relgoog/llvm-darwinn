@@ -1166,21 +1166,6 @@ struct DwcConvertConv1x1ToFcPass
     unsigned lowered = 0;
     if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    SmallVector<Operation *> dead;
-    func.getOperation()->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.convolution")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
   }
 };
 
@@ -2962,24 +2947,9 @@ struct DwcDarwinnSparsityPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No sparsity kernel shape in all_pseudocode.json. Identity sparsity
-    // folds; everything else only checks convertible types.
     func::FuncOp func = getOperation();
-    OpBuilder builder(func.getOperation()->getContext());
-    SmallVector<Operation *> dead;
-    func.getOperation()->walk([&](Operation *op) {
-      if (op->getName().getStringRef() != "darwinn.sparsity")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
+    if (failed(checkDwcConvertibleTypes(func.getOperation())))
+      return signalPassFailure();
   }
 };
 
@@ -4238,12 +4208,7 @@ struct DwcDwcLowerControlFlowPass
         return;
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
-          name != "darwinn.bitcast" && name != "darwinn.while" &&
-          name != "darwinn.condition_scope" && name != "darwinn.yield" &&
-          name != "darwinn.fence" && name != "darwinn.preemption_point" &&
-          name != "darwinn.probe" && name != "darwinn.infeed" &&
-          name != "darwinn.outfeed" && name != "darwinn.launch_custom_kernel" &&
-          name != "darwinn.launch_function" && name != "darwinn.terminate")
+          name != "darwinn.bitcast")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -4356,18 +4321,11 @@ struct DwcDwcLowerHlopsPass
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.convolution" &&
-          name != "darwinn.rkhy_compute_op" &&
-          name != "darwinn.rkhy_unary_compute_op" &&
+      if (name != "darwinn.rkhy_unary_compute_op" &&
           name != "darwinn.rkhy_depth_to_space_op" &&
-          name != "darwinn.static_compute_op" &&
           name != "darwinn.static_unary_compute_op" &&
-          name != "darwinn.synchronized_compute_op" &&
           name != "darwinn.synchronized_unary_compute_op" &&
-          name != "darwinn.streaming_compute_op" &&
-          name != "darwinn.streaming_unary_compute_op" &&
-          name != "darwinn.mma_compute_op" &&
-          name != "darwinn.fast_walsh_hadamard_transform")
+          name != "darwinn.streaming_unary_compute_op")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -4520,8 +4478,8 @@ struct DwcDwcLowerScalarOpsPass
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.relu" && name != "darwinn.unary_map" &&
-          name != "darwinn.unary_tensor_op" && name != "darwinn.dive_ref_cwise")
+      if (name != "darwinn.unary_map" && name != "darwinn.unary_tensor_op" &&
+          name != "darwinn.dive_ref_cwise")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -5250,30 +5208,10 @@ struct DwcInterpolateLoweringPassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // DiveVmOps.td names no interpolate target and all_pseudocode.json carries no interpolate kernel shape so only same type interpolate identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.interpolate" &&
-          name != "darwinn.interpolate_hardware" &&
-          name != "darwinn.interpolate_method" &&
-          name != "darwinn.legacy_interpolate")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
     bool failedLegal = false;
+
     root->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.interpolate" &&
@@ -6810,27 +6748,10 @@ struct DwcResamplerLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // DiveVmOps.td names no resample target and all_pseudocode.json carries no resample kernel shape so only same type resample identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.resampler" && name != "darwinn.resampler_options")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
     bool failedLegal = false;
+
     root->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.resampler" && name != "darwinn.resampler_options")
@@ -6870,8 +6791,7 @@ struct DwcRkhyShapeLegalizationPassPass
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.rkhy_compute_op" &&
-          name != "darwinn.rkhy_unary_compute_op" &&
+      if (name != "darwinn.rkhy_unary_compute_op" &&
           name != "darwinn.rkhy_depth_to_space_op")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
