@@ -700,6 +700,10 @@ LogicalResult dwc::PaddingOp::verify() {
   if (auto floatValue = llvm::dyn_cast<FloatAttr>((*this)->getAttr("padding_value"))) {
     if (!floatValue.getType().isF32())
       return (*this)->emitOpError("attribute 'padding_value' expects 32-bit float");
+  } else if (auto dense = llvm::dyn_cast<DenseElementsAttr>((*this)->getAttr("padding_value"))) {
+    auto shaped = llvm::dyn_cast<ShapedType>(dense.getType());
+    if (!shaped || !shaped.hasStaticShape() || shaped.getNumElements() != 2)
+      return (*this)->emitOpError("attribute 'padding_value' expects 32-bit float or 2-element on-off pair");
   }
   for (const char *name : {"post_padding", "pre_padding"}) {
     if (!llvm::cast<IntegerAttr>((*this)->getAttr(name)).getType().isSignlessInteger(32))
