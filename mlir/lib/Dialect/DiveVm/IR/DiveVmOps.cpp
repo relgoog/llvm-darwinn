@@ -108,6 +108,702 @@ LogicalResult dwg_tensor::EvalWithShapeOp::verify() {
   return success();
 }
 
+LogicalResult dive_vm_tensor::AbsOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfActivationOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfInputActivationOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfOutputActivationOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfParameterOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfParameterRegionOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::AddressOfScratchOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ArithmeticLeftShiftOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ArithmeticLeftShiftImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ArithmeticRightShiftOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ArithmeticRightShiftImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitcastOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitwiseAndOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitwiseAndImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitwiseOrOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitwiseOrImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitwiseXorOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BitwiseXorImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::BrOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CacheCleanInvalidateOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CastOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ConcatenateOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CondBrOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CopyOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CopyImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CountLeadingZerosOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CumsumOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::CustomOnBuffersOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::DeclareTensorOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::DivOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::DivImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::DmaHintOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::DynamicSliceYOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::EqualOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::EqualImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::EvalWithShapeOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ExtractOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::FillOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::FloorDivOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::GatherOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::GatherNdOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::GreaterOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::GreaterEqualOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::GreaterEqualImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::GreaterImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::IfOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::InsertOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LessOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LessEqualOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LessEqualImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LessImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LoadOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LoadIndirectOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LogicalAndOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LogicalAndImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LogicalRightShiftOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::LogicalRightShiftImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MarkValueWithShapeOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MaxOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MaxImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MinOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MinImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MulOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::MulImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::NotEqualOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::NotEqualImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::OneHotOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PadOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PerformSoftwarePreemptionIfRequestedOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PopCountOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PowOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PowImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PrintOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::PutBitsOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ReductionOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::RemOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::RemImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::RollOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::RunSerializedModelOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ScatterNdOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::SelectOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ShapeOfActivationOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::SignOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::StoreOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::StoreIndirectOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::SubOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::SubImmOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::SwitchOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::TopKOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::TpuOffloadOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::WhileOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::WriteDmaDescriptorOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::YieldOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::AbsOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::AddOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ArithmeticLeftShiftOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ArithmeticRightShiftOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::BarrierOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::BatchMatrixNmsOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::BitwiseAndOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::BitwiseOrOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::BitwiseXorOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CastOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CastFromIndexOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CastToIndexOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ConcatenationOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ConstBytesOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ConstNoneOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CopyOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CopyOuterSliceOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CountLeadingZerosOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CumsumOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::DeclareTensorOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::DeclareTensorStaticOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::DimensionLengthOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::DivOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::EqOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ForOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::GatherOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::GatherNdOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::GeOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::GtOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::GumbelRngOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::IfOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::LandmarksToTransformMatrixOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::LeOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::LogicalAndOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::LtOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::MaximumOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::MemoryCopyOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::MinimumOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ModOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::MulOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::NeOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::NewQosClassOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::OneHotOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::OneHotV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::OuterSliceOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::PadOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::PopCountOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::PowOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::RaiseErrorOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ReductionOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ReductionV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::RelayoutOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::RoiToTransformMatrixOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::RollOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ScatterNdOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SelectOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SelectV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SetDimensionLengthOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SignOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SingleChipOffloadOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SliceV2Op::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SortOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::StaticErrorOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SubOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::SwitchOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TestOnlyFingerprintCoreOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TopKOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TpuOffloadOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TransformLandmarksOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TransformTensorBilinearOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TypeCastOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::TypeCastDynamicOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::UniformRandomNumberGenerationOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::UnsortedSegmentReduceOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::UpdateOuterSliceOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::UseMaxConcurrencyModeOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::WhileOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::YieldOp::verify() {
+  return success();
+}
+
 static LogicalResult verifyDwcArityN(Operation *op, size_t numOperands,
                                     size_t expected) {
   if (numOperands != expected)
