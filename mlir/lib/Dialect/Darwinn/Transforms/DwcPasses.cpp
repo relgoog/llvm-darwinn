@@ -1044,23 +1044,6 @@ struct DwcConcatModelConverterPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    OpBuilder builder(func.getOperation()->getContext());
-    SmallVector<Operation *> dead;
-    func.getOperation()->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.concat" && name != "darwinn.concat_v2")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    (void)builder;
     if (failed(applyLocalCopySliceLowering(func)))
       return signalPassFailure();
   }
@@ -1073,25 +1056,7 @@ struct DwcConcatProofConverterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. There is no concat op in DarwinnOps.td to
-    // match, and no concat kernel shape in all_pseudocode.json, so the pass
-    // only folds the single input identity and leaves the rest in place.
     func::FuncOp func = getOperation();
-    SmallVector<Operation *> dead;
-    func.getOperation()->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.concat" && name != "darwinn.concat_v2")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
     if (failed(applyLocalCopySliceLowering(func)))
       return signalPassFailure();
   }
@@ -2356,9 +2321,7 @@ struct DwcConvertSpatialReductionToPoolingPass
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
-    if (failed(forwardDwcLowerTo(func, {"darwinn.spatial_reduction"},
-                                 "dive_vm.reduce", lowered)))
-      return signalPassFailure();
+    (void)lowered;
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       if (op->getName().getStringRef() != "darwinn.dive_ref_reduction")
@@ -3152,38 +3115,8 @@ struct DwcDiveUnrollFactorPass
   }
 
   void runOnOperation() override {
-    // No unroll factor contract is evidenced in all_pseudocode.json so only same type dive_vm loop identities fold.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "dive_vm.loop" && name != "dive_vm.for")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "dive_vm.loop" && name != "dive_vm.for")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
+    if (failed(checkDwcConvertibleTypes(func.getOperation())))
       return signalPassFailure();
   }
 };
@@ -6397,23 +6330,8 @@ struct DwcOptimizeDiveVmTensorInsertSlicePass
   }
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    OpBuilder builder(func.getOperation()->getContext());
-    SmallVector<Operation *> dead;
-    func.getOperation()->walk([&](Operation *op) {
-      if (op->getName().getStringRef() != "dive_vm.tensor_insert_slice")
-        return;
-      if (op->getNumOperands() != 3 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      if (op->getOperand(1) != op->getOperand(2))
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
+    if (failed(checkDwcConvertibleTypes(func.getOperation())))
+      return signalPassFailure();
   }
 };
 
