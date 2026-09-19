@@ -236,7 +236,7 @@ func.func @test_generic_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_dot
 func.func @test_generic_dot(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_dot
-  %0 = "dwc.generic_dot"(%arg0) {activation_function = "x", batch_dim_count = "x", contracting_dim_count = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_dot"(%arg0) {activation_function = "x", batch_dim_count = 1 : i64, contracting_dim_count = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -404,7 +404,7 @@ func.func @test_scalar(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: scatter_nd
 func.func @test_scatter_nd(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.scatter_nd
-  %0 = "dwc.scatter_nd"(%arg0) {shape = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.scatter_nd"(%arg0) {shape = dense<[4]> : tensor<1xi64>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

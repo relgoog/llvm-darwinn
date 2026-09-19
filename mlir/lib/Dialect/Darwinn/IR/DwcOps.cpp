@@ -428,6 +428,10 @@ LogicalResult dwc::GenericDotOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_dot' to have attribute 'batch_dim_count'");
   if (!(*this)->hasAttr("contracting_dim_count"))
     return (*this)->emitOpError("expected op 'dwc.generic_dot' to have attribute 'contracting_dim_count'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("batch_dim_count")))
+    return (*this)->emitOpError("attribute 'batch_dim_count' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("contracting_dim_count")))
+    return (*this)->emitOpError("attribute 'contracting_dim_count' expects IntegerAttr");
   return success();
 }
 
@@ -703,6 +707,8 @@ LogicalResult dwc::ScalarOp::verify() {
 LogicalResult dwc::ScatterNdOp::verify() {
   if (!(*this)->hasAttr("shape"))
     return (*this)->emitOpError("expected op 'dwc.scatter_nd' to have attribute 'shape'");
+  if (!llvm::isa<ElementsAttr>((*this)->getAttr("shape")))
+    return (*this)->emitOpError("attribute 'shape' expects ElementsAttr");
   return success();
 }
 
