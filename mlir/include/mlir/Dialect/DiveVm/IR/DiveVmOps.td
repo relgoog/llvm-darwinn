@@ -682,7 +682,7 @@ def DiveVm_DtcModeOp : DiveVm_Op<"dtc_mode"> {
 def DiveVm_DvfsOp : DiveVm_Op<"dvfs"> {
   let summary = "DiveVM dvfs operation.";
   let description = [{
-    Verifier accepts any operand count. Descriptor op carrying indices or metadata with no kernel shape evidenced. No callee symbol for dive_vm.dvfs evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.dvfs to DiveVm_UpdateDvfsHint, evidenced as a defined function in the embedded vm_utility bitcode modules.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -696,7 +696,7 @@ def DiveVm_DvfsOp : DiveVm_Op<"dvfs"> {
 def DiveVm_DynamicSliceYOp : DiveVm_Op<"dynamic_slice_y"> {
   let summary = "DiveVM dynamic_slice_y operation.";
   let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.dynamic_slice_y evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.dynamic_slice_y to DiveVm_ComputeDynamicSliceYMulticastBitmapAndAddress, evidenced as a defined function in the embedded vm_utility bitcode modules. No darwinn lowering forwarding to it evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1536,7 +1536,7 @@ def DiveVm_PrologueOp : DiveVm_Op<"prologue"> {
 def DiveVm_PutBitsOp : DiveVm_Op<"put_bits"> {
   let summary = "DiveVM put_bits operation.";
   let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.put_bits evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.put_bits to DiveVm_PutBits, evidenced as a defined function in the embedded vm_utility bitcode modules. No darwinn lowering forwarding to it evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

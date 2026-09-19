@@ -1512,6 +1512,12 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.dynamic_slice_y")
+        callee = "DiveVm_ComputeDynamicSliceYMulticastBitmapAndAddress";
+      else if (op->getName().getStringRef() == "dive_vm.put_bits")
+        callee = "DiveVm_PutBits";
+      else if (op->getName().getStringRef() == "dive_vm.dvfs")
+        callee = "DiveVm_UpdateDvfsHint";
       else if (op->getName().getStringRef() == "dive_vm.reduction") {
         op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
         return signalPassFailure();
@@ -1781,6 +1787,12 @@ struct DwcConvertDiveVmToMemrefPass
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.dynamic_slice_y")
+        callee = "DiveVm_ComputeDynamicSliceYMulticastBitmapAndAddress";
+      else if (op->getName().getStringRef() == "dive_vm.put_bits")
+        callee = "DiveVm_PutBits";
+      else if (op->getName().getStringRef() == "dive_vm.dvfs")
+        callee = "DiveVm_UpdateDvfsHint";
       else if (op->getName().getStringRef() == "dive_vm.reduction") {
         op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
         return signalPassFailure();
