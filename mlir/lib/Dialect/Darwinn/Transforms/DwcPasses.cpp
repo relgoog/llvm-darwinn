@@ -1494,8 +1494,7 @@ struct DwcConvertDiveVmToLlvmPass
       else if (op->getName().getStringRef() == "dive_vm.benchmark")
         callee = "DiveVm_Benchmark";
       else if (op->getName().getStringRef() == "dive_vm.program_tensor_mapping_table")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib25ProgramTensorMapping"
-                 "TableERKNS2_18TensorMappingTableEii";
+        callee = "DiveVm_PrepareAndProgramTensorMappingTable";
       else if (op->getName().getStringRef() == "dive_vm.write_dma_descriptor")
         callee = "DiveTpu_EnqueueDmaDescriptor";
       else if (op->getName().getStringRef() == "dive_vm.write_hib_data")
@@ -1776,8 +1775,7 @@ struct DwcConvertDiveVmToMemrefPass
       else if (op->getName().getStringRef() == "dive_vm.benchmark")
         callee = "DiveVm_Benchmark";
       else if (op->getName().getStringRef() == "dive_vm.program_tensor_mapping_table")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib25ProgramTensorMapping"
-                 "TableERKNS2_18TensorMappingTableEii";
+        callee = "DiveVm_PrepareAndProgramTensorMappingTable";
       else if (op->getName().getStringRef() == "dive_vm.write_dma_descriptor")
         callee = "DiveTpu_EnqueueDmaDescriptor";
       else if (op->getName().getStringRef() == "dive_vm.write_hib_data")

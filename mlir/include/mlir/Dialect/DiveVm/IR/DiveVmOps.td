@@ -1508,7 +1508,7 @@ def DiveVm_PrintOp : DiveVm_Op<"print"> {
 def DiveVm_ProgramTensorMappingTableOp : DiveVm_Op<"program_tensor_mapping_table"> {
   let summary = "DiveVM program_tensor_mapping_table operation.";
   let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.program_tensor_mapping_table to _ZN9platforms7darwinn4dive11runtime_lib25ProgramTensorMappingTableERKNS2_18TensorMappingTableEii. No darwinn lowering forwarding to dive_vm.program_tensor_mapping_table evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.program_tensor_mapping_table to DiveVm_PrepareAndProgramTensorMappingTable, evidenced as a defined wrapper in the embedded vm_utility bitcode modules. No darwinn lowering forwarding to dive_vm.program_tensor_mapping_table evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
