@@ -228,7 +228,7 @@ func.func @test_generic_constant(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_conv
 func.func @test_generic_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_conv
-  %0 = "dwc.generic_conv"(%arg0) {activation_function = "x", batch_group_count = "x", feature_group_count = "x", input_dilation = "x", padding_amount = "x", param_dilation = "x", param_reversal = "x", stride = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_conv"(%arg0) {activation_function = "x", batch_group_count = 1 : i64, feature_group_count = 1 : i64, input_dilation = dense<[1, 1]> : tensor<2xi64>, padding_amount = dense<[0, 0]> : tensor<2xi64>, param_dilation = dense<[1, 1]> : tensor<2xi64>, param_reversal = dense<false> : tensor<2xi1>, stride = dense<[1, 1]> : tensor<2xi64>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -308,7 +308,7 @@ func.func @test_one_hot(%arg0: tensor<4xi32>) -> tensor<4xi32> {
 // CHECK-LABEL: padding
 func.func @test_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.padding
-  %0 = "dwc.padding"(%arg0) {dimension = "x", padding_value = "x", post_padding = "x", pre_padding = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.padding"(%arg0) {dimension = 0 : i64, padding_value = 0.0 : f32, post_padding = 0 : i64, pre_padding = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -332,7 +332,7 @@ func.func @test_pow(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32>
 // CHECK-LABEL: pseudo_split
 func.func @test_pseudo_split(%arg0: tensor<i32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.pseudo_split
-  %0 = "dwc.pseudo_split"(%arg0, %arg1) {num_splits = "x"} : (tensor<i32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.pseudo_split"(%arg0, %arg1) {num_splits = 2 : i64} : (tensor<i32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -340,7 +340,7 @@ func.func @test_pseudo_split(%arg0: tensor<i32>, %arg1: tensor<4xf32>) -> tensor
 // CHECK-LABEL: reduction
 func.func @test_reduction(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.reduction
-  %0 = "dwc.reduction"(%arg0) {activation_function = "x", dimensions = "x", op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.reduction"(%arg0) {activation_function = "x", dimensions = dense<[0]> : tensor<1xi64>, op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -356,7 +356,7 @@ func.func @test_remainder(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: rescaling
 func.func @test_rescaling(%arg0: tensor<4xf16>) -> tensor<4xf16> {
   // CHECK: dwc.rescaling
-  %0 = "dwc.rescaling"(%arg0) {activation_function = "x", output_activation_per_z_out_scales = "x", per_z_out_scales_padding = "x"} : (tensor<4xf16>) -> tensor<4xf16>
+  %0 = "dwc.rescaling"(%arg0) {activation_function = "x", output_activation_per_z_out_scales = [], per_z_out_scales_padding = "x"} : (tensor<4xf16>) -> tensor<4xf16>
   return %0 : tensor<4xf16>
 }
 

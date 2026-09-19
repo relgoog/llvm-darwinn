@@ -428,6 +428,20 @@ LogicalResult dwc::GenericConvOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_conv' to have attribute 'param_reversal'");
   if (!(*this)->hasAttr("stride"))
     return (*this)->emitOpError("expected op 'dwc.generic_conv' to have attribute 'stride'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("batch_group_count")))
+    return (*this)->emitOpError("attribute 'batch_group_count' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("feature_group_count")))
+    return (*this)->emitOpError("attribute 'feature_group_count' expects IntegerAttr");
+  if (!llvm::isa<DenseIntElementsAttr>((*this)->getAttr("input_dilation")))
+    return (*this)->emitOpError("attribute 'input_dilation' expects DenseIntElementsAttr");
+  if (!llvm::isa<DenseIntElementsAttr>((*this)->getAttr("padding_amount")))
+    return (*this)->emitOpError("attribute 'padding_amount' expects DenseIntElementsAttr");
+  if (!llvm::isa<DenseIntElementsAttr>((*this)->getAttr("param_dilation")))
+    return (*this)->emitOpError("attribute 'param_dilation' expects DenseIntElementsAttr");
+  if (!llvm::isa<ElementsAttr>((*this)->getAttr("param_reversal")))
+    return (*this)->emitOpError("attribute 'param_reversal' expects ElementsAttr");
+  if (!llvm::isa<DenseIntElementsAttr>((*this)->getAttr("stride")))
+    return (*this)->emitOpError("attribute 'stride' expects DenseIntElementsAttr");
   return success();
 }
 
@@ -545,6 +559,12 @@ LogicalResult dwc::PaddingOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.padding' to have attribute 'post_padding'");
   if (!(*this)->hasAttr("pre_padding"))
     return (*this)->emitOpError("expected op 'dwc.padding' to have attribute 'pre_padding'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("dimension")))
+    return (*this)->emitOpError("attribute 'dimension' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("post_padding")))
+    return (*this)->emitOpError("attribute 'post_padding' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("pre_padding")))
+    return (*this)->emitOpError("attribute 'pre_padding' expects IntegerAttr");
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
     if (ranked.getRank() == 0)
       return (*this)->emitOpError("operand 0 expects non-0-ranked tensor");
@@ -595,6 +615,8 @@ LogicalResult dwc::PseudoSplitOp::verify() {
     return emitOpError("expects 2 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("num_splits"))
     return (*this)->emitOpError("expected op 'dwc.pseudo_split' to have attribute 'num_splits'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("num_splits")))
+    return (*this)->emitOpError("attribute 'num_splits' expects IntegerAttr");
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
     if (ranked.getRank() != 0)
       return (*this)->emitOpError("operand 0 expects 0D tensor");
@@ -624,6 +646,8 @@ LogicalResult dwc::ReductionOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.reduction' to have attribute 'dimensions'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.reduction' to have attribute 'op_type'");
+  if (!llvm::isa<ElementsAttr>((*this)->getAttr("dimensions")))
+    return (*this)->emitOpError("attribute 'dimensions' expects ElementsAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
@@ -646,6 +670,8 @@ LogicalResult dwc::RescalingOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'output_activation_per_z_out_scales'");
   if (!(*this)->hasAttr("per_z_out_scales_padding"))
     return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'per_z_out_scales_padding'");
+  if (!llvm::isa<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales")))
+    return (*this)->emitOpError("attribute 'output_activation_per_z_out_scales' expects ArrayAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type>(element))
