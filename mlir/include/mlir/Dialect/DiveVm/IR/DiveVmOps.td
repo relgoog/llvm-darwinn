@@ -52,7 +52,7 @@ def DiveVm_AddImmOp : DiveVm_Op<"add_imm"> {
 def DiveVm_AddressOfActivationOp : DiveVm_Op<"address_of_activation"> {
   let summary = "DiveVM address_of_activation operation.";
   let description = [{
-    Verifier accepts any operand count. LowerCopySlice DynamicSliceLowering creates dive_vm.address_of_activation from darwinn.dynamic_slice, darwinn.dynamic_slice_with_copy, darwinn.dynamic_update_slice, and darwinn.dynamic_update_slice_with_offsets to feed dive_vm.extract_slice or dive_vm.insert_slice. No callee symbol for dive_vm.address_of_activation evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier accepts any operand count. LowerCopySlice DynamicSliceLowering creates dive_vm.address_of_activation from darwinn.dynamic_slice, darwinn.dynamic_slice_with_copy, darwinn.dynamic_update_slice, and darwinn.dynamic_update_slice_with_offsets to feed dive_vm.extract_slice or dive_vm.insert_slice. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.address_of_activation to DiveVm_GetAddressOfInputActivation.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -444,7 +444,7 @@ def DiveVm_CondBrOp : DiveVm_Op<"cond_br"> {
 def DiveVm_ConstOp : DiveVm_Op<"const"> {
   let summary = "DiveVM const operation.";
   let description = [{
-    Verifier accepts any operand count. applyDwcLowerConstInline forwards arith.constant and darwinn.constant_generator to dive_vm.const. No callee symbol for dive_vm.const evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier accepts any operand count. applyDwcLowerConstInline forwards arith.constant and darwinn.constant_generator to dive_vm.const. Both emission switches drop unused dive_vm.const with the dead-const fold and reject used ones with a named no-callee error.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -780,7 +780,7 @@ def DiveVm_ExecutableOp : DiveVm_Op<"executable"> {
 def DiveVm_ExtractSliceOp : DiveVm_Op<"extract_slice"> {
   let summary = "DiveVM extract_slice operation.";
   let description = [{
-    Verifier accepts any operand count. LowerCopySlice DynamicSliceLowering creates dive_vm.extract_slice from darwinn.dynamic_slice and darwinn.dynamic_slice_with_copy with slice-offset generator attributes. No callee symbol for dive_vm.extract_slice evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier accepts any operand count. LowerCopySlice DynamicSliceLowering creates dive_vm.extract_slice from darwinn.dynamic_slice and darwinn.dynamic_slice_with_copy with slice-offset generator attributes. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.extract_slice to MemCpyPerf with the opaque pointer bridge.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -976,7 +976,7 @@ def DiveVm_IdpInstanceOp : DiveVm_Op<"idp_instance"> {
 def DiveVm_InsertSliceOp : DiveVm_Op<"insert_slice"> {
   let summary = "DiveVM insert_slice operation.";
   let description = [{
-    Verifier accepts any operand count. LowerCopySlice DynamicSliceLowering creates dive_vm.insert_slice from darwinn.dynamic_update_slice and darwinn.dynamic_update_slice_with_offsets with slice-offset generator attributes. No callee symbol for dive_vm.insert_slice evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier accepts any operand count. LowerCopySlice DynamicSliceLowering creates dive_vm.insert_slice from darwinn.dynamic_update_slice and darwinn.dynamic_update_slice_with_offsets with slice-offset generator attributes. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.insert_slice to MemCpyPerf with the opaque pointer bridge.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1662,7 +1662,7 @@ def DiveVm_ScatterNdOp : DiveVm_Op<"scatter_nd"> {
 def DiveVm_SelectOp : DiveVm_Op<"select"> {
   let summary = "DiveVM select operation.";
   let description = [{
-    Verifier requires exactly 2 operands. A darwinn lowering forwards darwinn.select to dive_vm.select. No callee symbol for dive_vm.select evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
+    Verifier requires exactly 2 operands. A darwinn lowering forwards darwinn.select to dive_vm.select. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.select to DiveVm_MaskIndices with the opaque pointer bridge.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
