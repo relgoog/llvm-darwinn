@@ -106,6 +106,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCPBQPSLICINGPASS
 #define GEN_PASS_DEF_DWCPOSTSLICINGOPTIMIZATIONPASS
 #define GEN_PASS_DEF_DWCREMOVEREDUNDANTMOVSPASS
+#define GEN_PASS_DEF_DWCSTREAMINGTOSYNCPASS
+#define GEN_PASS_DEF_DWCOPREORDERINGFORSTREAMINGPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8186,6 +8188,35 @@ struct DwcRemoveRedundantMovsPass
     });
     for (Operation *op : dead)
       op->erase();
+  }
+};
+
+struct DwcStreamingToSyncPass
+    : public darwinn::impl::DwcStreamingToSyncPassBase<DwcStreamingToSyncPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.streaming_copy_op")
+        return;
+      op->setAttr("dwc.sync_converted", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcOpReorderingForStreamingPass
+    : public darwinn::impl::DwcOpReorderingForStreamingPassBase<DwcOpReorderingForStreamingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned order = 0;
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.stream_order", IntegerAttr::get(IntegerType::get(&getContext(), 32), order++));
+    });
   }
 };
 

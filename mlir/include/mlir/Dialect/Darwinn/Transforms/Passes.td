@@ -1686,6 +1686,20 @@ def DwcRemoveRedundantMovsPass : Pass<"remove-redundant-movs", "func::FuncOp"> {
   }];
 }
 
+def DwcStreamingToSyncPass : Pass<"streaming-to-sync", "func::FuncOp"> {
+  let summary = "DWC pass streaming-to-sync";
+  let description = [{
+    Blob-evidenced lisa pass. Streaming to sync. Converts streaming copy ops to synchronized form.
+  }];
+}
+
+def DwcOpReorderingForStreamingPass : Pass<"op-reordering-for-streaming", "func::FuncOp"> {
+  let summary = "DWC pass op-reordering-for-streaming";
+  let description = [{
+    Blob-evidenced lisa pass. Op reordering for streaming. Reorders ops to maximize streaming overlap.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
