@@ -134,6 +134,12 @@ LogicalResult dwc::ClassifierOp::verify() {
     return (*this)->emitOpError("attribute 'beta' expects FloatAttr");
   if (!llvm::isa<ClassificationTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects ClassificationTypeAttr");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("axis")).getInt() != -1)
+    return (*this)->emitOpError("attribute 'axis' expects -1");
+  if (llvm::cast<FloatAttr>((*this)->getAttr("beta")).getValueAsDouble() != 1.0)
+    return (*this)->emitOpError("attribute 'beta' expects 1.0");
+  if (llvm::cast<ClassificationTypeAttr>((*this)->getAttr("op_type")).getValue() != ClassificationType::Softmax)
+    return (*this)->emitOpError("attribute 'op_type' expects SOFTMAX");
   return success();
 }
 
@@ -271,6 +277,8 @@ LogicalResult dwc::CumulativeOp::verify() {
     return (*this)->emitOpError("attribute 'exclusive' expects BoolAttr");
   if (!llvm::isa<CumulativeOpTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects CumulativeOpTypeAttr");
+  if (llvm::cast<CumulativeOpTypeAttr>((*this)->getAttr("op_type")).getValue() != CumulativeOpType::Sum)
+    return (*this)->emitOpError("attribute 'op_type' expects SUM");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
@@ -722,6 +730,8 @@ LogicalResult dwc::PseudoSplitOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.pseudo_split' to have attribute 'num_splits'");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("num_splits")))
     return (*this)->emitOpError("attribute 'num_splits' expects IntegerAttr");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("num_splits")).getInt() != 1)
+    return (*this)->emitOpError("attribute 'num_splits' expects 1");
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
     if (ranked.getRank() != 0)
       return (*this)->emitOpError("operand 0 expects 0D tensor");

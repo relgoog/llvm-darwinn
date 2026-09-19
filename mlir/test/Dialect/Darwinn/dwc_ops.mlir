@@ -52,7 +52,7 @@ func.func @test_ceil(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: classifier
 func.func @test_classifier(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.classifier
-  %0 = "dwc.classifier"(%arg0) {axis = 1 : i64, beta = 1.0 : f32, op_type = #dwc.classification_type<SOFTMAX>} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.classifier"(%arg0) {axis = -1 : i64, beta = 1.0 : f32, op_type = #dwc.classification_type<SOFTMAX>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -332,7 +332,7 @@ func.func @test_pow(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32>
 // CHECK-LABEL: pseudo_split
 func.func @test_pseudo_split(%arg0: tensor<i32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.pseudo_split
-  %0 = "dwc.pseudo_split"(%arg0, %arg1) {num_splits = 2 : i64} : (tensor<i32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.pseudo_split"(%arg0, %arg1) {num_splits = 1 : i64} : (tensor<i32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
