@@ -683,6 +683,10 @@ LogicalResult dwc::PaddingOp::verify() {
     return (*this)->emitOpError("attribute 'post_padding' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("pre_padding")))
     return (*this)->emitOpError("attribute 'pre_padding' expects IntegerAttr");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("post_padding")).getInt() < 0)
+    return (*this)->emitOpError("attribute 'post_padding' expects non-negative");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("pre_padding")).getInt() < 0)
+    return (*this)->emitOpError("attribute 'pre_padding' expects non-negative");
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
     if (ranked.getRank() == 0)
       return (*this)->emitOpError("operand 0 expects non-0-ranked tensor");
@@ -955,6 +959,10 @@ LogicalResult dwc::SliceOp::verify() {
     return (*this)->emitOpError("attribute 'in_size' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
     return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("in_begin")).getInt() < 0)
+    return (*this)->emitOpError("attribute 'in_begin' expects non-negative");
+  if (llvm::cast<IntegerAttr>((*this)->getAttr("mode")).getInt() < 0)
+    return (*this)->emitOpError("attribute 'mode' expects non-negative");
   return success();
 }
 
