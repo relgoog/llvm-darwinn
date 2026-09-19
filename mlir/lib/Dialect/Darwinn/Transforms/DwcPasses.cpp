@@ -104,6 +104,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCSLICEGRANULARITYASSIGNMENTPASS
 #define GEN_PASS_DEF_DWCPROPAGATINGSLICINGPASS
 #define GEN_PASS_DEF_DWCPBQPSLICINGPASS
+#define GEN_PASS_DEF_DWCPOSTSLICINGOPTIMIZATIONPASS
+#define GEN_PASS_DEF_DWCREMOVEREDUNDANTMOVSPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8148,6 +8150,42 @@ struct DwcPbqpSlicingPass
         return;
       op->setAttr("dwc.pbqp_cost", IntegerAttr::get(IntegerType::get(&getContext(), 32), cost++));
     });
+  }
+};
+
+struct DwcPostSlicingOptimizationPass
+    : public darwinn::impl::DwcPostSlicingOptimizationPassBase<DwcPostSlicingOptimizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.slicing_propagated"))
+        return;
+      op->setAttr("dwc.slicing_optimized", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcRemoveRedundantMovsPass
+    : public darwinn::impl::DwcRemoveRedundantMovsPassBase<DwcRemoveRedundantMovsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" && name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 

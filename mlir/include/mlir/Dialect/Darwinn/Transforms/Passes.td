@@ -1672,6 +1672,20 @@ def DwcPbqpSlicingPass : Pass<"pbqp-slicing", "func::FuncOp"> {
   }];
 }
 
+def DwcPostSlicingOptimizationPass : Pass<"post-slicing-optimization", "func::FuncOp"> {
+  let summary = "DWC pass post-slicing-optimization";
+  let description = [{
+    Blob-evidenced lisa pass. Post slicing optimization. Cleans up slicing metadata after assignment converges.
+  }];
+}
+
+def DwcRemoveRedundantMovsPass : Pass<"remove-redundant-movs", "func::FuncOp"> {
+  let summary = "DWC pass remove-redundant-movs";
+  let description = [{
+    Blob-evidenced lisa pass. Remove redundant movs. Erases identity copy-like ops left after slicing.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
