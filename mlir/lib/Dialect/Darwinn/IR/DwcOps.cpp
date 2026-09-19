@@ -175,6 +175,12 @@ LogicalResult dwc::ConvolutionOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'y_dilation_rate'");
   if (!(*this)->hasAttr("y_stride"))
     return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'y_stride'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
+    return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
+  if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
+    return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_dilation_rate")))
     return (*this)->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_stride")))
@@ -201,6 +207,12 @@ LogicalResult dwc::ConvolutionV2Op::verify() {
     return (*this)->emitOpError("expected op 'dwc.convolution_v2' to have attribute 'y_dilation_rate'");
   if (!(*this)->hasAttr("y_stride"))
     return (*this)->emitOpError("expected op 'dwc.convolution_v2' to have attribute 'y_stride'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
+    return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
+  if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
+    return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
   return success();
 }
 
@@ -280,6 +292,12 @@ LogicalResult dwc::DepthwiseConvolutionV2Op::verify() {
     return (*this)->emitOpError("expected op 'dwc.depthwise_convolution_v2' to have attribute 'y_dilation_rate'");
   if (!(*this)->hasAttr("y_stride"))
     return (*this)->emitOpError("expected op 'dwc.depthwise_convolution_v2' to have attribute 'y_stride'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
+    return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
+  if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
+    return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
   return success();
 }
 
@@ -388,6 +406,8 @@ LogicalResult dwc::FullyConnectedOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.fully_connected' to have attribute 'activation_function'");
   if (!(*this)->hasAttr("cell_operation"))
     return (*this)->emitOpError("expected op 'dwc.fully_connected' to have attribute 'cell_operation'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -426,6 +446,8 @@ LogicalResult dwc::GenericConstantOp::verify() {
 LogicalResult dwc::GenericConvOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.generic_conv' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   if (!(*this)->hasAttr("batch_group_count"))
     return (*this)->emitOpError("expected op 'dwc.generic_conv' to have attribute 'batch_group_count'");
   if (!(*this)->hasAttr("feature_group_count"))
@@ -940,6 +962,12 @@ LogicalResult dwc::TransposedConvolutionOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.transposed_convolution' to have attribute 'y_out_dim'");
   if (!(*this)->hasAttr("y_stride"))
     return (*this)->emitOpError("expected op 'dwc.transposed_convolution' to have attribute 'y_stride'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
+    return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
+  if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
+    return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
   return success();
 }
 

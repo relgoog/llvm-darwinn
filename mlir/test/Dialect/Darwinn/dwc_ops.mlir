@@ -84,7 +84,7 @@ func.func @test_const(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: convolution
 func.func @test_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.convolution
-  %0 = "dwc.convolution"(%arg0) {activation_function = "x", cell_operation = "x", pad = "x", x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.convolution"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -92,7 +92,7 @@ func.func @test_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: convolution_v2
 func.func @test_convolution_v2(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.convolution_v2
-  %0 = "dwc.convolution_v2"(%arg0) {activation_function = "x", cell_operation = "x", pad = "x", x_dilation_rate = "x", x_stride = "x", y_dilation_rate = "x", y_stride = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.convolution_v2"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -124,7 +124,7 @@ func.func @test_cwise(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf3
 // CHECK-LABEL: depthwise_convolution_v2
 func.func @test_depthwise_convolution_v2(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.depthwise_convolution_v2
-  %0 = "dwc.depthwise_convolution_v2"(%arg0) {activation_function = "x", cell_operation = "x", depth_multiplier = "x", pad = "x", x_dilation_rate = "x", x_stride = "x", y_dilation_rate = "x", y_stride = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.depthwise_convolution_v2"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, depth_multiplier = 1 : i64, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -196,7 +196,7 @@ func.func @test_floor_div(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<
 // CHECK-LABEL: fully_connected
 func.func @test_fully_connected(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.fully_connected
-  %0 = "dwc.fully_connected"(%arg0) {activation_function = "x", cell_operation = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.fully_connected"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -228,7 +228,7 @@ func.func @test_generic_constant(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_conv
 func.func @test_generic_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_conv
-  %0 = "dwc.generic_conv"(%arg0) {activation_function = "x", batch_group_count = 1 : i64, feature_group_count = 1 : i64, input_dilation = dense<[1, 1]> : tensor<2xi64>, padding_amount = dense<[0, 0]> : tensor<2xi64>, param_dilation = dense<[1, 1]> : tensor<2xi64>, param_reversal = dense<false> : tensor<2xi1>, stride = dense<[1, 1]> : tensor<2xi64>} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_conv"(%arg0) {activation_function = #dwc.activation_function<NONE>, batch_group_count = 1 : i64, feature_group_count = 1 : i64, input_dilation = dense<[1, 1]> : tensor<2xi64>, padding_amount = dense<[0, 0]> : tensor<2xi64>, param_dilation = dense<[1, 1]> : tensor<2xi64>, param_reversal = dense<false> : tensor<2xi1>, stride = dense<[1, 1]> : tensor<2xi64>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -492,7 +492,7 @@ func.func @test_transpose(%arg0: tensor<2x2x2xf32>) -> tensor<2x2x2xf32> {
 // CHECK-LABEL: transposed_convolution
 func.func @test_transposed_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.transposed_convolution
-  %0 = "dwc.transposed_convolution"(%arg0) {activation_function = "x", cell_operation = "x", pad = "x", x_dilation_rate = "x", x_out_dim = "x", x_stride = "x", y_dilation_rate = "x", y_out_dim = "x", y_stride = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.transposed_convolution"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_out_dim = 4 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_out_dim = 4 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
