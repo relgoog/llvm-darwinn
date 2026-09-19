@@ -30,10 +30,10 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Visitors.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -105,7 +105,7 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDWCLEGALIZEHLOTOTFPASS
 #define GEN_PASS_DEF_DWCDWCLEGALIZEINTANDQUANTTYPESPASS
 #define GEN_PASS_DEF_DWCDWCLEGALIZEINT64CONSTANTSPASS
-#define GEN_PASS_DEF_DWCDWCLEGALIZEPASSPASS
+#define GEN_PASS_DEF_DWCDWCLEGALIZEPASSSYMBOL
 #define GEN_PASS_DEF_DWCDWCLEGALIZESTABLEHLOANNOTATEMATERIALIZEPOLICYPASS
 #define GEN_PASS_DEF_DWCDWCLEGALIZESTABLEHLOCOMPOSITEPASS
 #define GEN_PASS_DEF_DWCDWCLEGALIZETFPIPELINEPASS
@@ -221,6 +221,7 @@ namespace darwinn {
 } // namespace darwinn
 } // namespace mlir
 
+using namespace mlir;
 using namespace mlir::darwinn;
 
 namespace mlir {
@@ -352,9 +353,9 @@ static LogicalResult forwardDwcLowerOp(OpBuilder &builder, Operation *op,
   if (!extraUnitAttr.empty())
     attrs.push_back(builder.getNamedAttr(extraUnitAttr, builder.getUnitAttr()));
   builder.setInsertionPoint(op);
-  Operation *next = makeDwcLowerVmOp(builder, op->getLoc(), target,
-                                     ValueRange(operands), TypeRange(results),
-                                     attrs);
+  Operation *next =
+      makeDwcLowerVmOp(builder, op->getLoc(), target, ValueRange(operands),
+                       TypeRange(results), attrs);
   for (unsigned i = 0, e = op->getNumResults(); i < e; ++i)
     op->getResult(i).replaceAllUsesWith(next->getResult(i));
   op->erase();
@@ -369,9 +370,8 @@ static LogicalResult forwardDwcLowerTo(func::FuncOp func,
   OpBuilder builder(func.getOperation()->getContext());
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
-    StringRef name = op->getName().getStringRef();
     for (StringRef src : sources) {
-      if (name == src) {
+      if (op->getName().getStringRef() == src) {
         targets.push_back(op);
         break;
       }
@@ -389,8 +389,8 @@ static LogicalResult applyDwcLowerGatherOob(func::FuncOp func,
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
-    if (name == "darwinn.gather" || name == "darwinn.gather_copy" ||
-        name == "darwinn.hib_gather")
+    if (op->getName().getStringRef() == "darwinn.gather" || op->getName().getStringRef() == "darwinn.gather_copy" ||
+        op->getName().getStringRef() == "darwinn.hib_gather")
       targets.push_back(op);
   });
   for (Operation *op : targets) {
@@ -415,8 +415,7 @@ static LogicalResult applyDwcLowerScatterInline(func::FuncOp func,
 
 static LogicalResult applyDwcLowerSelectInline(func::FuncOp func,
                                                unsigned &lowered) {
-  return forwardDwcLowerTo(func, {"darwinn.select"}, "dive_vm.select",
-                           lowered);
+  return forwardDwcLowerTo(func, {"darwinn.select"}, "dive_vm.select", lowered);
 }
 
 static LogicalResult applyDwcLowerTopKInline(func::FuncOp func,
@@ -427,10 +426,9 @@ static LogicalResult applyDwcLowerTopKInline(func::FuncOp func,
 
 static LogicalResult applyDwcLowerPadInline(func::FuncOp func,
                                             unsigned &lowered) {
-  return forwardDwcLowerTo(func,
-                           {"darwinn.rkhy_custom_padding",
-                            "darwinn.mesh_pad_slice"},
-                           "dive_vm.pad", lowered);
+  return forwardDwcLowerTo(
+      func, {"darwinn.rkhy_custom_padding", "darwinn.mesh_pad_slice"},
+      "dive_vm.pad", lowered);
 }
 
 static LogicalResult applyDwcLowerArgmaxInline(func::FuncOp func,
@@ -445,8 +443,8 @@ static LogicalResult applyDwcLowerCopyLike(func::FuncOp func,
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
-    if (name == "darwinn.copy_op" || name == "darwinn.copy_from_host" ||
-        name == "darwinn.copy_using_wide")
+    if (op->getName().getStringRef() == "darwinn.copy_op" || op->getName().getStringRef() == "darwinn.copy_from_host" ||
+        op->getName().getStringRef() == "darwinn.copy_using_wide")
       targets.push_back(op);
   });
   for (Operation *op : targets) {
@@ -469,9 +467,9 @@ static LogicalResult applyDwcLowerCopyLike(func::FuncOp func,
     for (auto attr : op->getAttrs())
       attrs.push_back(attr);
     builder.setInsertionPoint(op);
-    Operation *copy = makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.copy",
-                                       ValueRange(operands), TypeRange(results),
-                                       attrs);
+    Operation *copy =
+        makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.copy",
+                         ValueRange(operands), TypeRange(results), attrs);
     op->getResult(0).replaceAllUsesWith(copy->getResult(0));
     op->erase();
     ++lowered;
@@ -485,8 +483,8 @@ static LogicalResult applyDwcLowerConvertTrunc(func::FuncOp func,
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
-    if (name == "darwinn.convert" || name == "darwinn.cast_in" ||
-        name == "darwinn.cast_out")
+    if (op->getName().getStringRef() == "darwinn.convert" || op->getName().getStringRef() == "darwinn.cast_in" ||
+        op->getName().getStringRef() == "darwinn.cast_out")
       targets.push_back(op);
   });
   for (Operation *op : targets) {
@@ -511,9 +509,9 @@ static LogicalResult applyDwcLowerConvertTrunc(func::FuncOp func,
     SmallVector<Value> operands{input};
     SmallVector<Type> results{resultType};
     SmallVector<NamedAttribute> empty;
-    Operation *cast = makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.cast",
-                                       ValueRange(operands), TypeRange(results),
-                                       empty);
+    Operation *cast =
+        makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.cast",
+                         ValueRange(operands), TypeRange(results), empty);
     op->getResult(0).replaceAllUsesWith(cast->getResult(0));
     op->erase();
     ++lowered;
@@ -527,7 +525,7 @@ static LogicalResult applyDwcLowerConstInline(func::FuncOp func,
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
-    if (name == "arith.constant" || name == "darwinn.constant_generator")
+    if (op->getName().getStringRef() == "arith.constant" || op->getName().getStringRef() == "darwinn.constant_generator")
       targets.push_back(op);
   });
   for (Operation *op : targets) {
@@ -546,9 +544,9 @@ static LogicalResult applyDwcLowerConstInline(func::FuncOp func,
     for (auto attr : op->getAttrs())
       attrs.push_back(attr);
     builder.setInsertionPoint(op);
-    Operation *next = makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.const",
-                                       ValueRange(operands), TypeRange(results),
-                                       attrs);
+    Operation *next =
+        makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.const",
+                         ValueRange(operands), TypeRange(results), attrs);
     op->getResult(0).replaceAllUsesWith(next->getResult(0));
     op->erase();
     ++lowered;
@@ -562,9 +560,9 @@ static LogicalResult applyDwcLowerScalarArith(func::FuncOp func,
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
-    if (name == "darwinn.tgc_elementwise_add" ||
-        name == "darwinn.tgc_elementwise_mul" ||
-        name == "darwinn.tgc_elementwise_sub")
+    if (op->getName().getStringRef() == "darwinn.tgc_elementwise_add" ||
+        op->getName().getStringRef() == "darwinn.tgc_elementwise_mul" ||
+        op->getName().getStringRef() == "darwinn.tgc_elementwise_sub")
       targets.push_back(op);
   });
   for (Operation *op : targets) {
@@ -577,16 +575,16 @@ static LogicalResult applyDwcLowerScalarArith(func::FuncOp func,
     StringRef name = op->getName().getStringRef();
     StringRef target;
     if (isa<IntegerType>(dwcLowerElementOf(resultType))) {
-      if (name == "darwinn.tgc_elementwise_add")
+      if (op->getName().getStringRef() == "darwinn.tgc_elementwise_add")
         target = "arith.addi";
-      else if (name == "darwinn.tgc_elementwise_mul")
+      else if (op->getName().getStringRef() == "darwinn.tgc_elementwise_mul")
         target = "arith.muli";
       else
         target = "arith.subi";
     } else if (isa<FloatType>(dwcLowerElementOf(resultType))) {
-      if (name == "darwinn.tgc_elementwise_add")
+      if (op->getName().getStringRef() == "darwinn.tgc_elementwise_add")
         target = "arith.addf";
-      else if (name == "darwinn.tgc_elementwise_mul")
+      else if (op->getName().getStringRef() == "darwinn.tgc_elementwise_mul")
         target = "arith.mulf";
       else
         target = "arith.subf";
@@ -600,7 +598,9 @@ static LogicalResult applyDwcLowerScalarArith(func::FuncOp func,
 }
 
 // TSV row: "(ackr-model-converter" at 0xdac24f.
-struct DwcAckrModelConverterPass : public darwinn::impl::DwcAckrModelConverterPassBase<DwcAckrModelConverterPass> {
+struct DwcAckrModelConverterPass
+    : public darwinn::impl::DwcAckrModelConverterPassBase<
+          DwcAckrModelConverterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -629,7 +629,8 @@ struct DwcAckrModelConverterPass : public darwinn::impl::DwcAckrModelConverterPa
 };
 
 // TSV row: "add_bound_lower" at 0xdaad7f.
-struct DwcAddBoundLowerPass : public darwinn::impl::DwcAddBoundLowerPassBase<DwcAddBoundLowerPass> {
+struct DwcAddBoundLowerPass
+    : public darwinn::impl::DwcAddBoundLowerPassBase<DwcAddBoundLowerPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -658,7 +659,9 @@ struct DwcAddBoundLowerPass : public darwinn::impl::DwcAddBoundLowerPassBase<Dwc
 };
 
 // TSV row: "add-dive-abi-arguments" at 0xd7a252.
-struct DwcAddDiveAbiArgumentsPass : public darwinn::impl::DwcAddDiveAbiArgumentsPassBase<DwcAddDiveAbiArgumentsPass> {
+struct DwcAddDiveAbiArgumentsPass
+    : public darwinn::impl::DwcAddDiveAbiArgumentsPassBase<
+          DwcAddDiveAbiArgumentsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -687,7 +690,8 @@ struct DwcAddDiveAbiArgumentsPass : public darwinn::impl::DwcAddDiveAbiArguments
 };
 
 // TSV row: "add-dive-tracing" at 0xde194d.
-struct DwcAddDiveTracingPass : public darwinn::impl::DwcAddDiveTracingPassBase<DwcAddDiveTracingPass> {
+struct DwcAddDiveTracingPass
+    : public darwinn::impl::DwcAddDiveTracingPassBase<DwcAddDiveTracingPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -716,7 +720,9 @@ struct DwcAddDiveTracingPass : public darwinn::impl::DwcAddDiveTracingPassBase<D
 };
 
 // TSV row: "allow-bf16-and-f16-type-legalization" at 0xdc1b37.
-struct DwcAllowBf16AndF16TypeLegalizationPass : public darwinn::impl::DwcAllowBf16AndF16TypeLegalizationPassBase<DwcAllowBf16AndF16TypeLegalizationPass> {
+struct DwcAllowBf16AndF16TypeLegalizationPass
+    : public darwinn::impl::DwcAllowBf16AndF16TypeLegalizationPassBase<
+          DwcAllowBf16AndF16TypeLegalizationPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -733,7 +739,8 @@ struct DwcAllowBf16AndF16TypeLegalizationPass : public darwinn::impl::DwcAllowBf
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("allow-bf16-and-f16-type-legalization.marked", builder.getUnitAttr());
+      op->setAttr("allow-bf16-and-f16-type-legalization.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -745,7 +752,9 @@ struct DwcAllowBf16AndF16TypeLegalizationPass : public darwinn::impl::DwcAllowBf
 };
 
 // TSV row: "arith assert lower" at 0xdaad9b.
-struct DwcArithAssertLowerPass : public darwinn::impl::DwcArithAssertLowerPassBase<DwcArithAssertLowerPass> {
+struct DwcArithAssertLowerPass
+    : public darwinn::impl::DwcArithAssertLowerPassBase<
+          DwcArithAssertLowerPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -774,7 +783,8 @@ struct DwcArithAssertLowerPass : public darwinn::impl::DwcArithAssertLowerPassBa
 };
 
 // TSV row: "arith-lower" at 0xdaad8f.
-struct DwcArithLowerPass : public darwinn::impl::DwcArithLowerPassBase<DwcArithLowerPass> {
+struct DwcArithLowerPass
+    : public darwinn::impl::DwcArithLowerPassBase<DwcArithLowerPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -803,7 +813,8 @@ struct DwcArithLowerPass : public darwinn::impl::DwcArithLowerPassBase<DwcArithL
 };
 
 // TSV row: "bitcast-convert" at 0xd68cb7.
-struct DwcBitcastConvertPass : public darwinn::impl::DwcBitcastConvertPassBase<DwcBitcastConvertPass> {
+struct DwcBitcastConvertPass
+    : public darwinn::impl::DwcBitcastConvertPassBase<DwcBitcastConvertPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -832,40 +843,47 @@ struct DwcBitcastConvertPass : public darwinn::impl::DwcBitcastConvertPassBase<D
 };
 
 // TSV row: "chlo-legalize-to-hlo" at 0xdbc367.
-struct DwcChloLegalizeToHloPass : public darwinn::impl::DwcChloLegalizeToHloPassBase<DwcChloLegalizeToHloPass> {
+struct DwcChloLegalizeToHloPass
+    : public darwinn::impl::DwcChloLegalizeToHloPassBase<
+          DwcChloLegalizeToHloPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "chlo-legalize-to-hlo rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "chlo" && ns != "mhlo") {
-        op->emitError() << "chlo-legalize-to-hlo rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "chlo-legalize-to-hlo rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "chlo" && ns != "mhlo") {
+            op->emitError()
+                << "chlo-legalize-to-hlo rejects operation from dialect " << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "composite-lowering" at 0xddee24.
-struct DwcCompositeLoweringPass : public darwinn::impl::DwcCompositeLoweringPassBase<DwcCompositeLoweringPass> {
+struct DwcCompositeLoweringPass
+    : public darwinn::impl::DwcCompositeLoweringPassBase<
+          DwcCompositeLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -894,7 +912,9 @@ struct DwcCompositeLoweringPass : public darwinn::impl::DwcCompositeLoweringPass
 };
 
 // TSV row: "concat-model-converter" at 0xdac238.
-struct DwcConcatModelConverterPass : public darwinn::impl::DwcConcatModelConverterPassBase<DwcConcatModelConverterPass> {
+struct DwcConcatModelConverterPass
+    : public darwinn::impl::DwcConcatModelConverterPassBase<
+          DwcConcatModelConverterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -923,7 +943,9 @@ struct DwcConcatModelConverterPass : public darwinn::impl::DwcConcatModelConvert
 };
 
 // TSV row: "concat-proof-converter" at 0xdac279.
-struct DwcConcatProofConverterPass : public darwinn::impl::DwcConcatProofConverterPassBase<DwcConcatProofConverterPass> {
+struct DwcConcatProofConverterPass
+    : public darwinn::impl::DwcConcatProofConverterPassBase<
+          DwcConcatProofConverterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -952,7 +974,9 @@ struct DwcConcatProofConverterPass : public darwinn::impl::DwcConcatProofConvert
 };
 
 // TSV row: "convert-arith-to-llvm" at 0xdcb7f5.
-struct DwcConvertArithToLlvmPass : public darwinn::impl::DwcConvertArithToLlvmPassBase<DwcConvertArithToLlvmPass> {
+struct DwcConvertArithToLlvmPass
+    : public darwinn::impl::DwcConvertArithToLlvmPassBase<
+          DwcConvertArithToLlvmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -975,13 +999,13 @@ struct DwcConvertArithToLlvmPass : public darwinn::impl::DwcConvertArithToLlvmPa
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("arith.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("arith.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-cf-to-llvm" at 0xdcb838.
-struct DwcConvertCfToLlvmPass : public darwinn::impl::DwcConvertCfToLlvmPassBase<DwcConvertCfToLlvmPass> {
+struct DwcConvertCfToLlvmPass
+    : public darwinn::impl::DwcConvertCfToLlvmPassBase<DwcConvertCfToLlvmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1004,13 +1028,14 @@ struct DwcConvertCfToLlvmPass : public darwinn::impl::DwcConvertCfToLlvmPassBase
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("cf.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("cf.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-conv1x1-to-fc" at 0xe26ea5.
-struct DwcConvertConv1x1ToFcPass : public darwinn::impl::DwcConvertConv1x1ToFcPassBase<DwcConvertConv1x1ToFcPass> {
+struct DwcConvertConv1x1ToFcPass
+    : public darwinn::impl::DwcConvertConv1x1ToFcPassBase<
+          DwcConvertConv1x1ToFcPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1033,13 +1058,14 @@ struct DwcConvertConv1x1ToFcPass : public darwinn::impl::DwcConvertConv1x1ToFcPa
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dive-vm-tensor-to-linalg" at 0xde1ad1.
-struct DwcConvertDiveVmTensorToLinalgPass : public darwinn::impl::DwcConvertDiveVmTensorToLinalgPassBase<DwcConvertDiveVmTensorToLinalgPass> {
+struct DwcConvertDiveVmTensorToLinalgPass
+    : public darwinn::impl::DwcConvertDiveVmTensorToLinalgPassBase<
+          DwcConvertDiveVmTensorToLinalgPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1062,13 +1088,14 @@ struct DwcConvertDiveVmTensorToLinalgPass : public darwinn::impl::DwcConvertDive
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dive-vm-tensor-to-scf" at 0xde4651.
-struct DwcConvertDiveVmTensorToScfPass : public darwinn::impl::DwcConvertDiveVmTensorToScfPassBase<DwcConvertDiveVmTensorToScfPass> {
+struct DwcConvertDiveVmTensorToScfPass
+    : public darwinn::impl::DwcConvertDiveVmTensorToScfPassBase<
+          DwcConvertDiveVmTensorToScfPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1091,13 +1118,14 @@ struct DwcConvertDiveVmTensorToScfPass : public darwinn::impl::DwcConvertDiveVmT
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dive-vm-tensor-to-tensor" at 0xda89fa.
-struct DwcConvertDiveVmTensorToTensorPass : public darwinn::impl::DwcConvertDiveVmTensorToTensorPassBase<DwcConvertDiveVmTensorToTensorPass> {
+struct DwcConvertDiveVmTensorToTensorPass
+    : public darwinn::impl::DwcConvertDiveVmTensorToTensorPassBase<
+          DwcConvertDiveVmTensorToTensorPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1120,13 +1148,14 @@ struct DwcConvertDiveVmTensorToTensorPass : public darwinn::impl::DwcConvertDive
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dive-vm-to-llvm" at 0xdcb7dd.
-struct DwcConvertDiveVmToLlvmPass : public darwinn::impl::DwcConvertDiveVmToLlvmPassBase<DwcConvertDiveVmToLlvmPass> {
+struct DwcConvertDiveVmToLlvmPass
+    : public darwinn::impl::DwcConvertDiveVmToLlvmPassBase<
+          DwcConvertDiveVmToLlvmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1150,19 +1179,199 @@ struct DwcConvertDiveVmToLlvmPass : public darwinn::impl::DwcConvertDiveVmToLlvm
       if (failed(checkDwcConvertibleTypes(op)))
         return signalPassFailure();
       if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result dive_vm op in convert-dive-vm-to-llvm");
+        op->emitError(
+            "unsupported multi-result dive_vm op in convert-dive-vm-to-llvm");
         return signalPassFailure();
       }
-      StringRef name = op->getName().getStringRef();
-      StringRef callee;
-      if (name == "dive_vm.add")
+      if (op->getName().getStringRef() == "dive_vm.br") {
+        if (op->getNumResults()) {
+          op->emitError("unsupported result on dive_vm.br in convert-dive-vm-to-llvm");
+          return signalPassFailure();
+        }
+        Block *block = op->getBlock();
+        if (!block) {
+          op->emitError("dive_vm.br outside a block in convert-dive-vm-to-llvm");
+          return signalPassFailure();
+        }
+        Block *cont = block->splitBlock(op);
+        builder.setInsertionPointToEnd(block);
+        LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
+        op->erase();
+        ++lowered;
+        continue;
+      }
+      if (op->getName().getStringRef() == "dive_vm.cond_br") {
+        if (op->getNumResults()) {
+          op->emitError("unsupported result on dive_vm.cond_br in convert-dive-vm-to-llvm");
+          return signalPassFailure();
+        }
+        Block *block = op->getBlock();
+        if (!block) {
+          op->emitError("dive_vm.cond_br outside a block in convert-dive-vm-to-llvm");
+          return signalPassFailure();
+        }
+        Value cond;
+        bool hasI1Cond = false;
+        if (op->getNumOperands()) {
+          cond = op->getOperand(0);
+          if (auto intTy = dyn_cast<IntegerType>(cond.getType()))
+            hasI1Cond = intTy.getWidth() == 1;
+        }
+        Block *cont = block->splitBlock(op);
+        builder.setInsertionPointToEnd(block);
+        if (hasI1Cond) {
+          LLVM::CondBrOp::create(builder, op->getLoc(), cond, cont,
+                                 ValueRange(), cont, ValueRange());
+        } else {
+          LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
+        }
+        op->erase();
+        ++lowered;
+        continue;
+      }
+      const char *callee = nullptr;
+      if (op->getName().getStringRef() == "dive_vm.add")
         callee = "DiveRuntime_Log";
-      else if (name == "dive_vm.copy")
+      else if (op->getName().getStringRef() == "dive_vm.copy")
         callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
-      else if (name == "dive_vm.gather")
+      else if (op->getName().getStringRef() == "dive_vm.gather")
         callee = "DiveVm_HIBGatherEditE32";
-      else if (name == "dive_vm.legacy_scalar")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.legacy_scalar")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.cast" || op->getName().getStringRef() == "dive_vm.bitcast")
+        callee = "DiveVm_Cast";
+      else if (op->getName().getStringRef() == "dive_vm.sign")
+        callee = "DiveVm_Sign";
+      else if (op->getName().getStringRef() == "dive_vm.add_imm" || op->getName().getStringRef() == "dive_vm.sub" ||
+               op->getName().getStringRef() == "dive_vm.sub_imm" || op->getName().getStringRef() == "dive_vm.mul" ||
+               op->getName().getStringRef() == "dive_vm.mul_imm" || op->getName().getStringRef() == "dive_vm.div" ||
+               op->getName().getStringRef() == "dive_vm.div_imm" || op->getName().getStringRef() == "dive_vm.rem" ||
+               op->getName().getStringRef() == "dive_vm.rem_imm" || op->getName().getStringRef() == "dive_vm.min" ||
+               op->getName().getStringRef() == "dive_vm.min_imm" || op->getName().getStringRef() == "dive_vm.max" ||
+               op->getName().getStringRef() == "dive_vm.max_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.arithmetic_left_shift" ||
+               op->getName().getStringRef() == "dive_vm.arithmetic_left_shift_imm" ||
+               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift" ||
+               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift_imm" ||
+               op->getName().getStringRef() == "dive_vm.logical_right_shift" ||
+               op->getName().getStringRef() == "dive_vm.logical_right_shift_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.bitwise_and" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_and_imm" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_or" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_or_imm" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_xor" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_xor_imm" ||
+               op->getName().getStringRef() == "dive_vm.logical_and" ||
+               op->getName().getStringRef() == "dive_vm.logical_and_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.pow" || op->getName().getStringRef() == "dive_vm.pow_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.equal" || op->getName().getStringRef() == "dive_vm.equal_imm" ||
+               op->getName().getStringRef() == "dive_vm.not_equal" || op->getName().getStringRef() == "dive_vm.not_equal_imm" ||
+               op->getName().getStringRef() == "dive_vm.less" || op->getName().getStringRef() == "dive_vm.less_imm" ||
+               op->getName().getStringRef() == "dive_vm.less_equal" ||
+               op->getName().getStringRef() == "dive_vm.less_equal_imm" || op->getName().getStringRef() == "dive_vm.greater" ||
+               op->getName().getStringRef() == "dive_vm.greater_imm" ||
+               op->getName().getStringRef() == "dive_vm.greater_equal" ||
+               op->getName().getStringRef() == "dive_vm.greater_equal_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.allocate")
+        callee = "DiveRuntime_Allocate";
+      else if (op->getName().getStringRef() == "dive_vm.load" || op->getName().getStringRef() == "dive_vm.store" ||
+               op->getName().getStringRef() == "dive_vm.load_indirect" ||
+               op->getName().getStringRef() == "dive_vm.store_indirect" || op->getName().getStringRef() == "dive_vm.copy_imm")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+      else if (op->getName().getStringRef() == "dive_vm.fill")
+        callee = "_ZN7silicon4dive7kernels4FillERKNS0_"
+                 "11interpreter14ResolvedTensorERS3_";
+      else if (op->getName().getStringRef() == "dive_vm.pad")
+        callee = "_ZN7silicon4dive7kernels3PadERKNS0_"
+                 "11interpreter14ResolvedTensorES5_S5_RS3_";
+      else if (op->getName().getStringRef() == "dive_vm.roll")
+        callee = "_ZN7silicon4dive7kernels4RollERKNS0_"
+                 "11interpreter14ResolvedTensorEijS5_";
+      else if (op->getName().getStringRef() == "dive_vm.one_hot")
+        callee = "_ZN7silicon4dive7kernels6OneHotERKNS0_"
+                 "11interpreter14ResolvedTensorES5_S5_jiS5_";
+      else if (op->getName().getStringRef() == "dive_vm.cumsum")
+        callee = "_ZN7silicon4dive7kernels6CumsumERKNS0_"
+                 "11interpreter14ResolvedTensorEibbRS3_";
+      else if (op->getName().getStringRef() == "dive_vm.gather_nd")
+        callee = "_ZN7silicon4dive7kernels8GatherNdERKNS0_"
+                 "11interpreter14ResolvedTensorES5_iRNS2_16UnresolvedTensorE";
+      else if (op->getName().getStringRef() == "dive_vm.scatter_nd")
+        callee = "_ZN7silicon4dive7kernels9ScatterNdERKNS0_"
+                 "11interpreter14ResolvedTensorES5_RS3_";
+      else if (op->getName().getStringRef() == "dive_vm.top_k")
+        callee = "_ZN7silicon4dive7kernels4TopKERNS0_"
+                 "11interpreter14ResolvedTensorES4_S4_";
+      else if (op->getName().getStringRef() == "dive_vm.multinomial")
+        callee = "_ZN9platforms7darwinn4dive11runtime_"
+                 "lib18ComputeMultinomialEPfS3_iiibfiiiPv";
+      else if (op->getName().getStringRef() == "dive_vm.mask_indices")
+        callee = "DiveVm_MaskIndices";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_input_activation")
+        callee = "DiveVm_GetAddressOfInputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_output_activation")
+        callee = "DiveVm_GetAddressOfOutputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter_region")
+        callee = "DiveVm_GetAddressOfParameterRegion";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_scratch")
+        callee = "DiveVm_GetAddressOfScratch";
+      else if (op->getName().getStringRef() == "dive_vm.translate_sram_address" ||
+               op->getName().getStringRef() == "dive_vm.view_on_address")
+        callee = "DiveTpu_CastSharedMemoryAddressToPointer";
+      else if (op->getName().getStringRef() == "dive_vm.get_const")
+        callee = "DiveVm_GetConst";
+      else if (op->getName().getStringRef() == "dive_vm.patch_instruction_for_strided_io")
+        callee = "DiveVm_PatchInstructionForStridedIo";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_fence_completion")
+        callee = "DiveTpu_WaitForFenceCompletion";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_rkhy_completion")
+        callee = "DiveTpu_WaitForRkhyCompletion";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_power_island_transition_complete")
+        callee = "DiveVm_WaitForPowmgKllandTransitionComplete";
+      else if (op->getName().getStringRef() == "dive_vm.perform_software_preemption_if_requested")
+        callee = "DiveTpu_PerformSoftwarePreemptionIfRequested";
+      else if (op->getName().getStringRef() == "dive_vm.set_dtc_mode")
+        callee = "DiveVm_SetDtcMode";
+      else if (op->getName().getStringRef() == "dive_vm.read_gn_stats")
+        callee = "DiveDtc_ReadGnStatsSum";
+      else if (op->getName().getStringRef() == "dive_vm.transition_dtc_power_island")
+        callee = "DiveDtc_TransitionDtcPowmgKllandOn";
+      else if (op->getName().getStringRef() == "dive_vm.enable_itc_tracing")
+        callee = "DiveItcTracing_Enable";
+      else if (op->getName().getStringRef() == "dive_vm.disable_itc_tracing")
+        callee = "DiveItcTracing_Disable";
+      else if (op->getName().getStringRef() == "dive_vm.print")
+        callee = "DiveRuntime_Log";
+      else if (op->getName().getStringRef() == "dive_vm.benchmark")
+        callee = "DiveVm_Benchmark";
+      else if (op->getName().getStringRef() == "dive_vm.program_tensor_mapping_table")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib25ProgramTensorMapping"
+                 "TableERKNS2_18TensorMappingTableEii";
+      else if (op->getName().getStringRef() == "dive_vm.write_dma_descriptor")
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else if (op->getName().getStringRef() == "dive_vm.write_hib_data")
+        callee = "DiveTpu_WriteHibData";
+      else if (op->getName().getStringRef() == "dive_vm.write_scalar_arch_register")
+        callee = "DiveTpu_WriteScalarArchRegister";
+      else if (op->getName().getStringRef() == "dive_vm.cache_clean_invalidate")
+        callee = "DiveSystem_CacheCleanInvalidate";
       else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
         return signalPassFailure();
@@ -1172,25 +1381,26 @@ struct DwcConvertDiveVmToLlvmPass : public darwinn::impl::DwcConvertDiveVmToLlvm
         paramTypes.push_back(v.getType());
       Type resultType = op->getNumResults() ? op->getResult(0).getType()
                                             : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp =
-          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
+          builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
-      auto call =
-          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
+                                       op->getOperands());
       if (op->getNumResults())
         op->getResult(0).replaceAllUsesWith(call.getResult());
       op->erase();
       ++lowered;
     }
-    root->setAttr("dive_vm.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dive-vm-to-memref" at 0xde3efd.
-struct DwcConvertDiveVmToMemrefPass : public darwinn::impl::DwcConvertDiveVmToMemrefPassBase<DwcConvertDiveVmToMemrefPass> {
+struct DwcConvertDiveVmToMemrefPass
+    : public darwinn::impl::DwcConvertDiveVmToMemrefPassBase<
+          DwcConvertDiveVmToMemrefPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1214,19 +1424,199 @@ struct DwcConvertDiveVmToMemrefPass : public darwinn::impl::DwcConvertDiveVmToMe
       if (failed(checkDwcConvertibleTypes(op)))
         return signalPassFailure();
       if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result dive_vm op in convert-dive-vm-to-memref");
+        op->emitError(
+            "unsupported multi-result dive_vm op in convert-dive-vm-to-memref");
         return signalPassFailure();
       }
-      StringRef name = op->getName().getStringRef();
-      StringRef callee;
-      if (name == "dive_vm.add")
+      if (op->getName().getStringRef() == "dive_vm.br") {
+        if (op->getNumResults()) {
+          op->emitError("unsupported result on dive_vm.br in convert-dive-vm-to-memref");
+          return signalPassFailure();
+        }
+        Block *block = op->getBlock();
+        if (!block) {
+          op->emitError("dive_vm.br outside a block in convert-dive-vm-to-memref");
+          return signalPassFailure();
+        }
+        Block *cont = block->splitBlock(op);
+        builder.setInsertionPointToEnd(block);
+        LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
+        op->erase();
+        ++lowered;
+        continue;
+      }
+      if (op->getName().getStringRef() == "dive_vm.cond_br") {
+        if (op->getNumResults()) {
+          op->emitError("unsupported result on dive_vm.cond_br in convert-dive-vm-to-memref");
+          return signalPassFailure();
+        }
+        Block *block = op->getBlock();
+        if (!block) {
+          op->emitError("dive_vm.cond_br outside a block in convert-dive-vm-to-memref");
+          return signalPassFailure();
+        }
+        Value cond;
+        bool hasI1Cond = false;
+        if (op->getNumOperands()) {
+          cond = op->getOperand(0);
+          if (auto intTy = dyn_cast<IntegerType>(cond.getType()))
+            hasI1Cond = intTy.getWidth() == 1;
+        }
+        Block *cont = block->splitBlock(op);
+        builder.setInsertionPointToEnd(block);
+        if (hasI1Cond) {
+          LLVM::CondBrOp::create(builder, op->getLoc(), cond, cont,
+                                 ValueRange(), cont, ValueRange());
+        } else {
+          LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
+        }
+        op->erase();
+        ++lowered;
+        continue;
+      }
+      const char *callee = nullptr;
+      if (op->getName().getStringRef() == "dive_vm.add")
         callee = "DiveRuntime_Log";
-      else if (name == "dive_vm.copy")
+      else if (op->getName().getStringRef() == "dive_vm.copy")
         callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
-      else if (name == "dive_vm.gather")
+      else if (op->getName().getStringRef() == "dive_vm.gather")
         callee = "DiveVm_HIBGatherEditE32";
-      else if (name == "dive_vm.legacy_scalar")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.legacy_scalar")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.cast" || op->getName().getStringRef() == "dive_vm.bitcast")
+        callee = "DiveVm_Cast";
+      else if (op->getName().getStringRef() == "dive_vm.sign")
+        callee = "DiveVm_Sign";
+      else if (op->getName().getStringRef() == "dive_vm.add_imm" || op->getName().getStringRef() == "dive_vm.sub" ||
+               op->getName().getStringRef() == "dive_vm.sub_imm" || op->getName().getStringRef() == "dive_vm.mul" ||
+               op->getName().getStringRef() == "dive_vm.mul_imm" || op->getName().getStringRef() == "dive_vm.div" ||
+               op->getName().getStringRef() == "dive_vm.div_imm" || op->getName().getStringRef() == "dive_vm.rem" ||
+               op->getName().getStringRef() == "dive_vm.rem_imm" || op->getName().getStringRef() == "dive_vm.min" ||
+               op->getName().getStringRef() == "dive_vm.min_imm" || op->getName().getStringRef() == "dive_vm.max" ||
+               op->getName().getStringRef() == "dive_vm.max_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.arithmetic_left_shift" ||
+               op->getName().getStringRef() == "dive_vm.arithmetic_left_shift_imm" ||
+               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift" ||
+               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift_imm" ||
+               op->getName().getStringRef() == "dive_vm.logical_right_shift" ||
+               op->getName().getStringRef() == "dive_vm.logical_right_shift_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.bitwise_and" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_and_imm" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_or" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_or_imm" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_xor" ||
+               op->getName().getStringRef() == "dive_vm.bitwise_xor_imm" ||
+               op->getName().getStringRef() == "dive_vm.logical_and" ||
+               op->getName().getStringRef() == "dive_vm.logical_and_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.pow" || op->getName().getStringRef() == "dive_vm.pow_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.equal" || op->getName().getStringRef() == "dive_vm.equal_imm" ||
+               op->getName().getStringRef() == "dive_vm.not_equal" || op->getName().getStringRef() == "dive_vm.not_equal_imm" ||
+               op->getName().getStringRef() == "dive_vm.less" || op->getName().getStringRef() == "dive_vm.less_imm" ||
+               op->getName().getStringRef() == "dive_vm.less_equal" ||
+               op->getName().getStringRef() == "dive_vm.less_equal_imm" || op->getName().getStringRef() == "dive_vm.greater" ||
+               op->getName().getStringRef() == "dive_vm.greater_imm" ||
+               op->getName().getStringRef() == "dive_vm.greater_equal" ||
+               op->getName().getStringRef() == "dive_vm.greater_equal_imm")
+        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
+                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
+                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
+      else if (op->getName().getStringRef() == "dive_vm.allocate")
+        callee = "DiveRuntime_Allocate";
+      else if (op->getName().getStringRef() == "dive_vm.load" || op->getName().getStringRef() == "dive_vm.store" ||
+               op->getName().getStringRef() == "dive_vm.load_indirect" ||
+               op->getName().getStringRef() == "dive_vm.store_indirect" || op->getName().getStringRef() == "dive_vm.copy_imm")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+      else if (op->getName().getStringRef() == "dive_vm.fill")
+        callee = "_ZN7silicon4dive7kernels4FillERKNS0_"
+                 "11interpreter14ResolvedTensorERS3_";
+      else if (op->getName().getStringRef() == "dive_vm.pad")
+        callee = "_ZN7silicon4dive7kernels3PadERKNS0_"
+                 "11interpreter14ResolvedTensorES5_S5_RS3_";
+      else if (op->getName().getStringRef() == "dive_vm.roll")
+        callee = "_ZN7silicon4dive7kernels4RollERKNS0_"
+                 "11interpreter14ResolvedTensorEijS5_";
+      else if (op->getName().getStringRef() == "dive_vm.one_hot")
+        callee = "_ZN7silicon4dive7kernels6OneHotERKNS0_"
+                 "11interpreter14ResolvedTensorES5_S5_jiS5_";
+      else if (op->getName().getStringRef() == "dive_vm.cumsum")
+        callee = "_ZN7silicon4dive7kernels6CumsumERKNS0_"
+                 "11interpreter14ResolvedTensorEibbRS3_";
+      else if (op->getName().getStringRef() == "dive_vm.gather_nd")
+        callee = "_ZN7silicon4dive7kernels8GatherNdERKNS0_"
+                 "11interpreter14ResolvedTensorES5_iRNS2_16UnresolvedTensorE";
+      else if (op->getName().getStringRef() == "dive_vm.scatter_nd")
+        callee = "_ZN7silicon4dive7kernels9ScatterNdERKNS0_"
+                 "11interpreter14ResolvedTensorES5_RS3_";
+      else if (op->getName().getStringRef() == "dive_vm.top_k")
+        callee = "_ZN7silicon4dive7kernels4TopKERNS0_"
+                 "11interpreter14ResolvedTensorES4_S4_";
+      else if (op->getName().getStringRef() == "dive_vm.multinomial")
+        callee = "_ZN9platforms7darwinn4dive11runtime_"
+                 "lib18ComputeMultinomialEPfS3_iiibfiiiPv";
+      else if (op->getName().getStringRef() == "dive_vm.mask_indices")
+        callee = "DiveVm_MaskIndices";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_input_activation")
+        callee = "DiveVm_GetAddressOfInputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_output_activation")
+        callee = "DiveVm_GetAddressOfOutputActivation";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter_region")
+        callee = "DiveVm_GetAddressOfParameterRegion";
+      else if (op->getName().getStringRef() == "dive_vm.address_of_scratch")
+        callee = "DiveVm_GetAddressOfScratch";
+      else if (op->getName().getStringRef() == "dive_vm.translate_sram_address" ||
+               op->getName().getStringRef() == "dive_vm.view_on_address")
+        callee = "DiveTpu_CastSharedMemoryAddressToPointer";
+      else if (op->getName().getStringRef() == "dive_vm.get_const")
+        callee = "DiveVm_GetConst";
+      else if (op->getName().getStringRef() == "dive_vm.patch_instruction_for_strided_io")
+        callee = "DiveVm_PatchInstructionForStridedIo";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_fence_completion")
+        callee = "DiveTpu_WaitForFenceCompletion";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_rkhy_completion")
+        callee = "DiveTpu_WaitForRkhyCompletion";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_power_island_transition_complete")
+        callee = "DiveVm_WaitForPowmgKllandTransitionComplete";
+      else if (op->getName().getStringRef() == "dive_vm.perform_software_preemption_if_requested")
+        callee = "DiveTpu_PerformSoftwarePreemptionIfRequested";
+      else if (op->getName().getStringRef() == "dive_vm.set_dtc_mode")
+        callee = "DiveVm_SetDtcMode";
+      else if (op->getName().getStringRef() == "dive_vm.read_gn_stats")
+        callee = "DiveDtc_ReadGnStatsSum";
+      else if (op->getName().getStringRef() == "dive_vm.transition_dtc_power_island")
+        callee = "DiveDtc_TransitionDtcPowmgKllandOn";
+      else if (op->getName().getStringRef() == "dive_vm.enable_itc_tracing")
+        callee = "DiveItcTracing_Enable";
+      else if (op->getName().getStringRef() == "dive_vm.disable_itc_tracing")
+        callee = "DiveItcTracing_Disable";
+      else if (op->getName().getStringRef() == "dive_vm.print")
+        callee = "DiveRuntime_Log";
+      else if (op->getName().getStringRef() == "dive_vm.benchmark")
+        callee = "DiveVm_Benchmark";
+      else if (op->getName().getStringRef() == "dive_vm.program_tensor_mapping_table")
+        callee = "_ZN9platforms7darwinn4dive11runtime_lib25ProgramTensorMapping"
+                 "TableERKNS2_18TensorMappingTableEii";
+      else if (op->getName().getStringRef() == "dive_vm.write_dma_descriptor")
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else if (op->getName().getStringRef() == "dive_vm.write_hib_data")
+        callee = "DiveTpu_WriteHibData";
+      else if (op->getName().getStringRef() == "dive_vm.write_scalar_arch_register")
+        callee = "DiveTpu_WriteScalarArchRegister";
+      else if (op->getName().getStringRef() == "dive_vm.cache_clean_invalidate")
+        callee = "DiveSystem_CacheCleanInvalidate";
       else {
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-memref");
         return signalPassFailure();
@@ -1236,25 +1626,26 @@ struct DwcConvertDiveVmToMemrefPass : public darwinn::impl::DwcConvertDiveVmToMe
         paramTypes.push_back(v.getType());
       Type resultType = op->getNumResults() ? op->getResult(0).getType()
                                             : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp =
-          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
+          builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
-      auto call =
-          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
+                                       op->getOperands());
       if (op->getNumResults())
         op->getResult(0).replaceAllUsesWith(call.getResult());
       op->erase();
       ++lowered;
     }
-    root->setAttr("dive_vm.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dwc-to-dive-vm-tensor" at 0xda8a3d.
-struct DwcConvertDwcToDiveVmTensorPass : public darwinn::impl::DwcConvertDwcToDiveVmTensorPassBase<DwcConvertDwcToDiveVmTensorPass> {
+struct DwcConvertDwcToDiveVmTensorPass
+    : public darwinn::impl::DwcConvertDwcToDiveVmTensorPassBase<
+          DwcConvertDwcToDiveVmTensorPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1277,13 +1668,14 @@ struct DwcConvertDwcToDiveVmTensorPass : public darwinn::impl::DwcConvertDwcToDi
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dwg-to-dive-vm" at 0xdcb89c.
-struct DwcConvertDwgToDiveVmPass : public darwinn::impl::DwcConvertDwgToDiveVmPassBase<DwcConvertDwgToDiveVmPass> {
+struct DwcConvertDwgToDiveVmPass
+    : public darwinn::impl::DwcConvertDwgToDiveVmPassBase<
+          DwcConvertDwgToDiveVmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1306,13 +1698,14 @@ struct DwcConvertDwgToDiveVmPass : public darwinn::impl::DwcConvertDwgToDiveVmPa
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-dynamic-shape-scope-to-dive-vm" at 0xdcb8b3.
-struct DwcConvertDynamicShapeScopeToDiveVmPass : public darwinn::impl::DwcConvertDynamicShapeScopeToDiveVmPassBase<DwcConvertDynamicShapeScopeToDiveVmPass> {
+struct DwcConvertDynamicShapeScopeToDiveVmPass
+    : public darwinn::impl::DwcConvertDynamicShapeScopeToDiveVmPassBase<
+          DwcConvertDynamicShapeScopeToDiveVmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1335,13 +1728,14 @@ struct DwcConvertDynamicShapeScopeToDiveVmPass : public darwinn::impl::DwcConver
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-func-to-llvm" at 0xdcb867.
-struct DwcConvertFuncToLlvmPass : public darwinn::impl::DwcConvertFuncToLlvmPassBase<DwcConvertFuncToLlvmPass> {
+struct DwcConvertFuncToLlvmPass
+    : public darwinn::impl::DwcConvertFuncToLlvmPassBase<
+          DwcConvertFuncToLlvmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1364,13 +1758,14 @@ struct DwcConvertFuncToLlvmPass : public darwinn::impl::DwcConvertFuncToLlvmPass
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("func.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("func.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-generic-norm-to-pseudo-op" at 0xdb45be.
-struct DwcConvertGenericNormToPseudoOpPass : public darwinn::impl::DwcConvertGenericNormToPseudoOpPassBase<DwcConvertGenericNormToPseudoOpPass> {
+struct DwcConvertGenericNormToPseudoOpPass
+    : public darwinn::impl::DwcConvertGenericNormToPseudoOpPassBase<
+          DwcConvertGenericNormToPseudoOpPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1393,13 +1788,14 @@ struct DwcConvertGenericNormToPseudoOpPass : public darwinn::impl::DwcConvertGen
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-linalg-to-loops" at 0xd83df7.
-struct DwcConvertLinalgToLoopsPass : public darwinn::impl::DwcConvertLinalgToLoopsPassBase<DwcConvertLinalgToLoopsPass> {
+struct DwcConvertLinalgToLoopsPass
+    : public darwinn::impl::DwcConvertLinalgToLoopsPassBase<
+          DwcConvertLinalgToLoopsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1422,13 +1818,14 @@ struct DwcConvertLinalgToLoopsPass : public darwinn::impl::DwcConvertLinalgToLoo
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("linalg.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("linalg.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-math-to-libm" at 0xdce410.
-struct DwcConvertMathToLibmPass : public darwinn::impl::DwcConvertMathToLibmPassBase<DwcConvertMathToLibmPass> {
+struct DwcConvertMathToLibmPass
+    : public darwinn::impl::DwcConvertMathToLibmPassBase<
+          DwcConvertMathToLibmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1451,13 +1848,14 @@ struct DwcConvertMathToLibmPass : public darwinn::impl::DwcConvertMathToLibmPass
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("math.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("math.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-math-to-llvm" at 0xdcb80b.
-struct DwcConvertMathToLlvmPass : public darwinn::impl::DwcConvertMathToLlvmPassBase<DwcConvertMathToLlvmPass> {
+struct DwcConvertMathToLlvmPass
+    : public darwinn::impl::DwcConvertMathToLlvmPassBase<
+          DwcConvertMathToLlvmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1480,13 +1878,14 @@ struct DwcConvertMathToLlvmPass : public darwinn::impl::DwcConvertMathToLlvmPass
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("math.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("math.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-op-lowering" at 0xddedce.
-struct DwcConvertOpLoweringPass : public darwinn::impl::DwcConvertOpLoweringPassBase<DwcConvertOpLoweringPass> {
+struct DwcConvertOpLoweringPass
+    : public darwinn::impl::DwcConvertOpLoweringPassBase<
+          DwcConvertOpLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1509,13 +1908,14 @@ struct DwcConvertOpLoweringPass : public darwinn::impl::DwcConvertOpLoweringPass
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-pdl-to-pdl-interp" at 0xdb3800.
-struct DwcConvertPdlToPdlInterpPass : public darwinn::impl::DwcConvertPdlToPdlInterpPassBase<DwcConvertPdlToPdlInterpPass> {
+struct DwcConvertPdlToPdlInterpPass
+    : public darwinn::impl::DwcConvertPdlToPdlInterpPassBase<
+          DwcConvertPdlToPdlInterpPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1538,13 +1938,14 @@ struct DwcConvertPdlToPdlInterpPass : public darwinn::impl::DwcConvertPdlToPdlIn
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("pdl.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("pdl.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-scatter-to-generic-scatter" at 0xdabcd2.
-struct DwcConvertScatterToGenericScatterPass : public darwinn::impl::DwcConvertScatterToGenericScatterPassBase<DwcConvertScatterToGenericScatterPass> {
+struct DwcConvertScatterToGenericScatterPass
+    : public darwinn::impl::DwcConvertScatterToGenericScatterPassBase<
+          DwcConvertScatterToGenericScatterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1567,13 +1968,13 @@ struct DwcConvertScatterToGenericScatterPass : public darwinn::impl::DwcConvertS
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-scf-to-cf" at 0xde4728.
-struct DwcConvertScfToCfPass : public darwinn::impl::DwcConvertScfToCfPassBase<DwcConvertScfToCfPass> {
+struct DwcConvertScfToCfPass
+    : public darwinn::impl::DwcConvertScfToCfPassBase<DwcConvertScfToCfPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1596,13 +1997,14 @@ struct DwcConvertScfToCfPass : public darwinn::impl::DwcConvertScfToCfPassBase<D
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("scf.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("scf.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-signed-int-with-rescaling-ops" at 0xd84723.
-struct DwcConvertSignedIntWithRescalingOpsPass : public darwinn::impl::DwcConvertSignedIntWithRescalingOpsPassBase<DwcConvertSignedIntWithRescalingOpsPass> {
+struct DwcConvertSignedIntWithRescalingOpsPass
+    : public darwinn::impl::DwcConvertSignedIntWithRescalingOpsPassBase<
+          DwcConvertSignedIntWithRescalingOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1625,13 +2027,14 @@ struct DwcConvertSignedIntWithRescalingOpsPass : public darwinn::impl::DwcConver
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("arith.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("arith.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-spatial-reduction-to-pooling" at 0xddfd8d.
-struct DwcConvertSpatialReductionToPoolingPass : public darwinn::impl::DwcConvertSpatialReductionToPoolingPassBase<DwcConvertSpatialReductionToPoolingPass> {
+struct DwcConvertSpatialReductionToPoolingPass
+    : public darwinn::impl::DwcConvertSpatialReductionToPoolingPassBase<
+          DwcConvertSpatialReductionToPoolingPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1654,13 +2057,13 @@ struct DwcConvertSpatialReductionToPoolingPass : public darwinn::impl::DwcConver
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("linalg.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("linalg.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-tf-to-dwc" at 0xe2523e.
-struct DwcConvertTfToDwcPass : public darwinn::impl::DwcConvertTfToDwcPassBase<DwcConvertTfToDwcPass> {
+struct DwcConvertTfToDwcPass
+    : public darwinn::impl::DwcConvertTfToDwcPassBase<DwcConvertTfToDwcPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1683,13 +2086,14 @@ struct DwcConvertTfToDwcPass : public darwinn::impl::DwcConvertTfToDwcPassBase<D
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("tf.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("tf.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-to-k-in-m-sparsity" at 0xd5a046.
-struct DwcConvertToKInMSparsityPass : public darwinn::impl::DwcConvertToKInMSparsityPassBase<DwcConvertToKInMSparsityPass> {
+struct DwcConvertToKInMSparsityPass
+    : public darwinn::impl::DwcConvertToKInMSparsityPassBase<
+          DwcConvertToKInMSparsityPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1712,13 +2116,14 @@ struct DwcConvertToKInMSparsityPass : public darwinn::impl::DwcConvertToKInMSpar
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-tpu-offload-to-dive-vm" at 0xdcb8da.
-struct DwcConvertTpuOffloadToDiveVmPass : public darwinn::impl::DwcConvertTpuOffloadToDiveVmPassBase<DwcConvertTpuOffloadToDiveVmPass> {
+struct DwcConvertTpuOffloadToDiveVmPass
+    : public darwinn::impl::DwcConvertTpuOffloadToDiveVmPassBase<
+          DwcConvertTpuOffloadToDiveVmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1742,41 +2147,59 @@ struct DwcConvertTpuOffloadToDiveVmPass : public darwinn::impl::DwcConvertTpuOff
       if (failed(checkDwcConvertibleTypes(op)))
         return signalPassFailure();
       if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result edgetpu op in convert-tpu-offload-to-dive-vm");
+        op->emitError("unsupported multi-result edgetpu op in "
+                      "convert-tpu-offload-to-dive-vm");
         return signalPassFailure();
       }
       StringRef opName = op->getName().getStringRef();
       StringRef callee;
-      if (opName.contains("convolution"))
+      if (opName == "edgetpu.convolution_sub_channel" ||
+          opName == "edgetpu.convolution_sub_channel_drq" ||
+          opName == "edgetpu.transposed_convolution_sub_channel" ||
+          opName == "edgetpu.transposed_convolution_sub_channel_drq" ||
+          opName == "edgetpu.depthwise_convolution_fp8" ||
+          opName == "edgetpu.transpose_convolution_fp8" ||
+          opName == "edgetpu.attention_v1" ||
+          opName == "edgetpu.convert_yuv_to_rgb" ||
+          opName == "edgetpu.fast_walsh_hadamard_transform" ||
+          opName == "edgetpu.annotate_materialize_policy")
         callee = "DiveTpu_EnqueueInstructions";
-      else if (opName.contains("matrix_multiply") || opName.contains("fully_connected"))
+      else if (opName == "edgetpu.matrix_multiply_sub_channel" ||
+               opName == "edgetpu.matrix_multiply_sub_channel_drq" ||
+               opName == "edgetpu.fully_connected_sub_channel" ||
+               opName == "edgetpu.fully_connected_sub_channel_drq" ||
+               opName == "edgetpu.fully_connected_fp8")
         callee = "DiveTpu_EnqueueDmaDescriptor";
-      else
-        callee = "DiveTpu_EnqueueInstructions";
+      else {
+        op->emitError("unsupported edgetpu op in "
+                      "convert-tpu-offload-to-dive-vm");
+        return signalPassFailure();
+      }
       SmallVector<Type> paramTypes;
       for (Value v : op->getOperands())
         paramTypes.push_back(v.getType());
       Type resultType = op->getNumResults() ? op->getResult(0).getType()
                                             : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp =
-          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
+          builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
-      auto call =
-          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
+                                       op->getOperands());
       if (op->getNumResults())
         op->getResult(0).replaceAllUsesWith(call.getResult());
       op->erase();
       ++lowered;
     }
-    root->setAttr("edgetpu.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("edgetpu.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "convert-tpu-offload-to-llvm" at 0xdcb84b.
-struct DwcConvertTpuOffloadToLlvmPass : public darwinn::impl::DwcConvertTpuOffloadToLlvmPassBase<DwcConvertTpuOffloadToLlvmPass> {
+struct DwcConvertTpuOffloadToLlvmPass
+    : public darwinn::impl::DwcConvertTpuOffloadToLlvmPassBase<
+          DwcConvertTpuOffloadToLlvmPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1794,8 +2217,7 @@ struct DwcConvertTpuOffloadToLlvmPass : public darwinn::impl::DwcConvertTpuOfflo
       StringRef opName = op->getName().getStringRef();
       bool isOffload = opName == "dive_vm.tpu_offload";
       Dialect *dialect = op->getDialect();
-      if (!isOffload && dialect &&
-          dialect->getNamespace() == "edgetpu")
+      if (!isOffload && dialect && dialect->getNamespace() == "edgetpu")
         isOffload = true;
       if (isOffload)
         offloadOps.push_back(op);
@@ -1805,29 +2227,48 @@ struct DwcConvertTpuOffloadToLlvmPass : public darwinn::impl::DwcConvertTpuOfflo
       if (failed(checkDwcConvertibleTypes(op)))
         return signalPassFailure();
       if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result offload op in convert-tpu-offload-to-llvm");
+        op->emitError("unsupported multi-result offload op in "
+                      "convert-tpu-offload-to-llvm");
         return signalPassFailure();
       }
       StringRef opName = op->getName().getStringRef();
       StringRef callee;
       if (opName == "dive_vm.tpu_offload")
         callee = "DiveRuntime_ExecuteChildModel";
-      else if (opName.contains("matrix_multiply") || opName.contains("fully_connected"))
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else
+      else if (opName == "edgetpu.convolution_sub_channel" ||
+               opName == "edgetpu.convolution_sub_channel_drq" ||
+               opName == "edgetpu.transposed_convolution_sub_channel" ||
+               opName == "edgetpu.transposed_convolution_sub_channel_drq" ||
+               opName == "edgetpu.depthwise_convolution_fp8" ||
+               opName == "edgetpu.transpose_convolution_fp8" ||
+               opName == "edgetpu.attention_v1" ||
+               opName == "edgetpu.convert_yuv_to_rgb" ||
+               opName == "edgetpu.fast_walsh_hadamard_transform" ||
+               opName == "edgetpu.annotate_materialize_policy")
         callee = "DiveTpu_EnqueueInstructions";
+      else if (opName == "edgetpu.matrix_multiply_sub_channel" ||
+               opName == "edgetpu.matrix_multiply_sub_channel_drq" ||
+               opName == "edgetpu.fully_connected_sub_channel" ||
+               opName == "edgetpu.fully_connected_sub_channel_drq" ||
+               opName == "edgetpu.fully_connected_fp8")
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else {
+        op->emitError("unsupported edgetpu op in "
+                      "convert-tpu-offload-to-llvm");
+        return signalPassFailure();
+      }
       SmallVector<Type> paramTypes;
       for (Value v : op->getOperands())
         paramTypes.push_back(v.getType());
       Type resultType = op->getNumResults() ? op->getResult(0).getType()
                                             : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp =
-          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
+          builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
-      auto call =
-          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
+                                       op->getOperands());
       if (op->getNumResults())
         op->getResult(0).replaceAllUsesWith(call.getResult());
       op->erase();
@@ -1839,7 +2280,9 @@ struct DwcConvertTpuOffloadToLlvmPass : public darwinn::impl::DwcConvertTpuOfflo
 };
 
 // TSV row: "convert-xla-supported-stablehlo" at 0xdbc2b1.
-struct DwcConvertXlaSupportedStablehloPass : public darwinn::impl::DwcConvertXlaSupportedStablehloPassBase<DwcConvertXlaSupportedStablehloPass> {
+struct DwcConvertXlaSupportedStablehloPass
+    : public darwinn::impl::DwcConvertXlaSupportedStablehloPassBase<
+          DwcConvertXlaSupportedStablehloPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1868,7 +2311,9 @@ struct DwcConvertXlaSupportedStablehloPass : public darwinn::impl::DwcConvertXla
 };
 
 // TSV row: "ConvertDiveVmTensorToLinalg" at 0xde1af2.
-struct DwcConvertDiveVmTensorToLinalgSymbolPass : public darwinn::impl::DwcConvertDiveVmTensorToLinalgSymbolPassBase<DwcConvertDiveVmTensorToLinalgSymbolPass> {
+struct DwcConvertDiveVmTensorToLinalgSymbolPass
+    : public darwinn::impl::DwcConvertDiveVmTensorToLinalgSymbolPassBase<
+          DwcConvertDiveVmTensorToLinalgSymbolPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1891,13 +2336,14 @@ struct DwcConvertDiveVmTensorToLinalgSymbolPass : public darwinn::impl::DwcConve
     });
     if (failedConvert)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
 // TSV row: "ConvertTpuOffloadToLlvm" at 0xdcb87c.
-struct DwcConvertTpuOffloadToLlvmSymbolPass : public darwinn::impl::DwcConvertTpuOffloadToLlvmSymbolPassBase<DwcConvertTpuOffloadToLlvmSymbolPass> {
+struct DwcConvertTpuOffloadToLlvmSymbolPass
+    : public darwinn::impl::DwcConvertTpuOffloadToLlvmSymbolPassBase<
+          DwcConvertTpuOffloadToLlvmSymbolPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1921,27 +2367,45 @@ struct DwcConvertTpuOffloadToLlvmSymbolPass : public darwinn::impl::DwcConvertTp
       if (failed(checkDwcConvertibleTypes(op)))
         return signalPassFailure();
       if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result edgetpu op in ConvertTpuOffloadToLlvm");
+        op->emitError(
+            "unsupported multi-result edgetpu op in ConvertTpuOffloadToLlvm");
         return signalPassFailure();
       }
       StringRef opName = op->getName().getStringRef();
       StringRef callee;
-      if (opName.contains("matrix_multiply") || opName.contains("fully_connected"))
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else
+      if (opName == "edgetpu.convolution_sub_channel" ||
+          opName == "edgetpu.convolution_sub_channel_drq" ||
+          opName == "edgetpu.transposed_convolution_sub_channel" ||
+          opName == "edgetpu.transposed_convolution_sub_channel_drq" ||
+          opName == "edgetpu.depthwise_convolution_fp8" ||
+          opName == "edgetpu.transpose_convolution_fp8" ||
+          opName == "edgetpu.attention_v1" ||
+          opName == "edgetpu.convert_yuv_to_rgb" ||
+          opName == "edgetpu.fast_walsh_hadamard_transform" ||
+          opName == "edgetpu.annotate_materialize_policy")
         callee = "DiveTpu_EnqueueInstructions";
+      else if (opName == "edgetpu.matrix_multiply_sub_channel" ||
+               opName == "edgetpu.matrix_multiply_sub_channel_drq" ||
+               opName == "edgetpu.fully_connected_sub_channel" ||
+               opName == "edgetpu.fully_connected_sub_channel_drq" ||
+               opName == "edgetpu.fully_connected_fp8")
+        callee = "DiveTpu_EnqueueDmaDescriptor";
+      else {
+        op->emitError("unsupported edgetpu op in ConvertTpuOffloadToLlvm");
+        return signalPassFailure();
+      }
       SmallVector<Type> paramTypes;
       for (Value v : op->getOperands())
         paramTypes.push_back(v.getType());
       Type resultType = op->getNumResults() ? op->getResult(0).getType()
                                             : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp =
-          LLVM::lookupOrCreateFn(builder, moduleOp, callee, paramTypes, resultType);
+      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
+          builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
-      auto call =
-          LLVM::CallOp::create(builder, op->getLoc(), *calleeOp, op->getOperands());
+      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
+                                       op->getOperands());
       if (op->getNumResults())
         op->getResult(0).replaceAllUsesWith(call.getResult());
       op->erase();
@@ -1953,7 +2417,8 @@ struct DwcConvertTpuOffloadToLlvmSymbolPass : public darwinn::impl::DwcConvertTp
 };
 
 // TSV row: "copy-op-lowering" at 0xddedbd.
-struct DwcCopyOpLoweringPass : public darwinn::impl::DwcCopyOpLoweringPassBase<DwcCopyOpLoweringPass> {
+struct DwcCopyOpLoweringPass
+    : public darwinn::impl::DwcCopyOpLoweringPassBase<DwcCopyOpLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -1982,7 +2447,8 @@ struct DwcCopyOpLoweringPass : public darwinn::impl::DwcCopyOpLoweringPassBase<D
 };
 
 // TSV row: "darwinn-bundling" at 0xde00af.
-struct DwcDarwinnBundlingPass : public darwinn::impl::DwcDarwinnBundlingPassBase<DwcDarwinnBundlingPass> {
+struct DwcDarwinnBundlingPass
+    : public darwinn::impl::DwcDarwinnBundlingPassBase<DwcDarwinnBundlingPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2011,7 +2477,8 @@ struct DwcDarwinnBundlingPass : public darwinn::impl::DwcDarwinnBundlingPassBase
 };
 
 // TSV row: "darwinn.convert" at 0xd68ca7.
-struct DwcDarwinnConvertPass : public darwinn::impl::DwcDarwinnConvertPassBase<DwcDarwinnConvertPass> {
+struct DwcDarwinnConvertPass
+    : public darwinn::impl::DwcDarwinnConvertPassBase<DwcDarwinnConvertPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2040,7 +2507,8 @@ struct DwcDarwinnConvertPass : public darwinn::impl::DwcDarwinnConvertPassBase<D
 };
 
 // TSV row: "darwinn.math.join" at 0xdc9452.
-struct DwcDarwinnMathJoinPass : public darwinn::impl::DwcDarwinnMathJoinPassBase<DwcDarwinnMathJoinPass> {
+struct DwcDarwinnMathJoinPass
+    : public darwinn::impl::DwcDarwinnMathJoinPassBase<DwcDarwinnMathJoinPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2069,7 +2537,8 @@ struct DwcDarwinnMathJoinPass : public darwinn::impl::DwcDarwinnMathJoinPassBase
 };
 
 // TSV row: "darwinn.sparsity" at 0xd5a035.
-struct DwcDarwinnSparsityPass : public darwinn::impl::DwcDarwinnSparsityPassBase<DwcDarwinnSparsityPass> {
+struct DwcDarwinnSparsityPass
+    : public darwinn::impl::DwcDarwinnSparsityPassBase<DwcDarwinnSparsityPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2098,7 +2567,8 @@ struct DwcDarwinnSparsityPass : public darwinn::impl::DwcDarwinnSparsityPassBase
 };
 
 // TSV row: "dive-dce" at 0xe0fe97.
-struct DwcDiveDcePass : public darwinn::impl::DwcDiveDcePassBase<DwcDiveDcePass> {
+struct DwcDiveDcePass
+    : public darwinn::impl::DwcDiveDcePassBase<DwcDiveDcePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2121,13 +2591,14 @@ struct DwcDiveDcePass : public darwinn::impl::DwcDiveDcePassBase<DwcDiveDcePass>
     });
     if (failedMark)
       return signalPassFailure();
-    root->setAttr("dive-dce.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    root->setAttr("dive-dce.marked_count", builder.getI64IntegerAttr(marked));
   }
 };
 
 // TSV row: "dive-io-optimization" at 0xdc141b.
-struct DwcDiveIoOptimizationPass : public darwinn::impl::DwcDiveIoOptimizationPassBase<DwcDiveIoOptimizationPass> {
+struct DwcDiveIoOptimizationPass
+    : public darwinn::impl::DwcDiveIoOptimizationPassBase<
+          DwcDiveIoOptimizationPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2156,7 +2627,8 @@ struct DwcDiveIoOptimizationPass : public darwinn::impl::DwcDiveIoOptimizationPa
 };
 
 // TSV row: "dive-program-tpu" at 0xd6383a.
-struct DwcDiveProgramTpuPass : public darwinn::impl::DwcDiveProgramTpuPassBase<DwcDiveProgramTpuPass> {
+struct DwcDiveProgramTpuPass
+    : public darwinn::impl::DwcDiveProgramTpuPassBase<DwcDiveProgramTpuPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2230,14 +2702,13 @@ struct DwcDiveProgramTpuPass : public darwinn::impl::DwcDiveProgramTpuPassBase<D
       builder.setInsertionPointToStart(init);
       Value table = LLVM::PoisonOp::create(builder, func.getLoc(), arrayTy);
       for (uint64_t i = 0; i < n; ++i) {
-        Value fnPtr = LLVM::AddressOfOp::create(
-            builder, func.getLoc(), ptrTy, dispatchFn->getSymNameAttr());
+        Value fnPtr = LLVM::AddressOfOp::create(builder, func.getLoc(), ptrTy,
+                                                dispatchFn->getSymNameAttr());
         SmallVector<int64_t> pos{static_cast<int64_t>(i)};
         table = LLVM::InsertValueOp::create(builder, func.getLoc(), table,
                                             fnPtr, pos);
       }
-      LLVM::ReturnOp::create(builder, func.getLoc(),
-                             ArrayRef<Value>({table}));
+      LLVM::ReturnOp::create(builder, func.getLoc(), ArrayRef<Value>({table}));
       packets.push_back({global, arrayTy, n});
     }
 
@@ -2249,11 +2720,11 @@ struct DwcDiveProgramTpuPass : public darwinn::impl::DwcDiveProgramTpuPassBase<D
     else
       builder.setInsertionPointToEnd(&entryBlock);
     for (auto &item : packets) {
-      Value base = LLVM::AddressOfOp::create(
-          builder, func.getLoc(), ptrTy, item.global.getSymNameAttr());
-      Value table = LLVM::GEPOp::create(builder, func.getLoc(), ptrTy,
-                                        item.arrayTy, base,
-                                        ArrayRef<LLVM::GEPArg>{0, 0});
+      Value base = LLVM::AddressOfOp::create(builder, func.getLoc(), ptrTy,
+                                             item.global.getSymNameAttr());
+      Value table =
+          LLVM::GEPOp::create(builder, func.getLoc(), ptrTy, item.arrayTy, base,
+                              ArrayRef<LLVM::GEPArg>{0, 0});
       Value count = LLVM::ConstantOp::create(
           builder, func.getLoc(), i64Ty,
           builder.getI64IntegerAttr(static_cast<int64_t>(item.count)));
@@ -2264,7 +2735,9 @@ struct DwcDiveProgramTpuPass : public darwinn::impl::DwcDiveProgramTpuPassBase<D
 };
 
 // TSV row: "dive-unroll-factor" at 0xda744d.
-struct DwcDiveUnrollFactorPass : public darwinn::impl::DwcDiveUnrollFactorPassBase<DwcDiveUnrollFactorPass> {
+struct DwcDiveUnrollFactorPass
+    : public darwinn::impl::DwcDiveUnrollFactorPassBase<
+          DwcDiveUnrollFactorPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2293,7 +2766,8 @@ struct DwcDiveUnrollFactorPass : public darwinn::impl::DwcDiveUnrollFactorPassBa
 };
 
 // TSV row: "dive-vm-bufferize" at 0xde6a70.
-struct DwcDiveVmBufferizePass : public darwinn::impl::DwcDiveVmBufferizePassBase<DwcDiveVmBufferizePass> {
+struct DwcDiveVmBufferizePass
+    : public darwinn::impl::DwcDiveVmBufferizePassBase<DwcDiveVmBufferizePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2322,7 +2796,9 @@ struct DwcDiveVmBufferizePass : public darwinn::impl::DwcDiveVmBufferizePassBase
 };
 
 // TSV row: "dive-vm-outline-shareable-dive-consts" at 0xd788a7.
-struct DwcDiveVmOutlineShareableDiveConstsPass : public darwinn::impl::DwcDiveVmOutlineShareableDiveConstsPassBase<DwcDiveVmOutlineShareableDiveConstsPass> {
+struct DwcDiveVmOutlineShareableDiveConstsPass
+    : public darwinn::impl::DwcDiveVmOutlineShareableDiveConstsPassBase<
+          DwcDiveVmOutlineShareableDiveConstsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2339,7 +2815,8 @@ struct DwcDiveVmOutlineShareableDiveConstsPass : public darwinn::impl::DwcDiveVm
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dive-vm-outline-shareable-dive-consts.marked", builder.getUnitAttr());
+      op->setAttr("dive-vm-outline-shareable-dive-consts.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -2351,11 +2828,14 @@ struct DwcDiveVmOutlineShareableDiveConstsPass : public darwinn::impl::DwcDiveVm
 };
 
 // TSV row: "dwc-check-illegal-tpu-ops" at 0xd84494.
-struct DwcDwcCheckIllegalTpuOpsPass : public darwinn::impl::DwcDwcCheckIllegalTpuOpsPassBase<DwcDwcCheckIllegalTpuOpsPass> {
+struct DwcDwcCheckIllegalTpuOpsPass
+    : public darwinn::impl::DwcDwcCheckIllegalTpuOpsPassBase<
+          DwcDwcCheckIllegalTpuOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -2383,17 +2863,19 @@ struct DwcDwcCheckIllegalTpuOpsPass : public darwinn::impl::DwcDwcCheckIllegalTp
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-convert-input-output-types" at 0xd94dcc.
-struct DwcDwcConvertInputOutputTypesPass : public darwinn::impl::DwcDwcConvertInputOutputTypesPassBase<DwcDwcConvertInputOutputTypesPass> {
+struct DwcDwcConvertInputOutputTypesPass
+    : public darwinn::impl::DwcDwcConvertInputOutputTypesPassBase<
+          DwcDwcConvertInputOutputTypesPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -2421,17 +2903,19 @@ struct DwcDwcConvertInputOutputTypesPass : public darwinn::impl::DwcDwcConvertIn
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-copy-strided-buffers-on-tpu" at 0xd6381a.
-struct DwcDwcCopyStridedBuffersOnTpuPass : public darwinn::impl::DwcDwcCopyStridedBuffersOnTpuPassBase<DwcDwcCopyStridedBuffersOnTpuPass> {
+struct DwcDwcCopyStridedBuffersOnTpuPass
+    : public darwinn::impl::DwcDwcCopyStridedBuffersOnTpuPassBase<
+          DwcDwcCopyStridedBuffersOnTpuPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -2459,17 +2943,19 @@ struct DwcDwcCopyStridedBuffersOnTpuPass : public darwinn::impl::DwcDwcCopyStrid
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-form-tpu-clusters" at 0xd81a1f.
-struct DwcDwcFormTpuClustersPass : public darwinn::impl::DwcDwcFormTpuClustersPassBase<DwcDwcFormTpuClustersPass> {
+struct DwcDwcFormTpuClustersPass
+    : public darwinn::impl::DwcDwcFormTpuClustersPassBase<
+          DwcDwcFormTpuClustersPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -2497,17 +2983,18 @@ struct DwcDwcFormTpuClustersPass : public darwinn::impl::DwcDwcFormTpuClustersPa
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-legalize" at 0xde6d3f.
-struct DwcDwcLegalizePass : public darwinn::impl::DwcDwcLegalizePassBase<DwcDwcLegalizePass> {
+struct DwcDwcLegalizePass
+    : public darwinn::impl::DwcDwcLegalizePassBase<DwcDwcLegalizePass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2523,8 +3010,7 @@ struct DwcDwcLegalizePass : public darwinn::impl::DwcDwcLegalizePassBase<DwcDwcL
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "dwc-legalize rejects operation from dialect "
-                        << ns;
+        op->emitError() << "dwc-legalize rejects operation from dialect " << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -2536,11 +3022,13 @@ struct DwcDwcLegalizePass : public darwinn::impl::DwcDwcLegalizePassBase<DwcDwcL
 };
 
 // TSV row: "dwc-legalize-hlo" at 0xdbc39d.
-struct DwcDwcLegalizeHloPass : public darwinn::impl::DwcDwcLegalizeHloPassBase<DwcDwcLegalizeHloPass> {
+struct DwcDwcLegalizeHloPass
+    : public darwinn::impl::DwcDwcLegalizeHloPassBase<DwcDwcLegalizeHloPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2569,44 +3057,53 @@ struct DwcDwcLegalizeHloPass : public darwinn::impl::DwcDwcLegalizeHloPassBase<D
 };
 
 // TSV row: "dwc-legalize-hlo-to-tf" at 0xde2ad1.
-struct DwcDwcLegalizeHloToTfPass : public darwinn::impl::DwcDwcLegalizeHloToTfPassBase<DwcDwcLegalizeHloToTfPass> {
+struct DwcDwcLegalizeHloToTfPass
+    : public darwinn::impl::DwcDwcLegalizeHloToTfPassBase<
+          DwcDwcLegalizeHloToTfPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "dwc-legalize-hlo-to-tf rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "mhlo" && ns != "tf") {
-        op->emitError() << "dwc-legalize-hlo-to-tf rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "dwc-legalize-hlo-to-tf rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "mhlo" && ns != "tf") {
+            op->emitError()
+                << "dwc-legalize-hlo-to-tf rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "dwc-legalize-int-and-quant-types" at 0xd94e00.
-struct DwcDwcLegalizeIntAndQuantTypesPass : public darwinn::impl::DwcDwcLegalizeIntAndQuantTypesPassBase<DwcDwcLegalizeIntAndQuantTypesPass> {
+struct DwcDwcLegalizeIntAndQuantTypesPass
+    : public darwinn::impl::DwcDwcLegalizeIntAndQuantTypesPassBase<
+          DwcDwcLegalizeIntAndQuantTypesPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2615,14 +3112,16 @@ struct DwcDwcLegalizeIntAndQuantTypesPass : public darwinn::impl::DwcDwcLegalize
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-int-and-quant-types rejects unregistered operation "
+        op->emitError() << "dwc-legalize-int-and-quant-types rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "quant") {
-        op->emitError() << "dwc-legalize-int-and-quant-types rejects operation from dialect "
+        op->emitError() << "dwc-legalize-int-and-quant-types rejects operation "
+                           "from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -2635,11 +3134,14 @@ struct DwcDwcLegalizeIntAndQuantTypesPass : public darwinn::impl::DwcDwcLegalize
 };
 
 // TSV row: "dwc-legalize-int64-constants" at 0xd7bb5d.
-struct DwcDwcLegalizeInt64ConstantsPass : public darwinn::impl::DwcDwcLegalizeInt64ConstantsPassBase<DwcDwcLegalizeInt64ConstantsPass> {
+struct DwcDwcLegalizeInt64ConstantsPass
+    : public darwinn::impl::DwcDwcLegalizeInt64ConstantsPassBase<
+          DwcDwcLegalizeInt64ConstantsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2648,15 +3150,17 @@ struct DwcDwcLegalizeInt64ConstantsPass : public darwinn::impl::DwcDwcLegalizeIn
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-int64-constants rejects unregistered operation "
-                        << op->getName().getStringRef();
+        op->emitError()
+            << "dwc-legalize-int64-constants rejects unregistered operation "
+            << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "dwc-legalize-int64-constants rejects operation from dialect "
-                        << ns;
+        op->emitError()
+            << "dwc-legalize-int64-constants rejects operation from dialect "
+            << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -2668,11 +3172,13 @@ struct DwcDwcLegalizeInt64ConstantsPass : public darwinn::impl::DwcDwcLegalizeIn
 };
 
 // TSV row: "dwc-legalize-pass" at 0xd7f2b9.
-struct DwcDwcLegalizePassPass : public darwinn::impl::DwcDwcLegalizePassPassBase<DwcDwcLegalizePassPass> {
+struct DwcDwcLegalizePassSymbol
+    : public darwinn::impl::DwcDwcLegalizePassSymbolBase<DwcDwcLegalizePassSymbol> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2701,11 +3207,15 @@ struct DwcDwcLegalizePassPass : public darwinn::impl::DwcDwcLegalizePassPassBase
 };
 
 // TSV row: "dwc-legalize-stablehlo-annotate-materialize-policy" at 0xd5dd77.
-struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass : public darwinn::impl::DwcDwcLegalizeStablehloAnnotateMaterializePolicyPassBase<DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass> {
+struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass
+    : public darwinn::impl::
+          DwcDwcLegalizeStablehloAnnotateMaterializePolicyPassBase<
+              DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2714,14 +3224,16 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass : public darwinn::im
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-stablehlo-annotate-materialize-policy rejects unregistered operation "
+        op->emitError() << "dwc-legalize-stablehlo-annotate-materialize-policy "
+                           "rejects unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "stablehlo") {
-        op->emitError() << "dwc-legalize-stablehlo-annotate-materialize-policy rejects operation from dialect "
+        op->emitError() << "dwc-legalize-stablehlo-annotate-materialize-policy "
+                           "rejects operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -2734,11 +3246,14 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass : public darwinn::im
 };
 
 // TSV row: "dwc-legalize-stablehlo-composite" at 0xdef599.
-struct DwcDwcLegalizeStablehloCompositePass : public darwinn::impl::DwcDwcLegalizeStablehloCompositePassBase<DwcDwcLegalizeStablehloCompositePass> {
+struct DwcDwcLegalizeStablehloCompositePass
+    : public darwinn::impl::DwcDwcLegalizeStablehloCompositePassBase<
+          DwcDwcLegalizeStablehloCompositePass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2747,14 +3262,16 @@ struct DwcDwcLegalizeStablehloCompositePass : public darwinn::impl::DwcDwcLegali
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-stablehlo-composite rejects unregistered operation "
+        op->emitError() << "dwc-legalize-stablehlo-composite rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "stablehlo") {
-        op->emitError() << "dwc-legalize-stablehlo-composite rejects operation from dialect "
+        op->emitError() << "dwc-legalize-stablehlo-composite rejects operation "
+                           "from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -2767,44 +3284,53 @@ struct DwcDwcLegalizeStablehloCompositePass : public darwinn::impl::DwcDwcLegali
 };
 
 // TSV row: "dwc-legalize-tf-pipeline" at 0xe03284.
-struct DwcDwcLegalizeTfPipelinePass : public darwinn::impl::DwcDwcLegalizeTfPipelinePassBase<DwcDwcLegalizeTfPipelinePass> {
+struct DwcDwcLegalizeTfPipelinePass
+    : public darwinn::impl::DwcDwcLegalizeTfPipelinePassBase<
+          DwcDwcLegalizeTfPipelinePass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "dwc-legalize-tf-pipeline rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "tf") {
-        op->emitError() << "dwc-legalize-tf-pipeline rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "dwc-legalize-tf-pipeline rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "tf") {
+            op->emitError()
+                << "dwc-legalize-tf-pipeline rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "dwc-legalize-tfl-cudaemu-custom-ops" at 0xd8464e.
-struct DwcDwcLegalizeTflCudaemuCustomOpsPass : public darwinn::impl::DwcDwcLegalizeTflCudaemuCustomOpsPassBase<DwcDwcLegalizeTflCudaemuCustomOpsPass> {
+struct DwcDwcLegalizeTflCudaemuCustomOpsPass
+    : public darwinn::impl::DwcDwcLegalizeTflCudaemuCustomOpsPassBase<
+          DwcDwcLegalizeTflCudaemuCustomOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2813,14 +3339,16 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass : public darwinn::impl::DwcDwcLegal
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-tfl-cudaemu-custom-ops rejects unregistered operation "
+        op->emitError() << "dwc-legalize-tfl-cudaemu-custom-ops rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "tfl") {
-        op->emitError() << "dwc-legalize-tfl-cudaemu-custom-ops rejects operation from dialect "
+        op->emitError() << "dwc-legalize-tfl-cudaemu-custom-ops rejects "
+                           "operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -2833,11 +3361,14 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass : public darwinn::impl::DwcDwcLegal
 };
 
 // TSV row: "dwc-legalize-tfl-multinomial" at 0xdd3cdb.
-struct DwcDwcLegalizeTflMultinomialPass : public darwinn::impl::DwcDwcLegalizeTflMultinomialPassBase<DwcDwcLegalizeTflMultinomialPass> {
+struct DwcDwcLegalizeTflMultinomialPass
+    : public darwinn::impl::DwcDwcLegalizeTflMultinomialPassBase<
+          DwcDwcLegalizeTflMultinomialPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2846,15 +3377,17 @@ struct DwcDwcLegalizeTflMultinomialPass : public darwinn::impl::DwcDwcLegalizeTf
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-tfl-multinomial rejects unregistered operation "
-                        << op->getName().getStringRef();
+        op->emitError()
+            << "dwc-legalize-tfl-multinomial rejects unregistered operation "
+            << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "tfl") {
-        op->emitError() << "dwc-legalize-tfl-multinomial rejects operation from dialect "
-                        << ns;
+        op->emitError()
+            << "dwc-legalize-tfl-multinomial rejects operation from dialect "
+            << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -2866,11 +3399,14 @@ struct DwcDwcLegalizeTflMultinomialPass : public darwinn::impl::DwcDwcLegalizeTf
 };
 
 // TSV row: "dwc-legalize-tfl-variable-tensors" at 0xd81097.
-struct DwcDwcLegalizeTflVariableTensorsPass : public darwinn::impl::DwcDwcLegalizeTflVariableTensorsPassBase<DwcDwcLegalizeTflVariableTensorsPass> {
+struct DwcDwcLegalizeTflVariableTensorsPass
+    : public darwinn::impl::DwcDwcLegalizeTflVariableTensorsPassBase<
+          DwcDwcLegalizeTflVariableTensorsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -2879,14 +3415,16 @@ struct DwcDwcLegalizeTflVariableTensorsPass : public darwinn::impl::DwcDwcLegali
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "dwc-legalize-tfl-variable-tensors rejects unregistered operation "
+        op->emitError() << "dwc-legalize-tfl-variable-tensors rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "tfl") {
-        op->emitError() << "dwc-legalize-tfl-variable-tensors rejects operation from dialect "
+        op->emitError() << "dwc-legalize-tfl-variable-tensors rejects "
+                           "operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -2899,40 +3437,48 @@ struct DwcDwcLegalizeTflVariableTensorsPass : public darwinn::impl::DwcDwcLegali
 };
 
 // TSV row: "dwc-legalize-uint32-types" at 0xd94e3e.
-struct DwcDwcLegalizeUint32TypesPass : public darwinn::impl::DwcDwcLegalizeUint32TypesPassBase<DwcDwcLegalizeUint32TypesPass> {
+struct DwcDwcLegalizeUint32TypesPass
+    : public darwinn::impl::DwcDwcLegalizeUint32TypesPassBase<
+          DwcDwcLegalizeUint32TypesPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "dwc-legalize-uint32-types rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "darwinn") {
-        op->emitError() << "dwc-legalize-uint32-types rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "dwc-legalize-uint32-types rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "darwinn") {
+            op->emitError()
+                << "dwc-legalize-uint32-types rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "dwc-lower-argmax-index-unpool" at 0xdcf030.
-struct DwcDwcLowerArgmaxIndexUnpoolPass : public darwinn::impl::DwcDwcLowerArgmaxIndexUnpoolPassBase<DwcDwcLowerArgmaxIndexUnpoolPass> {
+struct DwcDwcLowerArgmaxIndexUnpoolPass
+    : public darwinn::impl::DwcDwcLowerArgmaxIndexUnpoolPassBase<
+          DwcDwcLowerArgmaxIndexUnpoolPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2941,8 +3487,8 @@ struct DwcDwcLowerArgmaxIndexUnpoolPass : public darwinn::impl::DwcDwcLowerArgma
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -2953,7 +3499,9 @@ struct DwcDwcLowerArgmaxIndexUnpoolPass : public darwinn::impl::DwcDwcLowerArgma
 };
 
 // TSV row: "dwc-lower-composite-ops" at 0xd84775.
-struct DwcDwcLowerCompositeOpsPass : public darwinn::impl::DwcDwcLowerCompositeOpsPassBase<DwcDwcLowerCompositeOpsPass> {
+struct DwcDwcLowerCompositeOpsPass
+    : public darwinn::impl::DwcDwcLowerCompositeOpsPassBase<
+          DwcDwcLowerCompositeOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2962,8 +3510,8 @@ struct DwcDwcLowerCompositeOpsPass : public darwinn::impl::DwcDwcLowerCompositeO
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -2974,7 +3522,9 @@ struct DwcDwcLowerCompositeOpsPass : public darwinn::impl::DwcDwcLowerCompositeO
 };
 
 // TSV row: "dwc-lower-control-flow" at 0xd61f2c.
-struct DwcDwcLowerControlFlowPass : public darwinn::impl::DwcDwcLowerControlFlowPassBase<DwcDwcLowerControlFlowPass> {
+struct DwcDwcLowerControlFlowPass
+    : public darwinn::impl::DwcDwcLowerControlFlowPassBase<
+          DwcDwcLowerControlFlowPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -2983,8 +3533,8 @@ struct DwcDwcLowerControlFlowPass : public darwinn::impl::DwcDwcLowerControlFlow
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -2995,7 +3545,9 @@ struct DwcDwcLowerControlFlowPass : public darwinn::impl::DwcDwcLowerControlFlow
 };
 
 // TSV row: "dwc-lower-depth-to-from-space" at 0xe102d0.
-struct DwcDwcLowerDepthToFromSpacePass : public darwinn::impl::DwcDwcLowerDepthToFromSpacePassBase<DwcDwcLowerDepthToFromSpacePass> {
+struct DwcDwcLowerDepthToFromSpacePass
+    : public darwinn::impl::DwcDwcLowerDepthToFromSpacePassBase<
+          DwcDwcLowerDepthToFromSpacePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3004,8 +3556,8 @@ struct DwcDwcLowerDepthToFromSpacePass : public darwinn::impl::DwcDwcLowerDepthT
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3016,7 +3568,9 @@ struct DwcDwcLowerDepthToFromSpacePass : public darwinn::impl::DwcDwcLowerDepthT
 };
 
 // TSV row: "dwc-lower-generic-constants" at 0xd7bb41.
-struct DwcDwcLowerGenericConstantsPass : public darwinn::impl::DwcDwcLowerGenericConstantsPassBase<DwcDwcLowerGenericConstantsPass> {
+struct DwcDwcLowerGenericConstantsPass
+    : public darwinn::impl::DwcDwcLowerGenericConstantsPassBase<
+          DwcDwcLowerGenericConstantsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3025,8 +3579,8 @@ struct DwcDwcLowerGenericConstantsPass : public darwinn::impl::DwcDwcLowerGeneri
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3037,7 +3591,8 @@ struct DwcDwcLowerGenericConstantsPass : public darwinn::impl::DwcDwcLowerGeneri
 };
 
 // TSV row: "dwc-lower-hlops" at 0xd841f4.
-struct DwcDwcLowerHlopsPass : public darwinn::impl::DwcDwcLowerHlopsPassBase<DwcDwcLowerHlopsPass> {
+struct DwcDwcLowerHlopsPass
+    : public darwinn::impl::DwcDwcLowerHlopsPassBase<DwcDwcLowerHlopsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3046,8 +3601,8 @@ struct DwcDwcLowerHlopsPass : public darwinn::impl::DwcDwcLowerHlopsPassBase<Dwc
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3058,7 +3613,9 @@ struct DwcDwcLowerHlopsPass : public darwinn::impl::DwcDwcLowerHlopsPassBase<Dwc
 };
 
 // TSV row: "dwc-lower-input-output-cast" at 0xd68084.
-struct DwcDwcLowerInputOutputCastPass : public darwinn::impl::DwcDwcLowerInputOutputCastPassBase<DwcDwcLowerInputOutputCastPass> {
+struct DwcDwcLowerInputOutputCastPass
+    : public darwinn::impl::DwcDwcLowerInputOutputCastPassBase<
+          DwcDwcLowerInputOutputCastPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3067,8 +3624,8 @@ struct DwcDwcLowerInputOutputCastPass : public darwinn::impl::DwcDwcLowerInputOu
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3079,7 +3636,9 @@ struct DwcDwcLowerInputOutputCastPass : public darwinn::impl::DwcDwcLowerInputOu
 };
 
 // TSV row: "dwc-lower-padding-ops" at 0xd84749.
-struct DwcDwcLowerPaddingOpsPass : public darwinn::impl::DwcDwcLowerPaddingOpsPassBase<DwcDwcLowerPaddingOpsPass> {
+struct DwcDwcLowerPaddingOpsPass
+    : public darwinn::impl::DwcDwcLowerPaddingOpsPassBase<
+          DwcDwcLowerPaddingOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3088,8 +3647,8 @@ struct DwcDwcLowerPaddingOpsPass : public darwinn::impl::DwcDwcLowerPaddingOpsPa
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3100,7 +3659,9 @@ struct DwcDwcLowerPaddingOpsPass : public darwinn::impl::DwcDwcLowerPaddingOpsPa
 };
 
 // TSV row: "dwc-lower-pseudo-ops" at 0xd845c5.
-struct DwcDwcLowerPseudoOpsPass : public darwinn::impl::DwcDwcLowerPseudoOpsPassBase<DwcDwcLowerPseudoOpsPass> {
+struct DwcDwcLowerPseudoOpsPass
+    : public darwinn::impl::DwcDwcLowerPseudoOpsPassBase<
+          DwcDwcLowerPseudoOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3109,8 +3670,8 @@ struct DwcDwcLowerPseudoOpsPass : public darwinn::impl::DwcDwcLowerPseudoOpsPass
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3121,7 +3682,9 @@ struct DwcDwcLowerPseudoOpsPass : public darwinn::impl::DwcDwcLowerPseudoOpsPass
 };
 
 // TSV row: "dwc-lower-resampler-ops" at 0xd84598.
-struct DwcDwcLowerResamplerOpsPass : public darwinn::impl::DwcDwcLowerResamplerOpsPassBase<DwcDwcLowerResamplerOpsPass> {
+struct DwcDwcLowerResamplerOpsPass
+    : public darwinn::impl::DwcDwcLowerResamplerOpsPassBase<
+          DwcDwcLowerResamplerOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3130,8 +3693,8 @@ struct DwcDwcLowerResamplerOpsPass : public darwinn::impl::DwcDwcLowerResamplerO
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3142,7 +3705,9 @@ struct DwcDwcLowerResamplerOpsPass : public darwinn::impl::DwcDwcLowerResamplerO
 };
 
 // TSV row: "dwc-lower-scalar-ops" at 0xd845b0.
-struct DwcDwcLowerScalarOpsPass : public darwinn::impl::DwcDwcLowerScalarOpsPassBase<DwcDwcLowerScalarOpsPass> {
+struct DwcDwcLowerScalarOpsPass
+    : public darwinn::impl::DwcDwcLowerScalarOpsPassBase<
+          DwcDwcLowerScalarOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3151,8 +3716,8 @@ struct DwcDwcLowerScalarOpsPass : public darwinn::impl::DwcDwcLowerScalarOpsPass
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3163,7 +3728,9 @@ struct DwcDwcLowerScalarOpsPass : public darwinn::impl::DwcDwcLowerScalarOpsPass
 };
 
 // TSV row: "dwc-lower-scatter-ops" at 0xd84582.
-struct DwcDwcLowerScatterOpsPass : public darwinn::impl::DwcDwcLowerScatterOpsPassBase<DwcDwcLowerScatterOpsPass> {
+struct DwcDwcLowerScatterOpsPass
+    : public darwinn::impl::DwcDwcLowerScatterOpsPassBase<
+          DwcDwcLowerScatterOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3172,8 +3739,8 @@ struct DwcDwcLowerScatterOpsPass : public darwinn::impl::DwcDwcLowerScatterOpsPa
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3184,7 +3751,8 @@ struct DwcDwcLowerScatterOpsPass : public darwinn::impl::DwcDwcLowerScatterOpsPa
 };
 
 // TSV row: "dwc-lower-top-k" at 0xdd6da3.
-struct DwcDwcLowerTopKPass : public darwinn::impl::DwcDwcLowerTopKPassBase<DwcDwcLowerTopKPass> {
+struct DwcDwcLowerTopKPass
+    : public darwinn::impl::DwcDwcLowerTopKPassBase<DwcDwcLowerTopKPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3193,8 +3761,8 @@ struct DwcDwcLowerTopKPass : public darwinn::impl::DwcDwcLowerTopKPassBase<DwcDw
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3205,11 +3773,14 @@ struct DwcDwcLowerTopKPass : public darwinn::impl::DwcDwcLowerTopKPassBase<DwcDw
 };
 
 // TSV row: "dwc-post-truncation-tpu-fitter" at 0xdab7fc.
-struct DwcDwcPostTruncationTpuFitterPass : public darwinn::impl::DwcDwcPostTruncationTpuFitterPassBase<DwcDwcPostTruncationTpuFitterPass> {
+struct DwcDwcPostTruncationTpuFitterPass
+    : public darwinn::impl::DwcDwcPostTruncationTpuFitterPassBase<
+          DwcDwcPostTruncationTpuFitterPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3237,17 +3808,19 @@ struct DwcDwcPostTruncationTpuFitterPass : public darwinn::impl::DwcDwcPostTrunc
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-pre-tpu-fitter-optimize-gather" at 0xdaf5f9.
-struct DwcDwcPreTpuFitterOptimizeGatherPass : public darwinn::impl::DwcDwcPreTpuFitterOptimizeGatherPassBase<DwcDwcPreTpuFitterOptimizeGatherPass> {
+struct DwcDwcPreTpuFitterOptimizeGatherPass
+    : public darwinn::impl::DwcDwcPreTpuFitterOptimizeGatherPassBase<
+          DwcDwcPreTpuFitterOptimizeGatherPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3275,17 +3848,19 @@ struct DwcDwcPreTpuFitterOptimizeGatherPass : public darwinn::impl::DwcDwcPreTpu
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-pre-tpu-fitter-optimize-scatter" at 0xdabc37.
-struct DwcDwcPreTpuFitterOptimizeScatterPass : public darwinn::impl::DwcDwcPreTpuFitterOptimizeScatterPassBase<DwcDwcPreTpuFitterOptimizeScatterPass> {
+struct DwcDwcPreTpuFitterOptimizeScatterPass
+    : public darwinn::impl::DwcDwcPreTpuFitterOptimizeScatterPassBase<
+          DwcDwcPreTpuFitterOptimizeScatterPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3313,17 +3888,19 @@ struct DwcDwcPreTpuFitterOptimizeScatterPass : public darwinn::impl::DwcDwcPreTp
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-regroup-tpu-functions" at 0xd873c3.
-struct DwcDwcRegroupTpuFunctionsPass : public darwinn::impl::DwcDwcRegroupTpuFunctionsPassBase<DwcDwcRegroupTpuFunctionsPass> {
+struct DwcDwcRegroupTpuFunctionsPass
+    : public darwinn::impl::DwcDwcRegroupTpuFunctionsPassBase<
+          DwcDwcRegroupTpuFunctionsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3351,17 +3928,19 @@ struct DwcDwcRegroupTpuFunctionsPass : public darwinn::impl::DwcDwcRegroupTpuFun
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-serialize-tpu-offloads" at 0xd9c33f.
-struct DwcDwcSerializeTpuOffloadsPass : public darwinn::impl::DwcDwcSerializeTpuOffloadsPassBase<DwcDwcSerializeTpuOffloadsPass> {
+struct DwcDwcSerializeTpuOffloadsPass
+    : public darwinn::impl::DwcDwcSerializeTpuOffloadsPassBase<
+          DwcDwcSerializeTpuOffloadsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3389,17 +3968,19 @@ struct DwcDwcSerializeTpuOffloadsPass : public darwinn::impl::DwcDwcSerializeTpu
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-test-repeat-tpu-ops" at 0xd8447c.
-struct DwcDwcTestRepeatTpuOpsPass : public darwinn::impl::DwcDwcTestRepeatTpuOpsPassBase<DwcDwcTestRepeatTpuOpsPass> {
+struct DwcDwcTestRepeatTpuOpsPass
+    : public darwinn::impl::DwcDwcTestRepeatTpuOpsPassBase<
+          DwcDwcTestRepeatTpuOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3427,17 +4008,18 @@ struct DwcDwcTestRepeatTpuOpsPass : public darwinn::impl::DwcDwcTestRepeatTpuOps
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-tpu-fitter" at 0xdab81b.
-struct DwcDwcTpuFitterPass : public darwinn::impl::DwcDwcTpuFitterPassBase<DwcDwcTpuFitterPass> {
+struct DwcDwcTpuFitterPass
+    : public darwinn::impl::DwcDwcTpuFitterPassBase<DwcDwcTpuFitterPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3465,17 +4047,19 @@ struct DwcDwcTpuFitterPass : public darwinn::impl::DwcDwcTpuFitterPassBase<DwcDw
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwc-tpu-function-cse" at 0xdf32f5.
-struct DwcDwcTpuFunctionCsePass : public darwinn::impl::DwcDwcTpuFunctionCsePassBase<DwcDwcTpuFunctionCsePass> {
+struct DwcDwcTpuFunctionCsePass
+    : public darwinn::impl::DwcDwcTpuFunctionCsePassBase<
+          DwcDwcTpuFunctionCsePass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3503,13 +4087,14 @@ struct DwcDwcTpuFunctionCsePass : public darwinn::impl::DwcDwcTpuFunctionCsePass
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwg-create-darwinn-custom-op" at 0xdb45e0.
-struct DwcDwgCreateDarwinnCustomOpPass : public darwinn::impl::DwcDwgCreateDarwinnCustomOpPassBase<DwcDwgCreateDarwinnCustomOpPass> {
+struct DwcDwgCreateDarwinnCustomOpPass
+    : public darwinn::impl::DwcDwgCreateDarwinnCustomOpPassBase<
+          DwcDwgCreateDarwinnCustomOpPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3538,11 +4123,14 @@ struct DwcDwgCreateDarwinnCustomOpPass : public darwinn::impl::DwcDwgCreateDarwi
 };
 
 // TSV row: "dwg-fork-multicore-tpu-offloads" at 0xd9c35a.
-struct DwcDwgForkMulticoreTpuOffloadsPass : public darwinn::impl::DwcDwgForkMulticoreTpuOffloadsPassBase<DwcDwgForkMulticoreTpuOffloadsPass> {
+struct DwcDwgForkMulticoreTpuOffloadsPass
+    : public darwinn::impl::DwcDwgForkMulticoreTpuOffloadsPassBase<
+          DwcDwgForkMulticoreTpuOffloadsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3570,13 +4158,14 @@ struct DwcDwgForkMulticoreTpuOffloadsPass : public darwinn::impl::DwcDwgForkMult
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "dwg-lower-for-to-while" at 0xe07f47.
-struct DwcDwgLowerForToWhilePass : public darwinn::impl::DwcDwgLowerForToWhilePassBase<DwcDwgLowerForToWhilePass> {
+struct DwcDwgLowerForToWhilePass
+    : public darwinn::impl::DwcDwgLowerForToWhilePassBase<
+          DwcDwgLowerForToWhilePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3585,8 +4174,8 @@ struct DwcDwgLowerForToWhilePass : public darwinn::impl::DwcDwgLowerForToWhilePa
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3597,7 +4186,9 @@ struct DwcDwgLowerForToWhilePass : public darwinn::impl::DwcDwgLowerForToWhilePa
 };
 
 // TSV row: "dwgt-lower-index-type" at 0xdf6914.
-struct DwcDwgtLowerIndexTypePass : public darwinn::impl::DwcDwgtLowerIndexTypePassBase<DwcDwgtLowerIndexTypePass> {
+struct DwcDwgtLowerIndexTypePass
+    : public darwinn::impl::DwcDwgtLowerIndexTypePassBase<
+          DwcDwgtLowerIndexTypePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3606,8 +4197,8 @@ struct DwcDwgtLowerIndexTypePass : public darwinn::impl::DwcDwgtLowerIndexTypePa
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -3618,7 +4209,9 @@ struct DwcDwgtLowerIndexTypePass : public darwinn::impl::DwcDwgtLowerIndexTypePa
 };
 
 // TSV row: "dynamic-update-slice-lowering" at 0xddee37.
-struct DwcDynamicUpdateSliceLoweringPass : public darwinn::impl::DwcDynamicUpdateSliceLoweringPassBase<DwcDynamicUpdateSliceLoweringPass> {
+struct DwcDynamicUpdateSliceLoweringPass
+    : public darwinn::impl::DwcDynamicUpdateSliceLoweringPassBase<
+          DwcDynamicUpdateSliceLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3635,7 +4228,8 @@ struct DwcDynamicUpdateSliceLoweringPass : public darwinn::impl::DwcDynamicUpdat
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dynamic-update-slice-lowering.marked", builder.getUnitAttr());
+      op->setAttr("dynamic-update-slice-lowering.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -3647,11 +4241,14 @@ struct DwcDynamicUpdateSliceLoweringPass : public darwinn::impl::DwcDynamicUpdat
 };
 
 // TSV row: "edgetpu-custom-op-2" at 0x103fe70.
-struct DwcEdgetpuCustomOp2Pass : public darwinn::impl::DwcEdgetpuCustomOp2PassBase<DwcEdgetpuCustomOp2Pass> {
+struct DwcEdgetpuCustomOp2Pass
+    : public darwinn::impl::DwcEdgetpuCustomOp2PassBase<
+          DwcEdgetpuCustomOp2Pass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3679,13 +4276,14 @@ struct DwcEdgetpuCustomOp2Pass : public darwinn::impl::DwcEdgetpuCustomOp2PassBa
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "(fm-model-converter" at 0xdac265.
-struct DwcFmModelConverterPass : public darwinn::impl::DwcFmModelConverterPassBase<DwcFmModelConverterPass> {
+struct DwcFmModelConverterPass
+    : public darwinn::impl::DwcFmModelConverterPassBase<
+          DwcFmModelConverterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3714,7 +4312,9 @@ struct DwcFmModelConverterPass : public darwinn::impl::DwcFmModelConverterPassBa
 };
 
 // TSV row: "(fpa2bv-model-converter" at 0xdac220.
-struct DwcFpa2bvModelConverterPass : public darwinn::impl::DwcFpa2bvModelConverterPassBase<DwcFpa2bvModelConverterPass> {
+struct DwcFpa2bvModelConverterPass
+    : public darwinn::impl::DwcFpa2bvModelConverterPassBase<
+          DwcFpa2bvModelConverterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3743,11 +4343,14 @@ struct DwcFpa2bvModelConverterPass : public darwinn::impl::DwcFpa2bvModelConvert
 };
 
 // TSV row: "group-tpu-offloads-by-parameters" at 0xd821ce.
-struct DwcGroupTpuOffloadsByParametersPass : public darwinn::impl::DwcGroupTpuOffloadsByParametersPassBase<DwcGroupTpuOffloadsByParametersPass> {
+struct DwcGroupTpuOffloadsByParametersPass
+    : public darwinn::impl::DwcGroupTpuOffloadsByParametersPassBase<
+          DwcGroupTpuOffloadsByParametersPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -3775,13 +4378,14 @@ struct DwcGroupTpuOffloadsByParametersPass : public darwinn::impl::DwcGroupTpuOf
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "interpolate-lowering-pass" at 0xd7f143.
-struct DwcInterpolateLoweringPassPass : public darwinn::impl::DwcInterpolateLoweringPassPassBase<DwcInterpolateLoweringPassPass> {
+struct DwcInterpolateLoweringPassPass
+    : public darwinn::impl::DwcInterpolateLoweringPassPassBase<
+          DwcInterpolateLoweringPassPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3809,8 +4413,14 @@ struct DwcInterpolateLoweringPassPass : public darwinn::impl::DwcInterpolateLowe
   }
 };
 
-// TSV row: "is not immutable, try removing mutable variables in your model since mutable variables are currently not supported through this converter" at 0xdac290.
-struct DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPass : public darwinn::impl::DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPassBase<DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPass> {
+// TSV row: "is not immutable, try removing mutable variables in your model
+// since mutable variables are currently not supported through this converter"
+// at 0xdac290.
+struct
+    DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPass
+    : public darwinn::impl::
+          DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPassBase<
+              DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariablesAreCurrentlyNotSupportedThroughThisConverterPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -3827,23 +4437,30 @@ struct DwcIsNotImmutableTryRemovingMutableVariablesInYourModelSinceMutableVariab
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("is not immutable, try removing mutable variables in your model since mutable variables are currently not supported through this converter.marked", builder.getUnitAttr());
+      op->setAttr("is not immutable, try removing mutable variables in your "
+                  "model since mutable variables are currently not supported "
+                  "through this converter.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
     if (failedMark)
       return signalPassFailure();
-    root->setAttr("is not immutable, try removing mutable variables in your model since mutable variables are currently not supported through this converter.marked_count",
+    root->setAttr("is not immutable, try removing mutable variables in your "
+                  "model since mutable variables are currently not supported "
+                  "through this converter.marked_count",
                   builder.getI64IntegerAttr(marked));
   }
 };
 
 // TSV row: "Legalize" at 0xde6d4c.
-struct DwcLegalizePass : public darwinn::impl::DwcLegalizePassBase<DwcLegalizePass> {
+struct DwcLegalizePass
+    : public darwinn::impl::DwcLegalizePassBase<DwcLegalizePass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -3859,8 +4476,7 @@ struct DwcLegalizePass : public darwinn::impl::DwcLegalizePassBase<DwcLegalizePa
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "legalize rejects operation from dialect "
-                        << ns;
+        op->emitError() << "legalize rejects operation from dialect " << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -3872,11 +4488,13 @@ struct DwcLegalizePass : public darwinn::impl::DwcLegalizePassBase<DwcLegalizePa
 };
 
 // TSV row: "legalize-affine" at 0xe03694.
-struct DwcLegalizeAffinePass : public darwinn::impl::DwcLegalizeAffinePassBase<DwcLegalizeAffinePass> {
+struct DwcLegalizeAffinePass
+    : public darwinn::impl::DwcLegalizeAffinePassBase<DwcLegalizeAffinePass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -3905,11 +4523,13 @@ struct DwcLegalizeAffinePass : public darwinn::impl::DwcLegalizeAffinePassBase<D
 };
 
 // TSV row: "legalize-dwc" at 0xe25250.
-struct DwcLegalizeDwcPass : public darwinn::impl::DwcLegalizeDwcPassBase<DwcLegalizeDwcPass> {
+struct DwcLegalizeDwcPass
+    : public darwinn::impl::DwcLegalizeDwcPassBase<DwcLegalizeDwcPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -3925,8 +4545,7 @@ struct DwcLegalizeDwcPass : public darwinn::impl::DwcLegalizeDwcPassBase<DwcLega
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "legalize-dwc rejects operation from dialect "
-                        << ns;
+        op->emitError() << "legalize-dwc rejects operation from dialect " << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -3938,11 +4557,14 @@ struct DwcLegalizeDwcPass : public darwinn::impl::DwcLegalizeDwcPassBase<DwcLega
 };
 
 // TSV row: "legalize-dwc-input-output-ops" at 0xd844c7.
-struct DwcLegalizeDwcInputOutputOpsPass : public darwinn::impl::DwcLegalizeDwcInputOutputOpsPassBase<DwcLegalizeDwcInputOutputOpsPass> {
+struct DwcLegalizeDwcInputOutputOpsPass
+    : public darwinn::impl::DwcLegalizeDwcInputOutputOpsPassBase<
+          DwcLegalizeDwcInputOutputOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -3951,15 +4573,17 @@ struct DwcLegalizeDwcInputOutputOpsPass : public darwinn::impl::DwcLegalizeDwcIn
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "legalize-dwc-input-output-ops rejects unregistered operation "
-                        << op->getName().getStringRef();
+        op->emitError()
+            << "legalize-dwc-input-output-ops rejects unregistered operation "
+            << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "legalize-dwc-input-output-ops rejects operation from dialect "
-                        << ns;
+        op->emitError()
+            << "legalize-dwc-input-output-ops rejects operation from dialect "
+            << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -3971,11 +4595,14 @@ struct DwcLegalizeDwcInputOutputOpsPass : public darwinn::impl::DwcLegalizeDwcIn
 };
 
 // TSV row: "legalize-dwg-tensor" at 0xda8a5b.
-struct DwcLegalizeDwgTensorPass : public darwinn::impl::DwcLegalizeDwgTensorPassBase<DwcLegalizeDwgTensorPass> {
+struct DwcLegalizeDwgTensorPass
+    : public darwinn::impl::DwcLegalizeDwgTensorPassBase<
+          DwcLegalizeDwgTensorPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -4004,44 +4631,51 @@ struct DwcLegalizeDwgTensorPass : public darwinn::impl::DwcLegalizeDwgTensorPass
 };
 
 // TSV row: "legalize-quant-types" at 0xd94deb.
-struct DwcLegalizeQuantTypesPass : public darwinn::impl::DwcLegalizeQuantTypesPassBase<DwcLegalizeQuantTypesPass> {
+struct DwcLegalizeQuantTypesPass
+    : public darwinn::impl::DwcLegalizeQuantTypesPassBase<
+          DwcLegalizeQuantTypesPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "legalize-quant-types rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "quant") {
-        op->emitError() << "legalize-quant-types rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "legalize-quant-types rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "quant") {
+            op->emitError()
+                << "legalize-quant-types rejects operation from dialect " << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "legalize-scf" at 0xde466f.
-struct DwcLegalizeScfPass : public darwinn::impl::DwcLegalizeScfPassBase<DwcLegalizeScfPass> {
+struct DwcLegalizeScfPass
+    : public darwinn::impl::DwcLegalizeScfPassBase<DwcLegalizeScfPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -4057,8 +4691,7 @@ struct DwcLegalizeScfPass : public darwinn::impl::DwcLegalizeScfPassBase<DwcLega
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "scf") {
-        op->emitError() << "legalize-scf rejects operation from dialect "
-                        << ns;
+        op->emitError() << "legalize-scf rejects operation from dialect " << ns;
         failedLegal = true;
         return WalkResult::interrupt();
       }
@@ -4070,11 +4703,14 @@ struct DwcLegalizeScfPass : public darwinn::impl::DwcLegalizeScfPassBase<DwcLega
 };
 
 // TSV row: "legalize-shape-ops" at 0xd84833.
-struct DwcLegalizeShapeOpsPass : public darwinn::impl::DwcLegalizeShapeOpsPassBase<DwcLegalizeShapeOpsPass> {
+struct DwcLegalizeShapeOpsPass
+    : public darwinn::impl::DwcLegalizeShapeOpsPassBase<
+          DwcLegalizeShapeOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -4103,11 +4739,14 @@ struct DwcLegalizeShapeOpsPass : public darwinn::impl::DwcLegalizeShapeOpsPassBa
 };
 
 // TSV row: "legalize test using layerir flow" at 0xd61f43.
-struct DwcLegalizeTestUsingLayerirFlowPass : public darwinn::impl::DwcLegalizeTestUsingLayerirFlowPassBase<DwcLegalizeTestUsingLayerirFlowPass> {
+struct DwcLegalizeTestUsingLayerirFlowPass
+    : public darwinn::impl::DwcLegalizeTestUsingLayerirFlowPassBase<
+          DwcLegalizeTestUsingLayerirFlowPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -4116,14 +4755,16 @@ struct DwcLegalizeTestUsingLayerirFlowPass : public darwinn::impl::DwcLegalizeTe
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "legalize-test-using-layerir-flow rejects unregistered operation "
+        op->emitError() << "legalize-test-using-layerir-flow rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "legalize-test-using-layerir-flow rejects operation from dialect "
+        op->emitError() << "legalize-test-using-layerir-flow rejects operation "
+                           "from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -4136,7 +4777,9 @@ struct DwcLegalizeTestUsingLayerirFlowPass : public darwinn::impl::DwcLegalizeTe
 };
 
 // TSV row: "Legalize TF_XlaCallModule Op to stablehlo" at 0xdbc2d1.
-struct DwcLegalizeTfXlacallmoduleOpToStablehloPass : public darwinn::impl::DwcLegalizeTfXlacallmoduleOpToStablehloPassBase<DwcLegalizeTfXlacallmoduleOpToStablehloPass> {
+struct DwcLegalizeTfXlacallmoduleOpToStablehloPass
+    : public darwinn::impl::DwcLegalizeTfXlacallmoduleOpToStablehloPassBase<
+          DwcLegalizeTfXlacallmoduleOpToStablehloPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4153,7 +4796,8 @@ struct DwcLegalizeTfXlacallmoduleOpToStablehloPass : public darwinn::impl::DwcLe
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("Legalize TF_XlaCallModule Op to stablehlo.marked", builder.getUnitAttr());
+      op->setAttr("Legalize TF_XlaCallModule Op to stablehlo.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -4165,11 +4809,14 @@ struct DwcLegalizeTfXlacallmoduleOpToStablehloPass : public darwinn::impl::DwcLe
 };
 
 // TSV row: "legalize-thread-oblivious-op-pass" at 0xd7ee8c.
-struct DwcLegalizeThreadObliviousOpPassPass : public darwinn::impl::DwcLegalizeThreadObliviousOpPassPassBase<DwcLegalizeThreadObliviousOpPassPass> {
+struct DwcLegalizeThreadObliviousOpPassPass
+    : public darwinn::impl::DwcLegalizeThreadObliviousOpPassPassBase<
+          DwcLegalizeThreadObliviousOpPassPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -4178,14 +4825,16 @@ struct DwcLegalizeThreadObliviousOpPassPass : public darwinn::impl::DwcLegalizeT
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "legalize-thread-oblivious-op-pass rejects unregistered operation "
+        op->emitError() << "legalize-thread-oblivious-op-pass rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "darwinn") {
-        op->emitError() << "legalize-thread-oblivious-op-pass rejects operation from dialect "
+        op->emitError() << "legalize-thread-oblivious-op-pass rejects "
+                           "operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -4198,11 +4847,14 @@ struct DwcLegalizeThreadObliviousOpPassPass : public darwinn::impl::DwcLegalizeT
 };
 
 // TSV row: "legalize-types-for-dive-vm-tensor" at 0xda8a1b.
-struct DwcLegalizeTypesForDiveVmTensorPass : public darwinn::impl::DwcLegalizeTypesForDiveVmTensorPassBase<DwcLegalizeTypesForDiveVmTensorPass> {
+struct DwcLegalizeTypesForDiveVmTensorPass
+    : public darwinn::impl::DwcLegalizeTypesForDiveVmTensorPassBase<
+          DwcLegalizeTypesForDiveVmTensorPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject them.
+    // Ops outside the canonical pipeline have no kernel shape evidence, reject
+    // them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
@@ -4211,14 +4863,16 @@ struct DwcLegalizeTypesForDiveVmTensorPass : public darwinn::impl::DwcLegalizeTy
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "legalize-types-for-dive-vm-tensor rejects unregistered operation "
+        op->emitError() << "legalize-types-for-dive-vm-tensor rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "dive_vm") {
-        op->emitError() << "legalize-types-for-dive-vm-tensor rejects operation from dialect "
+        op->emitError() << "legalize-types-for-dive-vm-tensor rejects "
+                           "operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -4231,7 +4885,9 @@ struct DwcLegalizeTypesForDiveVmTensorPass : public darwinn::impl::DwcLegalizeTy
 };
 
 // TSV row: "LegalizeStablehloComposite" at 0xdef61e.
-struct DwcLegalizeStablehloCompositePass : public darwinn::impl::DwcLegalizeStablehloCompositePassBase<DwcLegalizeStablehloCompositePass> {
+struct DwcLegalizeStablehloCompositePass
+    : public darwinn::impl::DwcLegalizeStablehloCompositePassBase<
+          DwcLegalizeStablehloCompositePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4260,7 +4916,8 @@ struct DwcLegalizeStablehloCompositePass : public darwinn::impl::DwcLegalizeStab
 };
 
 // TSV row: "lower-affine" at 0xe03675.
-struct DwcLowerAffinePass : public darwinn::impl::DwcLowerAffinePassBase<DwcLowerAffinePass> {
+struct DwcLowerAffinePass
+    : public darwinn::impl::DwcLowerAffinePassBase<DwcLowerAffinePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4269,8 +4926,8 @@ struct DwcLowerAffinePass : public darwinn::impl::DwcLowerAffinePassBase<DwcLowe
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4281,7 +4938,9 @@ struct DwcLowerAffinePass : public darwinn::impl::DwcLowerAffinePassBase<DwcLowe
 };
 
 // TSV row: "lower-all-functions" at 0xd873dd.
-struct DwcLowerAllFunctionsPass : public darwinn::impl::DwcLowerAllFunctionsPassBase<DwcLowerAllFunctionsPass> {
+struct DwcLowerAllFunctionsPass
+    : public darwinn::impl::DwcLowerAllFunctionsPassBase<
+          DwcLowerAllFunctionsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4290,8 +4949,8 @@ struct DwcLowerAllFunctionsPass : public darwinn::impl::DwcLowerAllFunctionsPass
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4302,7 +4961,8 @@ struct DwcLowerAllFunctionsPass : public darwinn::impl::DwcLowerAllFunctionsPass
 };
 
 // TSV row: "lower-all-pads" at 0xd9c263.
-struct DwcLowerAllPadsPass : public darwinn::impl::DwcLowerAllPadsPassBase<DwcLowerAllPadsPass> {
+struct DwcLowerAllPadsPass
+    : public darwinn::impl::DwcLowerAllPadsPassBase<DwcLowerAllPadsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4311,8 +4971,8 @@ struct DwcLowerAllPadsPass : public darwinn::impl::DwcLowerAllPadsPassBase<DwcLo
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4323,7 +4983,9 @@ struct DwcLowerAllPadsPass : public darwinn::impl::DwcLowerAllPadsPassBase<DwcLo
 };
 
 // TSV row: "lower-attention-ops" at 0xd845ec.
-struct DwcLowerAttentionOpsPass : public darwinn::impl::DwcLowerAttentionOpsPassBase<DwcLowerAttentionOpsPass> {
+struct DwcLowerAttentionOpsPass
+    : public darwinn::impl::DwcLowerAttentionOpsPassBase<
+          DwcLowerAttentionOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4332,8 +4994,8 @@ struct DwcLowerAttentionOpsPass : public darwinn::impl::DwcLowerAttentionOpsPass
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4344,7 +5006,8 @@ struct DwcLowerAttentionOpsPass : public darwinn::impl::DwcLowerAttentionOpsPass
 };
 
 // TSV row: "lower-input-cast" at 0xd680b2.
-struct DwcLowerInputCastPass : public darwinn::impl::DwcLowerInputCastPassBase<DwcLowerInputCastPass> {
+struct DwcLowerInputCastPass
+    : public darwinn::impl::DwcLowerInputCastPassBase<DwcLowerInputCastPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4353,8 +5016,8 @@ struct DwcLowerInputCastPass : public darwinn::impl::DwcLowerInputCastPassBase<D
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4365,7 +5028,8 @@ struct DwcLowerInputCastPass : public darwinn::impl::DwcLowerInputCastPassBase<D
 };
 
 // TSV row: "lower-join" at 0xdc9464.
-struct DwcLowerJoinPass : public darwinn::impl::DwcLowerJoinPassBase<DwcLowerJoinPass> {
+struct DwcLowerJoinPass
+    : public darwinn::impl::DwcLowerJoinPassBase<DwcLowerJoinPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4374,8 +5038,8 @@ struct DwcLowerJoinPass : public darwinn::impl::DwcLowerJoinPassBase<DwcLowerJoi
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4386,7 +5050,8 @@ struct DwcLowerJoinPass : public darwinn::impl::DwcLowerJoinPassBase<DwcLowerJoi
 };
 
 // TSV row: "lower-output-cast" at 0xd680a0.
-struct DwcLowerOutputCastPass : public darwinn::impl::DwcLowerOutputCastPassBase<DwcLowerOutputCastPass> {
+struct DwcLowerOutputCastPass
+    : public darwinn::impl::DwcLowerOutputCastPassBase<DwcLowerOutputCastPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4395,8 +5060,8 @@ struct DwcLowerOutputCastPass : public darwinn::impl::DwcLowerOutputCastPassBase
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4407,7 +5072,9 @@ struct DwcLowerOutputCastPass : public darwinn::impl::DwcLowerOutputCastPassBase
 };
 
 // TSV row: "LowerArgmaxIndexUnpool" at 0xdcf04e.
-struct DwcLowerArgmaxIndexUnpoolPass : public darwinn::impl::DwcLowerArgmaxIndexUnpoolPassBase<DwcLowerArgmaxIndexUnpoolPass> {
+struct DwcLowerArgmaxIndexUnpoolPass
+    : public darwinn::impl::DwcLowerArgmaxIndexUnpoolPassBase<
+          DwcLowerArgmaxIndexUnpoolPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4416,8 +5083,8 @@ struct DwcLowerArgmaxIndexUnpoolPass : public darwinn::impl::DwcLowerArgmaxIndex
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4428,7 +5095,9 @@ struct DwcLowerArgmaxIndexUnpoolPass : public darwinn::impl::DwcLowerArgmaxIndex
 };
 
 // TSV row: "mark-dive-vm-tensor-insert-slice-ops" at 0xd8488d.
-struct DwcMarkDiveVmTensorInsertSliceOpsPass : public darwinn::impl::DwcMarkDiveVmTensorInsertSliceOpsPassBase<DwcMarkDiveVmTensorInsertSliceOpsPass> {
+struct DwcMarkDiveVmTensorInsertSliceOpsPass
+    : public darwinn::impl::DwcMarkDiveVmTensorInsertSliceOpsPassBase<
+          DwcMarkDiveVmTensorInsertSliceOpsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4445,7 +5114,8 @@ struct DwcMarkDiveVmTensorInsertSliceOpsPass : public darwinn::impl::DwcMarkDive
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("mark-dive-vm-tensor-insert-slice-ops.marked", builder.getUnitAttr());
+      op->setAttr("mark-dive-vm-tensor-insert-slice-ops.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -4457,7 +5127,9 @@ struct DwcMarkDiveVmTensorInsertSliceOpsPass : public darwinn::impl::DwcMarkDive
 };
 
 // TSV row: "mhlo-legalize-einsum-to-dot-general" at 0xdd34bf.
-struct DwcMhloLegalizeEinsumToDotGeneralPass : public darwinn::impl::DwcMhloLegalizeEinsumToDotGeneralPassBase<DwcMhloLegalizeEinsumToDotGeneralPass> {
+struct DwcMhloLegalizeEinsumToDotGeneralPass
+    : public darwinn::impl::DwcMhloLegalizeEinsumToDotGeneralPassBase<
+          DwcMhloLegalizeEinsumToDotGeneralPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4469,14 +5141,16 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass : public darwinn::impl::DwcMhloLega
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "mhlo-legalize-einsum-to-dot-general rejects unregistered operation "
+        op->emitError() << "mhlo-legalize-einsum-to-dot-general rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "mhlo") {
-        op->emitError() << "mhlo-legalize-einsum-to-dot-general rejects operation from dialect "
+        op->emitError() << "mhlo-legalize-einsum-to-dot-general rejects "
+                           "operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -4489,7 +5163,9 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass : public darwinn::impl::DwcMhloLega
 };
 
 // TSV row: "mid-to-low-level-lowering" at 0xddedf4.
-struct DwcMidToLowLevelLoweringPass : public darwinn::impl::DwcMidToLowLevelLoweringPassBase<DwcMidToLowLevelLoweringPass> {
+struct DwcMidToLowLevelLoweringPass
+    : public darwinn::impl::DwcMidToLowLevelLoweringPassBase<
+          DwcMidToLowLevelLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4518,7 +5194,9 @@ struct DwcMidToLowLevelLoweringPass : public darwinn::impl::DwcMidToLowLevelLowe
 };
 
 // TSV row: "::mlir::darwinn::compute::Engine" at 0xe03654.
-struct DwcMlirDarwinnComputeEnginePass : public darwinn::impl::DwcMlirDarwinnComputeEnginePassBase<DwcMlirDarwinnComputeEnginePass> {
+struct DwcMlirDarwinnComputeEnginePass
+    : public darwinn::impl::DwcMlirDarwinnComputeEnginePassBase<
+          DwcMlirDarwinnComputeEnginePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4535,7 +5213,8 @@ struct DwcMlirDarwinnComputeEnginePass : public darwinn::impl::DwcMlirDarwinnCom
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("::mlir::darwinn::compute::Engine.marked", builder.getUnitAttr());
+      op->setAttr("::mlir::darwinn::compute::Engine.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -4546,8 +5225,12 @@ struct DwcMlirDarwinnComputeEnginePass : public darwinn::impl::DwcMlirDarwinnCom
   }
 };
 
-// TSV row: "Only DenseElementsAttr are supported for constant lowering" at 0xddee55.
-struct DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass : public darwinn::impl::DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPassBase<DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass> {
+// TSV row: "Only DenseElementsAttr are supported for constant lowering" at
+// 0xddee55.
+struct DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass
+    : public darwinn::impl::
+          DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPassBase<
+              DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4564,19 +5247,24 @@ struct DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass : public darw
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("Only DenseElementsAttr are supported for constant lowering.marked", builder.getUnitAttr());
+      op->setAttr(
+          "Only DenseElementsAttr are supported for constant lowering.marked",
+          builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
     if (failedMark)
       return signalPassFailure();
-    root->setAttr("Only DenseElementsAttr are supported for constant lowering.marked_count",
+    root->setAttr("Only DenseElementsAttr are supported for constant "
+                  "lowering.marked_count",
                   builder.getI64IntegerAttr(marked));
   }
 };
 
 // TSV row: "optimize-dive-vm-tensor-insert-slice" at 0xe0fa93.
-struct DwcOptimizeDiveVmTensorInsertSlicePass : public darwinn::impl::DwcOptimizeDiveVmTensorInsertSlicePassBase<DwcOptimizeDiveVmTensorInsertSlicePass> {
+struct DwcOptimizeDiveVmTensorInsertSlicePass
+    : public darwinn::impl::DwcOptimizeDiveVmTensorInsertSlicePassBase<
+          DwcOptimizeDiveVmTensorInsertSlicePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4593,7 +5281,8 @@ struct DwcOptimizeDiveVmTensorInsertSlicePass : public darwinn::impl::DwcOptimiz
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("optimize-dive-vm-tensor-insert-slice.marked", builder.getUnitAttr());
+      op->setAttr("optimize-dive-vm-tensor-insert-slice.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -4605,11 +5294,14 @@ struct DwcOptimizeDiveVmTensorInsertSlicePass : public darwinn::impl::DwcOptimiz
 };
 
 // TSV row: "-parameter-caching-dive-program" at 0xdce5e1.
-struct DwcParameterCachingDiveProgramPass : public darwinn::impl::DwcParameterCachingDiveProgramPassBase<DwcParameterCachingDiveProgramPass> {
+struct DwcParameterCachingDiveProgramPass
+    : public darwinn::impl::DwcParameterCachingDiveProgramPassBase<
+          DwcParameterCachingDiveProgramPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -4637,13 +5329,15 @@ struct DwcParameterCachingDiveProgramPass : public darwinn::impl::DwcParameterCa
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "platforms.darwinn.code_generator.Entry.Score.type" at 0xdf68e2.
-struct DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass : public darwinn::impl::DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePassBase<DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass> {
+struct DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass
+    : public darwinn::impl::
+          DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePassBase<
+              DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4660,19 +5354,27 @@ struct DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass : public darwinn::impl
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("platforms.darwinn.code_generator.Entry.Score.type.marked", builder.getUnitAttr());
+      op->setAttr("platforms.darwinn.code_generator.Entry.Score.type.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
     if (failedMark)
       return signalPassFailure();
-    root->setAttr("platforms.darwinn.code_generator.Entry.Score.type.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    root->setAttr(
+        "platforms.darwinn.code_generator.Entry.Score.type.marked_count",
+        builder.getI64IntegerAttr(marked));
   }
 };
 
-// TSV row: "platforms.darwinn.compiler.ProbeInstrumentationLocation.Constraints.functions" at 0xd87375.
-struct DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPass : public darwinn::impl::DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPassBase<DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPass> {
+// TSV row:
+// "platforms.darwinn.compiler.ProbeInstrumentationLocation.Constraints.functions"
+// at 0xd87375.
+struct
+    DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPass
+    : public darwinn::impl::
+          DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPassBase<
+              DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctionsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4689,19 +5391,24 @@ struct DwcPlatformsDarwinnCompilerProbeinstrumentationlocationConstraintsFunctio
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("platforms.darwinn.compiler.ProbeInstrumentationLocation.Constraints.functions.marked", builder.getUnitAttr());
+      op->setAttr("platforms.darwinn.compiler.ProbeInstrumentationLocation."
+                  "Constraints.functions.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
     if (failedMark)
       return signalPassFailure();
-    root->setAttr("platforms.darwinn.compiler.ProbeInstrumentationLocation.Constraints.functions.marked_count",
+    root->setAttr("platforms.darwinn.compiler.ProbeInstrumentationLocation."
+                  "Constraints.functions.marked_count",
                   builder.getI64IntegerAttr(marked));
   }
 };
 
 // TSV row: "quant-signedness-convert-lowering" at 0xdded43.
-struct DwcQuantSignednessConvertLoweringPass : public darwinn::impl::DwcQuantSignednessConvertLoweringPassBase<DwcQuantSignednessConvertLoweringPass> {
+struct DwcQuantSignednessConvertLoweringPass
+    : public darwinn::impl::DwcQuantSignednessConvertLoweringPassBase<
+          DwcQuantSignednessConvertLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4718,7 +5425,8 @@ struct DwcQuantSignednessConvertLoweringPass : public darwinn::impl::DwcQuantSig
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("quant-signedness-convert-lowering.marked", builder.getUnitAttr());
+      op->setAttr("quant-signedness-convert-lowering.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -4730,7 +5438,9 @@ struct DwcQuantSignednessConvertLoweringPass : public darwinn::impl::DwcQuantSig
 };
 
 // TSV row: "r52-reads-dive-buffers" at 0xd833a6.
-struct DwcR52ReadsDiveBuffersPass : public darwinn::impl::DwcR52ReadsDiveBuffersPassBase<DwcR52ReadsDiveBuffersPass> {
+struct DwcR52ReadsDiveBuffersPass
+    : public darwinn::impl::DwcR52ReadsDiveBuffersPassBase<
+          DwcR52ReadsDiveBuffersPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4759,7 +5469,9 @@ struct DwcR52ReadsDiveBuffersPass : public darwinn::impl::DwcR52ReadsDiveBuffers
 };
 
 // TSV row: "redistribute-lowering" at 0xddee0e.
-struct DwcRedistributeLoweringPass : public darwinn::impl::DwcRedistributeLoweringPassBase<DwcRedistributeLoweringPass> {
+struct DwcRedistributeLoweringPass
+    : public darwinn::impl::DwcRedistributeLoweringPassBase<
+          DwcRedistributeLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4768,8 +5480,8 @@ struct DwcRedistributeLoweringPass : public darwinn::impl::DwcRedistributeLoweri
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4780,7 +5492,9 @@ struct DwcRedistributeLoweringPass : public darwinn::impl::DwcRedistributeLoweri
 };
 
 // TSV row: "redistribute-lowering-pass-remarks" at 0xd8c505.
-struct DwcRedistributeLoweringPassRemarksPass : public darwinn::impl::DwcRedistributeLoweringPassRemarksPassBase<DwcRedistributeLoweringPassRemarksPass> {
+struct DwcRedistributeLoweringPassRemarksPass
+    : public darwinn::impl::DwcRedistributeLoweringPassRemarksPassBase<
+          DwcRedistributeLoweringPassRemarksPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4789,8 +5503,8 @@ struct DwcRedistributeLoweringPassRemarksPass : public darwinn::impl::DwcRedistr
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4801,7 +5515,9 @@ struct DwcRedistributeLoweringPassRemarksPass : public darwinn::impl::DwcRedistr
 };
 
 // TSV row: "reinterpret-cast-rank-legalize-pass" at 0xd7f295.
-struct DwcReinterpretCastRankLegalizePassPass : public darwinn::impl::DwcReinterpretCastRankLegalizePassPassBase<DwcReinterpretCastRankLegalizePassPass> {
+struct DwcReinterpretCastRankLegalizePassPass
+    : public darwinn::impl::DwcReinterpretCastRankLegalizePassPassBase<
+          DwcReinterpretCastRankLegalizePassPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4818,7 +5534,8 @@ struct DwcReinterpretCastRankLegalizePassPass : public darwinn::impl::DwcReinter
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("reinterpret-cast-rank-legalize-pass.marked", builder.getUnitAttr());
+      op->setAttr("reinterpret-cast-rank-legalize-pass.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -4830,7 +5547,9 @@ struct DwcReinterpretCastRankLegalizePassPass : public darwinn::impl::DwcReinter
 };
 
 // TSV row: "rename-dive-entry-function" at 0xdbfc27.
-struct DwcRenameDiveEntryFunctionPass : public darwinn::impl::DwcRenameDiveEntryFunctionPassBase<DwcRenameDiveEntryFunctionPass> {
+struct DwcRenameDiveEntryFunctionPass
+    : public darwinn::impl::DwcRenameDiveEntryFunctionPassBase<
+          DwcRenameDiveEntryFunctionPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4859,7 +5578,9 @@ struct DwcRenameDiveEntryFunctionPass : public darwinn::impl::DwcRenameDiveEntry
 };
 
 // TSV row: "resampler-lowering" at 0xdded92.
-struct DwcResamplerLoweringPass : public darwinn::impl::DwcResamplerLoweringPassBase<DwcResamplerLoweringPass> {
+struct DwcResamplerLoweringPass
+    : public darwinn::impl::DwcResamplerLoweringPassBase<
+          DwcResamplerLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4888,7 +5609,9 @@ struct DwcResamplerLoweringPass : public darwinn::impl::DwcResamplerLoweringPass
 };
 
 // TSV row: "rkhy-shape-legalization-pass" at 0xd7f029.
-struct DwcRkhyShapeLegalizationPassPass : public darwinn::impl::DwcRkhyShapeLegalizationPassPassBase<DwcRkhyShapeLegalizationPassPass> {
+struct DwcRkhyShapeLegalizationPassPass
+    : public darwinn::impl::DwcRkhyShapeLegalizationPassPassBase<
+          DwcRkhyShapeLegalizationPassPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4917,7 +5640,9 @@ struct DwcRkhyShapeLegalizationPassPass : public darwinn::impl::DwcRkhyShapeLega
 };
 
 // TSV row: "rkhy-type-legalization-pass" at 0xd7f00d.
-struct DwcRkhyTypeLegalizationPassPass : public darwinn::impl::DwcRkhyTypeLegalizationPassPassBase<DwcRkhyTypeLegalizationPassPass> {
+struct DwcRkhyTypeLegalizationPassPass
+    : public darwinn::impl::DwcRkhyTypeLegalizationPassPassBase<
+          DwcRkhyTypeLegalizationPassPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4946,7 +5671,8 @@ struct DwcRkhyTypeLegalizationPassPass : public darwinn::impl::DwcRkhyTypeLegali
 };
 
 // TSV row: "run-r52-ops-on-dive" at 0xde9621.
-struct DwcRunR52OpsOnDivePass : public darwinn::impl::DwcRunR52OpsOnDivePassBase<DwcRunR52OpsOnDivePass> {
+struct DwcRunR52OpsOnDivePass
+    : public darwinn::impl::DwcRunR52OpsOnDivePassBase<DwcRunR52OpsOnDivePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4975,7 +5701,9 @@ struct DwcRunR52OpsOnDivePass : public darwinn::impl::DwcRunR52OpsOnDivePassBase
 };
 
 // TSV row: "scalar-core-control-flow-lowering" at 0xdded21.
-struct DwcScalarCoreControlFlowLoweringPass : public darwinn::impl::DwcScalarCoreControlFlowLoweringPassBase<DwcScalarCoreControlFlowLoweringPass> {
+struct DwcScalarCoreControlFlowLoweringPass
+    : public darwinn::impl::DwcScalarCoreControlFlowLoweringPassBase<
+          DwcScalarCoreControlFlowLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -4984,8 +5712,8 @@ struct DwcScalarCoreControlFlowLoweringPass : public darwinn::impl::DwcScalarCor
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -4996,7 +5724,9 @@ struct DwcScalarCoreControlFlowLoweringPass : public darwinn::impl::DwcScalarCor
 };
 
 // TSV row: "scalar-core-std-ops-lowering" at 0xdded75.
-struct DwcScalarCoreStdOpsLoweringPass : public darwinn::impl::DwcScalarCoreStdOpsLoweringPassBase<DwcScalarCoreStdOpsLoweringPass> {
+struct DwcScalarCoreStdOpsLoweringPass
+    : public darwinn::impl::DwcScalarCoreStdOpsLoweringPassBase<
+          DwcScalarCoreStdOpsLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5005,8 +5735,8 @@ struct DwcScalarCoreStdOpsLoweringPass : public darwinn::impl::DwcScalarCoreStdO
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -5017,7 +5747,9 @@ struct DwcScalarCoreStdOpsLoweringPass : public darwinn::impl::DwcScalarCoreStdO
 };
 
 // TSV row: "scalar-ops-legalize" at 0xde6d2b.
-struct DwcScalarOpsLegalizePass : public darwinn::impl::DwcScalarOpsLegalizePassBase<DwcScalarOpsLegalizePass> {
+struct DwcScalarOpsLegalizePass
+    : public darwinn::impl::DwcScalarOpsLegalizePassBase<
+          DwcScalarOpsLegalizePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5046,7 +5778,9 @@ struct DwcScalarOpsLegalizePass : public darwinn::impl::DwcScalarOpsLegalizePass
 };
 
 // TSV row: "scatter-gather-lowering" at 0xddeda5.
-struct DwcScatterGatherLoweringPass : public darwinn::impl::DwcScatterGatherLoweringPassBase<DwcScatterGatherLoweringPass> {
+struct DwcScatterGatherLoweringPass
+    : public darwinn::impl::DwcScatterGatherLoweringPassBase<
+          DwcScatterGatherLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5075,7 +5809,8 @@ struct DwcScatterGatherLoweringPass : public darwinn::impl::DwcScatterGatherLowe
 };
 
 // TSV row: "select-lowering" at 0xdded65.
-struct DwcSelectLoweringPass : public darwinn::impl::DwcSelectLoweringPassBase<DwcSelectLoweringPass> {
+struct DwcSelectLoweringPass
+    : public darwinn::impl::DwcSelectLoweringPassBase<DwcSelectLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5104,7 +5839,9 @@ struct DwcSelectLoweringPass : public darwinn::impl::DwcSelectLoweringPassBase<D
 };
 
 // TSV row: "sharding-using-dive" at 0xde9635.
-struct DwcShardingUsingDivePass : public darwinn::impl::DwcShardingUsingDivePassBase<DwcShardingUsingDivePass> {
+struct DwcShardingUsingDivePass
+    : public darwinn::impl::DwcShardingUsingDivePassBase<
+          DwcShardingUsingDivePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5133,7 +5870,9 @@ struct DwcShardingUsingDivePass : public darwinn::impl::DwcShardingUsingDivePass
 };
 
 // TSV row: "skipping fold of float convert" at 0xd68cda.
-struct DwcSkippingFoldOfFloatConvertPass : public darwinn::impl::DwcSkippingFoldOfFloatConvertPassBase<DwcSkippingFoldOfFloatConvertPass> {
+struct DwcSkippingFoldOfFloatConvertPass
+    : public darwinn::impl::DwcSkippingFoldOfFloatConvertPassBase<
+          DwcSkippingFoldOfFloatConvertPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5150,7 +5889,8 @@ struct DwcSkippingFoldOfFloatConvertPass : public darwinn::impl::DwcSkippingFold
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("skipping fold of float convert.marked", builder.getUnitAttr());
+      op->setAttr("skipping fold of float convert.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -5162,7 +5902,8 @@ struct DwcSkippingFoldOfFloatConvertPass : public darwinn::impl::DwcSkippingFold
 };
 
 // TSV row: "split-op-lowering" at 0xddede2.
-struct DwcSplitOpLoweringPass : public darwinn::impl::DwcSplitOpLoweringPassBase<DwcSplitOpLoweringPass> {
+struct DwcSplitOpLoweringPass
+    : public darwinn::impl::DwcSplitOpLoweringPassBase<DwcSplitOpLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5191,7 +5932,9 @@ struct DwcSplitOpLoweringPass : public darwinn::impl::DwcSplitOpLoweringPassBase
 };
 
 // TSV row: "stablehlo-composite-legalize-tfl-custom" at 0xdccdf7.
-struct DwcStablehloCompositeLegalizeTflCustomPass : public darwinn::impl::DwcStablehloCompositeLegalizeTflCustomPassBase<DwcStablehloCompositeLegalizeTflCustomPass> {
+struct DwcStablehloCompositeLegalizeTflCustomPass
+    : public darwinn::impl::DwcStablehloCompositeLegalizeTflCustomPassBase<
+          DwcStablehloCompositeLegalizeTflCustomPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5208,7 +5951,8 @@ struct DwcStablehloCompositeLegalizeTflCustomPass : public darwinn::impl::DwcSta
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("stablehlo-composite-legalize-tfl-custom.marked", builder.getUnitAttr());
+      op->setAttr("stablehlo-composite-legalize-tfl-custom.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -5220,7 +5964,9 @@ struct DwcStablehloCompositeLegalizeTflCustomPass : public darwinn::impl::DwcSta
 };
 
 // TSV row: "stablehlo-custom-call-legalize-composite" at 0xdef5f5.
-struct DwcStablehloCustomCallLegalizeCompositePass : public darwinn::impl::DwcStablehloCustomCallLegalizeCompositePassBase<DwcStablehloCustomCallLegalizeCompositePass> {
+struct DwcStablehloCustomCallLegalizeCompositePass
+    : public darwinn::impl::DwcStablehloCustomCallLegalizeCompositePassBase<
+          DwcStablehloCustomCallLegalizeCompositePass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5237,7 +5983,8 @@ struct DwcStablehloCustomCallLegalizeCompositePass : public darwinn::impl::DwcSt
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("stablehlo-custom-call-legalize-composite.marked", builder.getUnitAttr());
+      op->setAttr("stablehlo-custom-call-legalize-composite.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -5249,7 +5996,9 @@ struct DwcStablehloCustomCallLegalizeCompositePass : public darwinn::impl::DwcSt
 };
 
 // TSV row: "stablehlo-legalize-composite-to-call" at 0xdd00c2.
-struct DwcStablehloLegalizeCompositeToCallPass : public darwinn::impl::DwcStablehloLegalizeCompositeToCallPassBase<DwcStablehloLegalizeCompositeToCallPass> {
+struct DwcStablehloLegalizeCompositeToCallPass
+    : public darwinn::impl::DwcStablehloLegalizeCompositeToCallPassBase<
+          DwcStablehloLegalizeCompositeToCallPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5261,14 +6010,16 @@ struct DwcStablehloLegalizeCompositeToCallPass : public darwinn::impl::DwcStable
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
-        op->emitError() << "stablehlo-legalize-composite-to-call rejects unregistered operation "
+        op->emitError() << "stablehlo-legalize-composite-to-call rejects "
+                           "unregistered operation "
                         << op->getName().getStringRef();
         failedLegal = true;
         return WalkResult::interrupt();
       }
       StringRef ns = dialect->getNamespace();
       if (ns != "stablehlo") {
-        op->emitError() << "stablehlo-legalize-composite-to-call rejects operation from dialect "
+        op->emitError() << "stablehlo-legalize-composite-to-call rejects "
+                           "operation from dialect "
                         << ns;
         failedLegal = true;
         return WalkResult::interrupt();
@@ -5281,103 +6032,120 @@ struct DwcStablehloLegalizeCompositeToCallPass : public darwinn::impl::DwcStable
 };
 
 // TSV row: "stablehlo-legalize-to-hlo" at 0xdbc34d.
-struct DwcStablehloLegalizeToHloPass : public darwinn::impl::DwcStablehloLegalizeToHloPassBase<DwcStablehloLegalizeToHloPass> {
+struct DwcStablehloLegalizeToHloPass
+    : public darwinn::impl::DwcStablehloLegalizeToHloPassBase<
+          DwcStablehloLegalizeToHloPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "stablehlo-legalize-to-hlo rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "stablehlo" && ns != "mhlo") {
-        op->emitError() << "stablehlo-legalize-to-hlo rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "stablehlo-legalize-to-hlo rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "stablehlo" && ns != "mhlo") {
+            op->emitError()
+                << "stablehlo-legalize-to-hlo rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "stablehlo-legalize-to-vhlo" at 0xdbc236.
-struct DwcStablehloLegalizeToVhloPass : public darwinn::impl::DwcStablehloLegalizeToVhloPassBase<DwcStablehloLegalizeToVhloPass> {
+struct DwcStablehloLegalizeToVhloPass
+    : public darwinn::impl::DwcStablehloLegalizeToVhloPassBase<
+          DwcStablehloLegalizeToVhloPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "stablehlo-legalize-to-vhlo rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "stablehlo" && ns != "vhlo") {
-        op->emitError() << "stablehlo-legalize-to-vhlo rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "stablehlo-legalize-to-vhlo rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "stablehlo" && ns != "vhlo") {
+            op->emitError()
+                << "stablehlo-legalize-to-vhlo rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "stablehlo-legalize-vhlo" at 0xdbc251.
-struct DwcStablehloLegalizeVhloPass : public darwinn::impl::DwcStablehloLegalizeVhloPassBase<DwcStablehloLegalizeVhloPass> {
+struct DwcStablehloLegalizeVhloPass
+    : public darwinn::impl::DwcStablehloLegalizeVhloPassBase<
+          DwcStablehloLegalizeVhloPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "stablehlo-legalize-vhlo rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "stablehlo" && ns != "vhlo") {
-        op->emitError() << "stablehlo-legalize-vhlo rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "stablehlo-legalize-vhlo rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "stablehlo" && ns != "vhlo") {
+            op->emitError()
+                << "stablehlo-legalize-vhlo rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "stochastic-convert" at 0xd68cc7.
-struct DwcStochasticConvertPass : public darwinn::impl::DwcStochasticConvertPassBase<DwcStochasticConvertPass> {
+struct DwcStochasticConvertPass
+    : public darwinn::impl::DwcStochasticConvertPassBase<
+          DwcStochasticConvertPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5406,7 +6174,8 @@ struct DwcStochasticConvertPass : public darwinn::impl::DwcStochasticConvertPass
 };
 
 // TSV row: "tf-legalize-hlo" at 0xdbc38d.
-struct DwcTfLegalizeHloPass : public darwinn::impl::DwcTfLegalizeHloPassBase<DwcTfLegalizeHloPass> {
+struct DwcTfLegalizeHloPass
+    : public darwinn::impl::DwcTfLegalizeHloPassBase<DwcTfLegalizeHloPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5438,7 +6207,9 @@ struct DwcTfLegalizeHloPass : public darwinn::impl::DwcTfLegalizeHloPassBase<Dwc
 };
 
 // TSV row: "tfl-custom-lowering-rewriting-pass" at 0xd7f120.
-struct DwcTflCustomLoweringRewritingPassPass : public darwinn::impl::DwcTflCustomLoweringRewritingPassPassBase<DwcTflCustomLoweringRewritingPassPass> {
+struct DwcTflCustomLoweringRewritingPassPass
+    : public darwinn::impl::DwcTflCustomLoweringRewritingPassPassBase<
+          DwcTflCustomLoweringRewritingPassPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5455,7 +6226,8 @@ struct DwcTflCustomLoweringRewritingPassPass : public darwinn::impl::DwcTflCusto
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("tfl-custom-lowering-rewriting-pass.marked", builder.getUnitAttr());
+      op->setAttr("tfl-custom-lowering-rewriting-pass.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -5467,7 +6239,8 @@ struct DwcTflCustomLoweringRewritingPassPass : public darwinn::impl::DwcTflCusto
 };
 
 // TSV row: "tfl-legalize-chlo" at 0xdbc2fb.
-struct DwcTflLegalizeChloPass : public darwinn::impl::DwcTflLegalizeChloPassBase<DwcTflLegalizeChloPass> {
+struct DwcTflLegalizeChloPass
+    : public darwinn::impl::DwcTflLegalizeChloPassBase<DwcTflLegalizeChloPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5499,39 +6272,45 @@ struct DwcTflLegalizeChloPass : public darwinn::impl::DwcTflLegalizeChloPassBase
 };
 
 // TSV row: "tfl-legalize-hashtables-tf" at 0xde2a7d.
-struct DwcTflLegalizeHashtablesTfPass : public darwinn::impl::DwcTflLegalizeHashtablesTfPassBase<DwcTflLegalizeHashtablesTfPass> {
+struct DwcTflLegalizeHashtablesTfPass
+    : public darwinn::impl::DwcTflLegalizeHashtablesTfPassBase<
+          DwcTflLegalizeHashtablesTfPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "tfl-legalize-hashtables-tf rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "tfl" && ns != "tf") {
-        op->emitError() << "tfl-legalize-hashtables-tf rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "tfl-legalize-hashtables-tf rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "tfl" && ns != "tf") {
+            op->emitError()
+                << "tfl-legalize-hashtables-tf rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "tfl-legalize-hlo" at 0xdbc37c.
-struct DwcTflLegalizeHloPass : public darwinn::impl::DwcTflLegalizeHloPassBase<DwcTflLegalizeHloPass> {
+struct DwcTflLegalizeHloPass
+    : public darwinn::impl::DwcTflLegalizeHloPassBase<DwcTflLegalizeHloPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5563,39 +6342,45 @@ struct DwcTflLegalizeHloPass : public darwinn::impl::DwcTflLegalizeHloPassBase<D
 };
 
 // TSV row: "tfl-legalize-tensorlist" at 0xd66a8f.
-struct DwcTflLegalizeTensorlistPass : public darwinn::impl::DwcTflLegalizeTensorlistPassBase<DwcTflLegalizeTensorlistPass> {
+struct DwcTflLegalizeTensorlistPass
+    : public darwinn::impl::DwcTflLegalizeTensorlistPassBase<
+          DwcTflLegalizeTensorlistPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "tfl-legalize-tensorlist rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "tfl") {
-        op->emitError() << "tfl-legalize-tensorlist rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "tfl-legalize-tensorlist rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "tfl") {
+            op->emitError()
+                << "tfl-legalize-tensorlist rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "tfl-legalize-tf" at 0xde2ae8.
-struct DwcTflLegalizeTfPass : public darwinn::impl::DwcTflLegalizeTfPassBase<DwcTflLegalizeTfPass> {
+struct DwcTflLegalizeTfPass
+    : public darwinn::impl::DwcTflLegalizeTfPassBase<DwcTflLegalizeTfPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5627,71 +6412,83 @@ struct DwcTflLegalizeTfPass : public darwinn::impl::DwcTflLegalizeTfPassBase<Dwc
 };
 
 // TSV row: "tfl-legalize-tf-while" at 0xe07f5e.
-struct DwcTflLegalizeTfWhilePass : public darwinn::impl::DwcTflLegalizeTfWhilePassBase<DwcTflLegalizeTfWhilePass> {
+struct DwcTflLegalizeTfWhilePass
+    : public darwinn::impl::DwcTflLegalizeTfWhilePassBase<
+          DwcTflLegalizeTfWhilePass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "tfl-legalize-tf-while rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "tfl" && ns != "tf") {
-        op->emitError() << "tfl-legalize-tf-while rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "tfl-legalize-tf-while rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "tfl" && ns != "tf") {
+            op->emitError()
+                << "tfl-legalize-tf-while rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "tfl-legalize-variables-tf" at 0xde2a98.
-struct DwcTflLegalizeVariablesTfPass : public darwinn::impl::DwcTflLegalizeVariablesTfPassBase<DwcTflLegalizeVariablesTfPass> {
+struct DwcTflLegalizeVariablesTfPass
+    : public darwinn::impl::DwcTflLegalizeVariablesTfPassBase<
+          DwcTflLegalizeVariablesTfPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "tfl-legalize-variables-tf rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "tfl" && ns != "tf") {
-        op->emitError() << "tfl-legalize-variables-tf rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "tfl-legalize-variables-tf rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "tfl" && ns != "tf") {
+            op->emitError()
+                << "tfl-legalize-variables-tf rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "tfl-lower-quant-annotations" at 0xd87c99.
-struct DwcTflLowerQuantAnnotationsPass : public darwinn::impl::DwcTflLowerQuantAnnotationsPassBase<DwcTflLowerQuantAnnotationsPass> {
+struct DwcTflLowerQuantAnnotationsPass
+    : public darwinn::impl::DwcTflLowerQuantAnnotationsPassBase<
+          DwcTflLowerQuantAnnotationsPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5700,8 +6497,8 @@ struct DwcTflLowerQuantAnnotationsPass : public darwinn::impl::DwcTflLowerQuantA
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -5712,7 +6509,9 @@ struct DwcTflLowerQuantAnnotationsPass : public darwinn::impl::DwcTflLowerQuantA
 };
 
 // TSV row: "tfl-lower-static-tensor-list" at 0xd66ca5.
-struct DwcTflLowerStaticTensorListPass : public darwinn::impl::DwcTflLowerStaticTensorListPassBase<DwcTflLowerStaticTensorListPass> {
+struct DwcTflLowerStaticTensorListPass
+    : public darwinn::impl::DwcTflLowerStaticTensorListPassBase<
+          DwcTflLowerStaticTensorListPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5721,8 +6520,8 @@ struct DwcTflLowerStaticTensorListPass : public darwinn::impl::DwcTflLowerStatic
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                            std::move(patterns))))
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
@@ -5733,7 +6532,9 @@ struct DwcTflLowerStaticTensorListPass : public darwinn::impl::DwcTflLowerStatic
 };
 
 // TSV row: "top-k-lowering-policy" at 0xd5dd44.
-struct DwcTopKLoweringPolicyPass : public darwinn::impl::DwcTopKLoweringPolicyPassBase<DwcTopKLoweringPolicyPass> {
+struct DwcTopKLoweringPolicyPass
+    : public darwinn::impl::DwcTopKLoweringPolicyPassBase<
+          DwcTopKLoweringPolicyPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5762,11 +6563,14 @@ struct DwcTopKLoweringPolicyPass : public darwinn::impl::DwcTopKLoweringPolicyPa
 };
 
 // TSV row: "tpu-clustering-algorithm" at 0xdcdd6e.
-struct DwcTpuClusteringAlgorithmPass : public darwinn::impl::DwcTpuClusteringAlgorithmPassBase<DwcTpuClusteringAlgorithmPass> {
+struct DwcTpuClusteringAlgorithmPass
+    : public darwinn::impl::DwcTpuClusteringAlgorithmPassBase<
+          DwcTpuClusteringAlgorithmPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -5794,81 +6598,93 @@ struct DwcTpuClusteringAlgorithmPass : public darwinn::impl::DwcTpuClusteringAlg
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "vhlo-legalize-stablehlo" at 0xdbc299.
-struct DwcVhloLegalizeStablehloPass : public darwinn::impl::DwcVhloLegalizeStablehloPassBase<DwcVhloLegalizeStablehloPass> {
+struct DwcVhloLegalizeStablehloPass
+    : public darwinn::impl::DwcVhloLegalizeStablehloPassBase<
+          DwcVhloLegalizeStablehloPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "vhlo-legalize-stablehlo rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "vhlo" && ns != "stablehlo") {
-        op->emitError() << "vhlo-legalize-stablehlo rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "vhlo-legalize-stablehlo rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "vhlo" && ns != "stablehlo") {
+            op->emitError()
+                << "vhlo-legalize-stablehlo rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "vhlo-legalize-to-stablehlo" at 0xdbc271.
-struct DwcVhloLegalizeToStablehloPass : public darwinn::impl::DwcVhloLegalizeToStablehloPassBase<DwcVhloLegalizeToStablehloPass> {
+struct DwcVhloLegalizeToStablehloPass
+    : public darwinn::impl::DwcVhloLegalizeToStablehloPassBase<
+          DwcVhloLegalizeToStablehloPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      Dialect *dialect = op->getDialect();
-      if (!dialect) {
-        op->emitError() << "vhlo-legalize-to-stablehlo rejects unregistered operation "
-                        << op->getName().getStringRef();
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      StringRef ns = dialect->getNamespace();
-      if (ns != "vhlo" && ns != "stablehlo") {
-        op->emitError() << "vhlo-legalize-to-stablehlo rejects operation from dialect "
-                        << ns;
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
+    root->walk(
+        [&](Operation *op) {
+          if (isa<func::FuncOp>(op))
+            return WalkResult::advance();
+          Dialect *dialect = op->getDialect();
+          if (!dialect) {
+            op->emitError()
+                << "vhlo-legalize-to-stablehlo rejects unregistered operation "
+                << op->getName().getStringRef();
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          StringRef ns = dialect->getNamespace();
+          if (ns != "vhlo" && ns != "stablehlo") {
+            op->emitError()
+                << "vhlo-legalize-to-stablehlo rejects operation from dialect "
+                << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          return WalkResult::advance();
+        });
     if (failedLegal)
       signalPassFailure();
   }
 };
 
 // TSV row: "wrap-up-dive-program" at 0xdce5cc.
-struct DwcWrapUpDiveProgramPass : public darwinn::impl::DwcWrapUpDiveProgramPassBase<DwcWrapUpDiveProgramPass> {
+struct DwcWrapUpDiveProgramPass
+    : public darwinn::impl::DwcWrapUpDiveProgramPassBase<
+          DwcWrapUpDiveProgramPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order only.
+    // Binary packet layout is absent from all_pseudocode.json, group and order
+    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
@@ -5896,13 +6712,14 @@ struct DwcWrapUpDiveProgramPass : public darwinn::impl::DwcWrapUpDiveProgramPass
       op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count",
-                  builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
   }
 };
 
 // TSV row: "xla_cpu_use_new_xtile_lowering" at 0xdded02.
-struct DwcXlaCpuUseNewXtileLoweringPass : public darwinn::impl::DwcXlaCpuUseNewXtileLoweringPassBase<DwcXlaCpuUseNewXtileLoweringPass> {
+struct DwcXlaCpuUseNewXtileLoweringPass
+    : public darwinn::impl::DwcXlaCpuUseNewXtileLoweringPassBase<
+          DwcXlaCpuUseNewXtileLoweringPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -5919,7 +6736,8 @@ struct DwcXlaCpuUseNewXtileLoweringPass : public darwinn::impl::DwcXlaCpuUseNewX
         failedMark = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("xla_cpu_use_new_xtile_lowering.marked", builder.getUnitAttr());
+      op->setAttr("xla_cpu_use_new_xtile_lowering.marked",
+                  builder.getUnitAttr());
       ++marked;
       return WalkResult::advance();
     });
@@ -5932,9 +6750,4 @@ struct DwcXlaCpuUseNewXtileLoweringPass : public darwinn::impl::DwcXlaCpuUseNewX
 
 } // namespace
 
-namespace mlir {
-namespace darwinn {
-#define GEN_PASS_REGISTRATION
-#include "DwcPasses.h.inc"
-} // namespace darwinn
-} // namespace mlir
+

@@ -156,7 +156,7 @@ struct DwcLowerCopySlicePass
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(getOperation(),
+    if (failed(applyPatternsGreedily(getOperation(),
                                             std::move(patterns))))
       signalPassFailure();
   }

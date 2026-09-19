@@ -22,6 +22,7 @@
 #include "mlir/Dialect/Async/Passes.h"
 #include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/Darwinn/Transforms/Passes.h"
 #include "mlir/Dialect/EmitC/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/GPU/Pipelines/Passes.h"
@@ -70,6 +71,7 @@ void mlir::registerAllPasses() {
   registerAsyncPasses();
   arith::registerArithPasses();
   bufferization::registerBufferizationPasses();
+  darwinn::registerDwcPasses();
   func::registerFuncPasses();
   registerGPUPasses();
   registerLinalgPasses();
