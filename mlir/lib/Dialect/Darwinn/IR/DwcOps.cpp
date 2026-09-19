@@ -627,6 +627,9 @@ LogicalResult dwc::MultiplyOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.multiply' to have attribute 'activation_function'");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  auto activation = llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue();
+  if (activation != ActivationFunction::None && activation != ActivationFunction::Relu)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE or RELU");
   return success();
 }
 
@@ -1075,6 +1078,8 @@ LogicalResult dwc::TransposedConvolutionOp::verify() {
     return (*this)->emitOpError("attribute 'y_out_dim' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
     return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   return success();
 }
 
@@ -1087,6 +1092,9 @@ LogicalResult dwc::UnsortedSegmentReduceOp::verify() {
     return (*this)->emitOpError("attribute 'num_segments' expects IntegerAttr");
   if (!llvm::isa<ReductionTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects ReductionTypeAttr");
+  auto opType = llvm::cast<ReductionTypeAttr>((*this)->getAttr("op_type")).getValue();
+  if (opType != ReductionType::Sum && opType != ReductionType::Max)
+    return (*this)->emitOpError("attribute 'op_type' expects SUM or MAX");
   return success();
 }
 
