@@ -97,6 +97,9 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCCOMPUTEMAPOPTIMIZEPASS
 #define GEN_PASS_DEF_DWCDYNAMICSLICEINDEXTRANSFORMATIONPASS
 #define GEN_PASS_DEF_DWCDYNAMICSLICEWITHCOPYPASS
+#define GEN_PASS_DEF_DWCSIMPLESPILLANDFILLPASS
+#define GEN_PASS_DEF_DWCSPILLFILLOPTIMIZATIONPASS
+#define GEN_PASS_DEF_DWCSIMPLEOUTPUTSLICINGPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8037,6 +8040,50 @@ struct DwcDynamicSliceWithCopyPass
       if (!op->hasAttr("dwc.slice_index_transformed"))
         return;
       op->setAttr("dwc.slice_with_copy", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcSimpleSpillAndFillPass
+    : public darwinn::impl::DwcSimpleSpillAndFillPassBase<DwcSimpleSpillAndFillPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.spilled", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcSpillFillOptimizationPass
+    : public darwinn::impl::DwcSpillFillOptimizationPassBase<DwcSpillFillOptimizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->hasAttr("dwc.spilled") && op->use_empty())
+        dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->removeAttr("dwc.spilled");
+  }
+};
+
+struct DwcSimpleOutputSlicingPass
+    : public darwinn::impl::DwcSimpleOutputSlicingPassBase<DwcSimpleOutputSlicingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() != 1)
+        return;
+      op->setAttr("dwc.output_sliced", UnitAttr::get(&getContext()));
     });
   }
 };

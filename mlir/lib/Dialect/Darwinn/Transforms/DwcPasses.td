@@ -1623,6 +1623,27 @@ def DwcDynamicSliceWithCopyPass : Pass<"dynamic-slice-with-copy", "func::FuncOp"
   }];
 }
 
+def DwcSimpleSpillAndFillPass : Pass<"simple-spill-and-fill", "func::FuncOp"> {
+  let summary = "DWC pass simple-spill-and-fill";
+  let description = [{
+    Blob-evidenced lisa pass. Simple spill and fill. Inserts spill fill pairs around high pressure regions.
+  }];
+}
+
+def DwcSpillFillOptimizationPass : Pass<"spill-fill-optimization", "func::FuncOp"> {
+  let summary = "DWC pass spill-fill-optimization";
+  let description = [{
+    Blob-evidenced lisa pass. Spill fill optimization. Removes redundant spill fill pairs.
+  }];
+}
+
+def DwcSimpleOutputSlicingPass : Pass<"simple-output-slicing", "func::FuncOp"> {
+  let summary = "DWC pass simple-output-slicing";
+  let description = [{
+    Blob-evidenced lisa pass. Simple output slicing. Slices output tensors along the major axis.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
