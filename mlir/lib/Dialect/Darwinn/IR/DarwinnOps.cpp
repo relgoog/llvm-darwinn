@@ -498,7 +498,12 @@ LogicalResult darwinn::AuxTensorTypeOp::verify() {
 }
 
 LogicalResult darwinn::BinaryMapOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 2);
+  if (failed(verifyDwcArityN(*this, getInputs().size(), 2)))
+    return failure();
+  if (!(*this)->hasAttr("function"))
+    return (*this)->emitOpError(
+        "expected op 'darwinn.binary_map' to have attribute 'function'");
+  return success();
 }
 
 LogicalResult darwinn::BitcastOp::verify() {

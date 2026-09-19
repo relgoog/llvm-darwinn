@@ -139,7 +139,7 @@ func.func @test_aux_tensor_type() -> tensor<4xf32> {
 // CHECK-LABEL: binary_map
 func.func @test_binary_map(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: darwinn.binary_map
-  %0 = "darwinn.binary_map"(%arg0, %arg1) : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = "darwinn.binary_map"(%arg0, %arg1) {function = "add"} : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
