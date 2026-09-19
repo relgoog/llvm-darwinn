@@ -28,7 +28,7 @@ func.func @test_batch_matrix_nms(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: bitcast
 func.func @test_bitcast(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.bitcast
-  %0 = "dwc.bitcast"(%arg0) {output_element_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.bitcast"(%arg0) {output_element_type = f32} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -220,7 +220,7 @@ func.func @test_generic_compute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_constant
 func.func @test_generic_constant(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_constant
-  %0 = "dwc.generic_constant"(%arg0) {value = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_constant"(%arg0) {value = dense<0.0> : tensor<4xf32>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -260,7 +260,7 @@ func.func @test_logistic(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: matrix_multiply
 func.func @test_matrix_multiply(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.matrix_multiply
-  %0 = "dwc.matrix_multiply"(%arg0) {activation_function = "x", transpose_rhs = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.matrix_multiply"(%arg0) {activation_function = "x", transpose_rhs = true} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -300,7 +300,7 @@ func.func @test_not(%arg0: tensor<4xi1>) -> tensor<4xi1> {
 // CHECK-LABEL: one_hot
 func.func @test_one_hot(%arg0: tensor<4xi32>) -> tensor<4xi32> {
   // CHECK: dwc.one_hot
-  %0 = "dwc.one_hot"(%arg0) {axis = "x"} : (tensor<4xi32>) -> tensor<4xi32>
+  %0 = "dwc.one_hot"(%arg0) {axis = 1 : i64} : (tensor<4xi32>) -> tensor<4xi32>
   return %0 : tensor<4xi32>
 }
 
@@ -500,7 +500,7 @@ func.func @test_transposed_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: unsorted_segment_reduce
 func.func @test_unsorted_segment_reduce(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.unsorted_segment_reduce
-  %0 = "dwc.unsorted_segment_reduce"(%arg0) {num_segments = "x", op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.unsorted_segment_reduce"(%arg0) {num_segments = 4 : i64, op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

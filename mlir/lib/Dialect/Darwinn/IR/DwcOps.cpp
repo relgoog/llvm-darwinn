@@ -86,6 +86,8 @@ LogicalResult dwc::BatchMatrixNmsOp::verify() {
 LogicalResult dwc::BitcastOp::verify() {
   if (!(*this)->hasAttr("output_element_type"))
     return (*this)->emitOpError("expected op 'dwc.bitcast' to have attribute 'output_element_type'");
+  if (!llvm::isa<TypeAttr>((*this)->getAttr("output_element_type")))
+    return (*this)->emitOpError("attribute 'output_element_type' expects TypeAttr");
   return success();
 }
 
@@ -394,6 +396,8 @@ LogicalResult dwc::GenericComputeOp::verify() {
 LogicalResult dwc::GenericConstantOp::verify() {
   if (!(*this)->hasAttr("value"))
     return (*this)->emitOpError("expected op 'dwc.generic_constant' to have attribute 'value'");
+  if (!llvm::isa<ElementsAttr>((*this)->getAttr("value")))
+    return (*this)->emitOpError("attribute 'value' expects ElementsAttr");
   return success();
 }
 
@@ -462,6 +466,8 @@ LogicalResult dwc::MatrixMultiplyOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.matrix_multiply' to have attribute 'activation_function'");
   if (!(*this)->hasAttr("transpose_rhs"))
     return (*this)->emitOpError("expected op 'dwc.matrix_multiply' to have attribute 'transpose_rhs'");
+  if (!llvm::isa<BoolAttr>((*this)->getAttr("transpose_rhs")))
+    return (*this)->emitOpError("attribute 'transpose_rhs' expects BoolAttr");
   return success();
 }
 
@@ -499,6 +505,8 @@ LogicalResult dwc::OneHotOp::verify() {
     return emitOpError("expects 1 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("axis"))
     return (*this)->emitOpError("expected op 'dwc.one_hot' to have attribute 'axis'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("axis")))
+    return (*this)->emitOpError("attribute 'axis' expects IntegerAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
@@ -876,6 +884,8 @@ LogicalResult dwc::UnsortedSegmentReduceOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.unsorted_segment_reduce' to have attribute 'num_segments'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.unsorted_segment_reduce' to have attribute 'op_type'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("num_segments")))
+    return (*this)->emitOpError("attribute 'num_segments' expects IntegerAttr");
   return success();
 }
 
