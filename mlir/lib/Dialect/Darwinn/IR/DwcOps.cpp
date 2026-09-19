@@ -606,20 +606,47 @@ LogicalResult dwc::ReshapeOp::verify() {
 LogicalResult dwc::RoundOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::RoundNearestAfzOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::RsqrtOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::ScalarOp::verify() {
   if (!(*this)->hasAttr("op_type"))
@@ -668,8 +695,17 @@ LogicalResult dwc::SignOp::verify() {
 LogicalResult dwc::SinOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::SliceOp::verify() {
   if (!(*this)->hasAttr("in_begin"))
@@ -696,8 +732,17 @@ LogicalResult dwc::SortOp::verify() {
 LogicalResult dwc::SqrtOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::SubtractOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
@@ -708,14 +753,32 @@ LogicalResult dwc::SubtractOp::verify() {
 LogicalResult dwc::TanOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::TanhOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
+
 
 LogicalResult dwc::TransposeOp::verify() {
   if (getInputs().size() != 1)
