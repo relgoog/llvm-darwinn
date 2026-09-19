@@ -314,10 +314,10 @@ func.func @test_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: pop_count
-func.func @test_pop_count(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_pop_count(%arg0: tensor<4xi32>) -> tensor<4xi32> {
   // CHECK: dwc.pop_count
-  %0 = "dwc.pop_count"(%arg0) {} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.pop_count"(%arg0) {} : (tensor<4xi32>) -> tensor<4xi32>
+  return %0 : tensor<4xi32>
 }
 
 // -----

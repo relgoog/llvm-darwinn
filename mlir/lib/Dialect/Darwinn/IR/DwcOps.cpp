@@ -421,7 +421,19 @@ LogicalResult dwc::PaddingOp::verify() {
 LogicalResult dwc::PopCountOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && integer.getWidth() == 1)
+      return success();
+    if (integer.isSignless() && (integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+    if (integer.isSignless() && integer.getWidth() == 32)
+      return success();
+    if (integer.isUnsigned() && (integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, u8, or u16");
 }
 
 LogicalResult dwc::PowOp::verify() {

@@ -491,7 +491,7 @@ def Dwc_PaddingOp : Dwc_Op<"padding"> {
 def Dwc_PopCountOp : Dwc_Op<"pop_count"> {
   let summary = "DWC pop_count operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, i32, u8, or u16 operand per the blob element constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
