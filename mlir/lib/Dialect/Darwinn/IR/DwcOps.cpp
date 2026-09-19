@@ -785,6 +785,12 @@ LogicalResult dwc::ReductionOp::verify() {
     return (*this)->emitOpError("attribute 'op_type' expects ReductionTypeAttr");
   if (llvm::cast<SimpleActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != SimpleActivationFunction::None)
     return (*this)->emitOpError("attribute 'activation_function' expects NONE");
+  {
+    auto dims = llvm::cast<ElementsAttr>((*this)->getAttr("dimensions"));
+    auto shaped = llvm::dyn_cast<ShapedType>(dims.getType());
+    if (!shaped || !shaped.hasRank() || shaped.getRank() != 1 || !shaped.getElementType().isSignlessInteger(32))
+      return (*this)->emitOpError("attribute 'dimensions' expects 1D tensor of I32 elements");
+  }
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))

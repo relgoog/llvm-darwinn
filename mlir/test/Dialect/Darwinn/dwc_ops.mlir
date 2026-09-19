@@ -340,7 +340,7 @@ func.func @test_pseudo_split(%arg0: tensor<i32>, %arg1: tensor<4xf32>) -> tensor
 // CHECK-LABEL: reduction
 func.func @test_reduction(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.reduction
-  %0 = "dwc.reduction"(%arg0) {activation_function = #dwc.simple_activation_function<NONE>, dimensions = dense<[0]> : tensor<1xi64>, op_type = #dwc.reduction_type<SUM>} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.reduction"(%arg0) {activation_function = #dwc.simple_activation_function<NONE>, dimensions = dense<[0]> : tensor<1xi32>, op_type = #dwc.reduction_type<SUM>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
