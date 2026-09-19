@@ -179,7 +179,7 @@ def Dwc_CosOp : Dwc_Op<"cos"> {
 def Dwc_CumulativeOp : Dwc_Op<"cumulative"> {
   let summary = "DWC cumulative operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints. Requires `axis`, `exclusive`, `op_type`.
+    Exactly 1 i32, i64, u32, or u64 operand per the blob element constraint. Requires `axis`, `exclusive`, `op_type`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

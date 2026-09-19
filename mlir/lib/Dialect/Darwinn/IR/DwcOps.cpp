@@ -166,7 +166,13 @@ LogicalResult dwc::CumulativeOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.cumulative' to have attribute 'exclusive'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.cumulative' to have attribute 'op_type'");
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if ((integer.isSignless() || integer.isUnsigned()) && (integer.getWidth() == 32 || integer.getWidth() == 64))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i32, i64, u32, or u64");
 }
 
 LogicalResult dwc::CwiseOp::verify() {

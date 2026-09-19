@@ -106,10 +106,10 @@ func.func @test_cos(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: cumulative
-func.func @test_cumulative(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_cumulative(%arg0: tensor<4xi32>) -> tensor<4xi32> {
   // CHECK: dwc.cumulative
-  %0 = "dwc.cumulative"(%arg0) {axis = "x", exclusive = "x", op_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.cumulative"(%arg0) {axis = "x", exclusive = "x", op_type = "x"} : (tensor<4xi32>) -> tensor<4xi32>
+  return %0 : tensor<4xi32>
 }
 
 // -----
