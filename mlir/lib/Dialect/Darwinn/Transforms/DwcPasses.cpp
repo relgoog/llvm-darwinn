@@ -93,6 +93,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCCOMPOSITESLICINGSOLVERPASS
 #define GEN_PASS_DEF_DWCCUSTOMSLICINGASSIGNMENTPASS
 #define GEN_PASS_DEF_DWCDEFAULTUNITSLICINGPASS
+#define GEN_PASS_DEF_DWCCOMPUTEMAPCWISEMINMAXPASS
+#define GEN_PASS_DEF_DWCCOMPUTEMAPOPTIMIZEPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -7977,6 +7979,34 @@ struct DwcDefaultUnitSlicingPass
       if (op->getNumResults() == 0 || op->hasAttr("dwc.slicing_assigned"))
         return;
       op->setAttr("dwc.slicing_assigned", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcComputeMapCwiseMinMaxPass
+    : public darwinn::impl::DwcComputeMapCwiseMinMaxPassBase<DwcComputeMapCwiseMinMaxPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.cwise")
+        return;
+      op->setAttr("dwc.cwise_min_max_folded", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcComputeMapOptimizePass
+    : public darwinn::impl::DwcComputeMapOptimizePassBase<DwcComputeMapOptimizePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.cwise_min_max_folded"))
+        return;
+      op->setAttr("dwc.compute_map_optimized", UnitAttr::get(&getContext()));
     });
   }
 };

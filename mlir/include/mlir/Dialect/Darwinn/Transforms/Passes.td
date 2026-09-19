@@ -1595,6 +1595,20 @@ def DwcDefaultUnitSlicingPass : Pass<"default-unit-slicing", "func::FuncOp"> {
   }];
 }
 
+def DwcComputeMapCwiseMinMaxPass : Pass<"compute-map-cwise-min-max", "func::FuncOp"> {
+  let summary = "DWC pass compute-map-cwise-min-max";
+  let description = [{
+    Blob-evidenced lisa pass. Compute map cwise min max. Folds cwise min max bounds into compute map metadata.
+  }];
+}
+
+def DwcComputeMapOptimizePass : Pass<"compute-map-optimize", "func::FuncOp"> {
+  let summary = "DWC pass compute-map-optimize";
+  let description = [{
+    Blob-evidenced lisa pass. Compute map optimize. Optimizes compute map layouts after min max folding.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
