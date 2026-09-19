@@ -211,4 +211,17 @@ def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   ]>;
 def Dwc_MemorySpaceAttr : Dwc_I32EnumAttr<"memory_space", Dwc_MemorySpaceEnum>;
 
+def Dwc_ProbeSubTensorAttr : AttrDef<Dwc_Dialect, "ProbeSubTensor"> {
+  let summary = "DWC probe subtensor attribute.";
+  let mnemonic = "probe_subtensor";
+  let parameters = (ins
+    "StringAttr":$full_probe_id,
+    "DenseElementsAttr":$padding_amount,
+    "IntegerAttr":$padding_value,
+    "DenseElementsAttr":$slice_begin,
+    "DenseElementsAttr":$slice_size
+  );
+  let assemblyFormat = "`<` $full_probe_id `,` $padding_amount `,` $padding_value `,` $slice_begin `,` $slice_size `>`";
+}
+
 #endif // DWC_DIALECT
