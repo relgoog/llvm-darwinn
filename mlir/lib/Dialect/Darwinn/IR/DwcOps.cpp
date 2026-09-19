@@ -72,6 +72,14 @@ LogicalResult dwc::BatchMatrixNmsOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.batch_matrix_nms' to have attribute 'sigma'");
   if (!(*this)->hasAttr("suppress_top_k"))
     return (*this)->emitOpError("expected op 'dwc.batch_matrix_nms' to have attribute 'suppress_top_k'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("max_output_size")))
+    return (*this)->emitOpError("attribute 'max_output_size' expects IntegerAttr");
+  if (!llvm::isa<FloatAttr>((*this)->getAttr("score_threshold")))
+    return (*this)->emitOpError("attribute 'score_threshold' expects FloatAttr");
+  if (!llvm::isa<FloatAttr>((*this)->getAttr("sigma")))
+    return (*this)->emitOpError("attribute 'sigma' expects FloatAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("suppress_top_k")))
+    return (*this)->emitOpError("attribute 'suppress_top_k' expects IntegerAttr");
   return success();
 }
 

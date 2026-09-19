@@ -20,7 +20,7 @@ func.func @test_atan(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: batch_matrix_nms
 func.func @test_batch_matrix_nms(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.batch_matrix_nms
-  %0 = "dwc.batch_matrix_nms"(%arg0) {max_output_size = "x", score_threshold = "x", sigma = "x", suppress_top_k = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.batch_matrix_nms"(%arg0) {max_output_size = 128 : i64, score_threshold = 0.5 : f32, sigma = 0.5 : f32, suppress_top_k = 10 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
