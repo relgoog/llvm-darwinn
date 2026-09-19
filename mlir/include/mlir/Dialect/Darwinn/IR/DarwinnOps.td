@@ -1077,8 +1077,8 @@ def Darwinn_MaskIndicesOp : Darwinn_Op<"mask_indices"> {
 def Darwinn_MaterializeCastOp : Darwinn_Op<"materialize_cast"> {
   let summary = "Darwinn materialize_cast operation.";
   let description = [{
-    Takes one operand.
-    No kernel shape is evidenced.
+    Takes one floating-point or 1/32-bit signless integer operand per the blob
+    element constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

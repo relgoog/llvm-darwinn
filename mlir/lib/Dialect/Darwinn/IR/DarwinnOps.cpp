@@ -781,7 +781,18 @@ LogicalResult darwinn::MappingOp::verify() {
 
 
 LogicalResult darwinn::MaterializeCastOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
+  if (failed(verifyDwcArityN(*this, getInputs().size(), 1)))
+    return failure();
+  auto element = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type elementType = element ? element.getElementType() : getInputs()[0].getType();
+  if (auto integer = llvm::dyn_cast<IntegerType>(elementType)) {
+    if ((integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 32)))
+      return success();
+    return (*this)->emitOpError("operand 0 expects 1-bit or 32-bit signless integer");
+  }
+  if (llvm::isa<FloatType>(elementType))
+    return success();
+  return (*this)->emitOpError("operand 0 expects floating-point or 1/32-bit signless integer");
 }
 
 LogicalResult darwinn::MaterializePolicyOp::verify() {
