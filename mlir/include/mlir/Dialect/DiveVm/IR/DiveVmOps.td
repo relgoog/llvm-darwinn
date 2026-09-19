@@ -1662,7 +1662,7 @@ def DiveVm_ScatterNdOp : DiveVm_Op<"scatter_nd"> {
 def DiveVm_SelectOp : DiveVm_Op<"select"> {
   let summary = "DiveVM select operation.";
   let description = [{
-    Verifier requires exactly 2 operands. A darwinn lowering forwards darwinn.select to dive_vm.select. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.select to DiveVm_MaskIndices with the opaque pointer bridge.
+    Verifier requires exactly 3 operands. A darwinn lowering forwards darwinn.select to dive_vm.select. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.select to the four-operand Select kernel with the opaque pointer bridge.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

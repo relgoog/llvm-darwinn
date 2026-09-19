@@ -1478,7 +1478,8 @@ struct DwcConvertDiveVmToLlvmPass
                op->getName().getStringRef() == "dive_vm.insert_slice")
         callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
       else if (op->getName().getStringRef() == "dive_vm.select")
-        callee = "DiveVm_MaskIndices";
+        callee = "_ZN7silicon4dive7kernels6SelectERKNS0_"
+                 "11interpreter14ResolvedTensorES5_S5_S5_";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
       else if (op->getName().getStringRef() == "dive_vm.dynamic_slice_y")
@@ -1767,7 +1768,8 @@ struct DwcConvertDiveVmToMemrefPass
                op->getName().getStringRef() == "dive_vm.insert_slice")
         callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
       else if (op->getName().getStringRef() == "dive_vm.select")
-        callee = "DiveVm_MaskIndices";
+        callee = "_ZN7silicon4dive7kernels6SelectERKNS0_"
+                 "11interpreter14ResolvedTensorES5_S5_S5_";
       else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
         callee = "DiveVm_GetAddressOfInputActivation";
       else if (op->getName().getStringRef() == "dive_vm.dynamic_slice_y")

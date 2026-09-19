@@ -595,7 +595,7 @@ LogicalResult dive_vm::ScatterNdOp::verify() {
 }
 
 LogicalResult dive_vm::SelectOp::verify() {
-  return verifyDwcArityN(*this, getOperands().size(), 2);
+  return verifyDwcArityN(*this, getOperands().size(), 3);
 }
 
 LogicalResult dive_vm::SerializedModelFormatTypeOp::verify() {

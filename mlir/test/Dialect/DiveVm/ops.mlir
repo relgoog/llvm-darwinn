@@ -1062,9 +1062,9 @@ func.func @test_rem_imm(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: select
-func.func @test_select(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_select(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>, %arg2: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dive_vm.select
-  %0 = dive_vm.select %arg0, %arg1 : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = dive_vm.select %arg0, %arg1, %arg2 : (tensor<4xf32>, tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
