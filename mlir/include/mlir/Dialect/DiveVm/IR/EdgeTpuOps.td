@@ -24,7 +24,7 @@ include "mlir/Dialect/DiveVm/IR/DiveVmDialect.td"
 def EdgeTpu_AnnotateMaterializePolicyOp : EdgeTpu_Op<"annotate_materialize_policy"> {
   let summary = "EdgeTPU annotate_materialize_policy operation.";
   let description = [{
-    Placeholder for the edgetpu.annotate_materialize_policy operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.annotate_materialize_policy to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.annotate_materialize_policy evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -38,7 +38,7 @@ def EdgeTpu_AnnotateMaterializePolicyOp : EdgeTpu_Op<"annotate_materialize_polic
 def EdgeTpu_AttentionV1Op : EdgeTpu_Op<"attention_v1"> {
   let summary = "EdgeTPU attention_v1 operation.";
   let description = [{
-    Placeholder for the edgetpu.attention_v1 operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.attention_v1 to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.attention_v1 evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -52,7 +52,7 @@ def EdgeTpu_AttentionV1Op : EdgeTpu_Op<"attention_v1"> {
 def EdgeTpu_ConvertYuvToRgbOp : EdgeTpu_Op<"convert_yuv_to_rgb"> {
   let summary = "EdgeTPU convert_yuv_to_rgb operation.";
   let description = [{
-    Placeholder for the edgetpu.convert_yuv_to_rgb operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.convert_yuv_to_rgb to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.convert_yuv_to_rgb evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -66,7 +66,7 @@ def EdgeTpu_ConvertYuvToRgbOp : EdgeTpu_Op<"convert_yuv_to_rgb"> {
 def EdgeTpu_ConvolutionSubChannelOp : EdgeTpu_Op<"convolution_sub_channel"> {
   let summary = "EdgeTPU convolution_sub_channel operation.";
   let description = [{
-    Placeholder for the edgetpu.convolution_sub_channel operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.convolution_sub_channel to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.convolution_sub_channel evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -80,7 +80,7 @@ def EdgeTpu_ConvolutionSubChannelOp : EdgeTpu_Op<"convolution_sub_channel"> {
 def EdgeTpu_ConvolutionSubChannelDrqOp : EdgeTpu_Op<"convolution_sub_channel_drq"> {
   let summary = "EdgeTPU convolution_sub_channel_drq operation.";
   let description = [{
-    Placeholder for the edgetpu.convolution_sub_channel_drq operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.convolution_sub_channel_drq to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.convolution_sub_channel_drq evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -94,7 +94,7 @@ def EdgeTpu_ConvolutionSubChannelDrqOp : EdgeTpu_Op<"convolution_sub_channel_drq
 def EdgeTpu_DepthwiseConvolutionFp8Op : EdgeTpu_Op<"depthwise_convolution_fp8"> {
   let summary = "EdgeTPU depthwise_convolution_fp8 operation.";
   let description = [{
-    Placeholder for the edgetpu.depthwise_convolution_fp8 operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.depthwise_convolution_fp8 to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.depthwise_convolution_fp8 evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -108,7 +108,7 @@ def EdgeTpu_DepthwiseConvolutionFp8Op : EdgeTpu_Op<"depthwise_convolution_fp8"> 
 def EdgeTpu_FastWalshHadamardTransformOp : EdgeTpu_Op<"fast_walsh_hadamard_transform"> {
   let summary = "EdgeTPU fast_walsh_hadamard_transform operation.";
   let description = [{
-    Placeholder for the edgetpu.fast_walsh_hadamard_transform operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.fast_walsh_hadamard_transform to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.fast_walsh_hadamard_transform evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -122,7 +122,7 @@ def EdgeTpu_FastWalshHadamardTransformOp : EdgeTpu_Op<"fast_walsh_hadamard_trans
 def EdgeTpu_FullyConnectedFp8Op : EdgeTpu_Op<"fully_connected_fp8"> {
   let summary = "EdgeTPU fully_connected_fp8 operation.";
   let description = [{
-    Placeholder for the edgetpu.fully_connected_fp8 operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.fully_connected_fp8 to DiveTpu_EnqueueDmaDescriptor. No darwinn lowering forwarding to edgetpu.fully_connected_fp8 evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -136,7 +136,7 @@ def EdgeTpu_FullyConnectedFp8Op : EdgeTpu_Op<"fully_connected_fp8"> {
 def EdgeTpu_FullyConnectedSubChannelOp : EdgeTpu_Op<"fully_connected_sub_channel"> {
   let summary = "EdgeTPU fully_connected_sub_channel operation.";
   let description = [{
-    Placeholder for the edgetpu.fully_connected_sub_channel operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.fully_connected_sub_channel to DiveTpu_EnqueueDmaDescriptor. No darwinn lowering forwarding to edgetpu.fully_connected_sub_channel evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -150,7 +150,7 @@ def EdgeTpu_FullyConnectedSubChannelOp : EdgeTpu_Op<"fully_connected_sub_channel
 def EdgeTpu_FullyConnectedSubChannelDrqOp : EdgeTpu_Op<"fully_connected_sub_channel_drq"> {
   let summary = "EdgeTPU fully_connected_sub_channel_drq operation.";
   let description = [{
-    Placeholder for the edgetpu.fully_connected_sub_channel_drq operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.fully_connected_sub_channel_drq to DiveTpu_EnqueueDmaDescriptor. No darwinn lowering forwarding to edgetpu.fully_connected_sub_channel_drq evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -164,7 +164,7 @@ def EdgeTpu_FullyConnectedSubChannelDrqOp : EdgeTpu_Op<"fully_connected_sub_chan
 def EdgeTpu_MatrixMultiplySubChannelOp : EdgeTpu_Op<"matrix_multiply_sub_channel"> {
   let summary = "EdgeTPU matrix_multiply_sub_channel operation.";
   let description = [{
-    Placeholder for the edgetpu.matrix_multiply_sub_channel operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.matrix_multiply_sub_channel to DiveTpu_EnqueueDmaDescriptor. No darwinn lowering forwarding to edgetpu.matrix_multiply_sub_channel evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -178,7 +178,7 @@ def EdgeTpu_MatrixMultiplySubChannelOp : EdgeTpu_Op<"matrix_multiply_sub_channel
 def EdgeTpu_MatrixMultiplySubChannelDrqOp : EdgeTpu_Op<"matrix_multiply_sub_channel_drq"> {
   let summary = "EdgeTPU matrix_multiply_sub_channel_drq operation.";
   let description = [{
-    Placeholder for the edgetpu.matrix_multiply_sub_channel_drq operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.matrix_multiply_sub_channel_drq to DiveTpu_EnqueueDmaDescriptor. No darwinn lowering forwarding to edgetpu.matrix_multiply_sub_channel_drq evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -192,7 +192,7 @@ def EdgeTpu_MatrixMultiplySubChannelDrqOp : EdgeTpu_Op<"matrix_multiply_sub_chan
 def EdgeTpu_TransposeConvolutionFp8Op : EdgeTpu_Op<"transpose_convolution_fp8"> {
   let summary = "EdgeTPU transpose_convolution_fp8 operation.";
   let description = [{
-    Placeholder for the edgetpu.transpose_convolution_fp8 operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.transpose_convolution_fp8 to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.transpose_convolution_fp8 evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -206,7 +206,7 @@ def EdgeTpu_TransposeConvolutionFp8Op : EdgeTpu_Op<"transpose_convolution_fp8"> 
 def EdgeTpu_TransposedConvolutionSubChannelOp : EdgeTpu_Op<"transposed_convolution_sub_channel"> {
   let summary = "EdgeTPU transposed_convolution_sub_channel operation.";
   let description = [{
-    Placeholder for the edgetpu.transposed_convolution_sub_channel operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.transposed_convolution_sub_channel to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.transposed_convolution_sub_channel evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -220,7 +220,7 @@ def EdgeTpu_TransposedConvolutionSubChannelOp : EdgeTpu_Op<"transposed_convoluti
 def EdgeTpu_TransposedConvolutionSubChannelDrqOp : EdgeTpu_Op<"transposed_convolution_sub_channel_drq"> {
   let summary = "EdgeTPU transposed_convolution_sub_channel_drq operation.";
   let description = [{
-    Placeholder for the edgetpu.transposed_convolution_sub_channel_drq operation observed in dive binaries.
+    Verifier accepts any operand count. convert-tpu-offload-to-dive-vm and convert-tpu-offload-to-llvm map edgetpu.transposed_convolution_sub_channel_drq to DiveTpu_EnqueueInstructions. No darwinn lowering forwarding to edgetpu.transposed_convolution_sub_channel_drq evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

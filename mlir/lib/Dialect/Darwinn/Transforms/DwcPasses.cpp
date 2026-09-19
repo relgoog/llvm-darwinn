@@ -21,6 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -482,8 +483,8 @@ static LogicalResult applyDwcLowerConvertTrunc(func::FuncOp func,
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
-    if (op->getName().getStringRef() == "darwinn.convert" || op->getName().getStringRef() == "darwinn.cast_in" ||
-        op->getName().getStringRef() == "darwinn.cast_out")
+    if (name == "darwinn.convert" || name == "darwinn.cast_in" ||
+        name == "darwinn.cast_out" || name == "darwinn.materialize_cast")
       targets.push_back(op);
   });
   for (Operation *op : targets) {
@@ -756,6 +757,10 @@ struct DwcAllowBf16AndF16TypeLegalizationPass
           DwcAllowBf16AndF16TypeLegalizationPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     OpBuilder builder(func.getOperation()->getContext());
@@ -797,6 +802,10 @@ struct DwcArithAssertLowerPass
     : public darwinn::impl::DwcArithAssertLowerPassBase<
           DwcArithAssertLowerPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -843,6 +852,10 @@ struct DwcArithLowerPass
     : public darwinn::impl::DwcArithLowerPassBase<DwcArithLowerPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     RewritePatternSet patterns(&getContext());
@@ -866,13 +879,19 @@ struct DwcBitcastConvertPass
     : public darwinn::impl::DwcBitcastConvertPassBase<DwcBitcastConvertPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     OpBuilder builder(func.getOperation()->getContext());
     SmallVector<Operation *> dead;
     SmallVector<Operation *> targets;
     func.getOperation()->walk([&](Operation *op) {
-      if (op->getName().getStringRef() != "darwinn.bitcast")
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.bitcast" && name != "darwinn.reinterpret_cast" &&
+          name != "darwinn.hl_bitcast")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -976,6 +995,10 @@ struct DwcCompositeLoweringPass
     : public darwinn::impl::DwcCompositeLoweringPassBase<
           DwcCompositeLoweringPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -1134,6 +1157,21 @@ struct DwcConvertConv1x1ToFcPass
     unsigned lowered = 0;
     if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.convolution")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -1229,6 +1267,10 @@ struct DwcConvertDiveVmToLlvmPass
     : public darwinn::impl::DwcConvertDiveVmToLlvmPassBase<
           DwcConvertDiveVmToLlvmPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -1474,6 +1516,10 @@ struct DwcConvertDiveVmToMemrefPass
     : public darwinn::impl::DwcConvertDiveVmToMemrefPassBase<
           DwcConvertDiveVmToMemrefPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -2047,6 +2093,10 @@ struct DwcConvertOpLoweringPass
           DwcConvertOpLoweringPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     RewritePatternSet patterns(&getContext());
@@ -2212,12 +2262,30 @@ struct DwcConvertSpatialReductionToPoolingPass
           DwcConvertSpatialReductionToPoolingPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
     if (failed(forwardDwcLowerTo(func, {"darwinn.spatial_reduction"},
                                  "dive_vm.reduce", lowered)))
       return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.dive_ref_reduction")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -2389,6 +2457,10 @@ struct DwcConvertTpuOffloadToLlvmPass
     : public darwinn::impl::DwcConvertTpuOffloadToLlvmPassBase<
           DwcConvertTpuOffloadToLlvmPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -2680,6 +2752,10 @@ struct DwcCopyOpLoweringPass
     : public darwinn::impl::DwcCopyOpLoweringPassBase<DwcCopyOpLoweringPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     RewritePatternSet patterns(&getContext());
@@ -2691,6 +2767,25 @@ struct DwcCopyOpLoweringPass
     unsigned lowered = 0;
     if (failed(applyDwcLowerCopyLike(func, lowered)))
       return signalPassFailure();
+    if (failed(forwardDwcLowerTo(func, {"darwinn.fill"}, "dive_vm.fill", lowered)))
+      return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.synchronized_copy_op" && name != "darwinn.streaming_copy_op" &&
+          name != "darwinn.parallel_mesh_copy" && name != "darwinn.tile_to_tile" &&
+          name != "darwinn.tile_to_host" && name != "darwinn.host_to_tile")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -2700,7 +2795,6 @@ struct DwcDarwinnBundlingPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No bundle layout is evidenced in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
 
@@ -2813,9 +2907,9 @@ struct DwcDiveDcePass
         return;
       if (op->getNumRegions() != 0)
         return;
-      if (op->getName().getStringRef() == "dive_vm.const" ||
-          op->getName().getStringRef() == "dive_vm.copy")
-        dead.push_back(op);
+      if (!mlir::wouldOpBeTriviallyDead(op))
+        return;
+      dead.push_back(op);
     });
     for (Operation *op : dead)
       op->erase();
@@ -2827,6 +2921,10 @@ struct DwcDiveIoOptimizationPass
     : public darwinn::impl::DwcDiveIoOptimizationPassBase<
           DwcDiveIoOptimizationPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // No copy folding contract is evidenced in all_pseudocode.json, so the
@@ -2855,6 +2953,10 @@ struct DwcDiveIoOptimizationPass
 struct DwcDiveProgramTpuPass
     : public darwinn::impl::DwcDiveProgramTpuPassBase<DwcDiveProgramTpuPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // Grouping decides packet membership and order only. Each packet then gets
@@ -2965,6 +3067,10 @@ struct DwcDiveUnrollFactorPass
           DwcDiveUnrollFactorPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // No unroll factor contract is evidenced in all_pseudocode.json so only same type dive_vm loop identities fold.
     func::FuncOp func = getOperation();
@@ -3049,6 +3155,10 @@ struct DwcDiveVmOutlineShareableDiveConstsPass
     : public darwinn::impl::DwcDiveVmOutlineShareableDiveConstsPassBase<
           DwcDiveVmOutlineShareableDiveConstsPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -3996,6 +4106,10 @@ struct DwcDwcLowerCompositeOpsPass
           DwcDwcLowerCompositeOpsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4023,10 +4137,20 @@ struct DwcDwcLowerControlFlowPass
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     SmallVector<Operation *> dead;
+    // DarwinnOps.td gives no region or kernel shape for the control and misc
+    // ops so only regionless same type identities fold. Everything else stays
+    // for the convertible types gate below.
     root->walk([&](Operation *op) {
+      if (op->getNumRegions() != 0)
+        return;
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
-          name != "darwinn.bitcast")
+          name != "darwinn.bitcast" && name != "darwinn.while" &&
+          name != "darwinn.condition_scope" && name != "darwinn.yield" &&
+          name != "darwinn.fence" && name != "darwinn.preemption_point" &&
+          name != "darwinn.probe" && name != "darwinn.infeed" &&
+          name != "darwinn.outfeed" && name != "darwinn.launch_custom_kernel" &&
+          name != "darwinn.launch_function" && name != "darwinn.terminate")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -4065,6 +4189,10 @@ struct DwcDwcLowerDepthToFromSpacePass
           DwcDwcLowerDepthToFromSpacePass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4088,6 +4216,10 @@ struct DwcDwcLowerGenericConstantsPass
           DwcDwcLowerGenericConstantsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4110,6 +4242,10 @@ struct DwcDwcLowerHlopsPass
     : public darwinn::impl::DwcDwcLowerHlopsPassBase<DwcDwcLowerHlopsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4124,6 +4260,32 @@ struct DwcDwcLowerHlopsPass
       return signalPassFailure();
     if (failed(applyLocalConvertLowering(func)))
       return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.convolution" &&
+          name != "darwinn.rkhy_compute_op" &&
+          name != "darwinn.rkhy_unary_compute_op" &&
+          name != "darwinn.rkhy_depth_to_space_op" &&
+          name != "darwinn.static_compute_op" &&
+          name != "darwinn.static_unary_compute_op" &&
+          name != "darwinn.synchronized_compute_op" &&
+          name != "darwinn.synchronized_unary_compute_op" &&
+          name != "darwinn.streaming_compute_op" &&
+          name != "darwinn.streaming_unary_compute_op" &&
+          name != "darwinn.mma_compute_op" &&
+          name != "darwinn.fast_walsh_hadamard_transform")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -4132,6 +4294,10 @@ struct DwcDwcLowerInputOutputCastPass
     : public darwinn::impl::DwcDwcLowerInputOutputCastPassBase<
           DwcDwcLowerInputOutputCastPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -4156,6 +4322,10 @@ struct DwcDwcLowerPaddingOpsPass
           DwcDwcLowerPaddingOpsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4178,6 +4348,10 @@ struct DwcDwcLowerPseudoOpsPass
     : public darwinn::impl::DwcDwcLowerPseudoOpsPassBase<
           DwcDwcLowerPseudoOpsPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -4202,6 +4376,10 @@ struct DwcDwcLowerResamplerOpsPass
           DwcDwcLowerResamplerOpsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4225,6 +4403,10 @@ struct DwcDwcLowerScalarOpsPass
           DwcDwcLowerScalarOpsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4239,6 +4421,27 @@ struct DwcDwcLowerScalarOpsPass
       return signalPassFailure();
     if (failed(applyLocalConvertLowering(func)))
       return signalPassFailure();
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
+      return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.relu" && name != "darwinn.binary_map" &&
+          name != "darwinn.unary_map" && name != "darwinn.unary_tensor_op" &&
+          name != "darwinn.dive_ref_cwise" &&
+          name != "darwinn.rkhy_residual_add_op")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -4247,6 +4450,10 @@ struct DwcDwcLowerScatterOpsPass
     : public darwinn::impl::DwcDwcLowerScatterOpsPassBase<
           DwcDwcLowerScatterOpsPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -4269,6 +4476,10 @@ struct DwcDwcLowerScatterOpsPass
 struct DwcDwcLowerTopKPass
     : public darwinn::impl::DwcDwcLowerTopKPassBase<DwcDwcLowerTopKPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -4572,6 +4783,10 @@ struct DwcDwcTpuFunctionCsePass
           DwcDwcTpuFunctionCsePass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     DenseMap<Attribute, Operation *> seen;
@@ -4649,6 +4864,10 @@ struct DwcDwgForkMulticoreTpuOffloadsPass
           DwcDwgForkMulticoreTpuOffloadsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
@@ -4671,6 +4890,10 @@ struct DwcDwgLowerForToWhilePass
     : public darwinn::impl::DwcDwgLowerForToWhilePassBase<
           DwcDwgLowerForToWhilePass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -4695,6 +4918,10 @@ struct DwcDwgtLowerIndexTypePass
           DwcDwgtLowerIndexTypePass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -4718,12 +4945,37 @@ struct DwcDynamicUpdateSliceLoweringPass
           DwcDynamicUpdateSliceLoweringPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.iota" && name != "darwinn.reshape_op" &&
+          name != "darwinn.broadcast_slice" && name != "darwinn.narrow_to_narrow_slice" &&
+          name != "darwinn.narrow_to_wide_slice" && name != "darwinn.wide_to_narrow_slice" &&
+          name != "darwinn.sparse_narrow_to_wide_slice" && name != "darwinn.get_indexed_slice" &&
+          name != "darwinn.slice_1d_extent" && name != "darwinn.slice_1d_extent_with_padding_info" &&
+          name != "darwinn.create_empty_tensor" && name != "darwinn.get_tensor" &&
+          name != "darwinn.narrow_to_narrow" && name != "darwinn.narrow_to_wide" &&
+          name != "darwinn.wide_to_narrow" && name != "darwinn.sparse_narrow_to_wide")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -4870,6 +5122,10 @@ struct DwcGroupTpuOffloadsByParametersPass
     : public darwinn::impl::DwcGroupTpuOffloadsByParametersPassBase<
           DwcGroupTpuOffloadsByParametersPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -5609,6 +5865,10 @@ struct DwcLegalizeTypesForDiveVmTensorPass
           DwcLegalizeTypesForDiveVmTensorPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // DiveVmOps.td documents dive_vm.copy with an honest same type fold so it folds here. No other dive_vm tensor kernel shape appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
@@ -5755,6 +6015,10 @@ struct DwcLowerAttentionOpsPass
           DwcLowerAttentionOpsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -5776,6 +6040,10 @@ struct DwcLowerAttentionOpsPass
 struct DwcLowerInputCastPass
     : public darwinn::impl::DwcLowerInputCastPassBase<DwcLowerInputCastPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -5799,6 +6067,10 @@ struct DwcLowerJoinPass
     : public darwinn::impl::DwcLowerJoinPassBase<DwcLowerJoinPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -5820,6 +6092,10 @@ struct DwcLowerJoinPass
 struct DwcLowerOutputCastPass
     : public darwinn::impl::DwcLowerOutputCastPassBase<DwcLowerOutputCastPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -5857,6 +6133,10 @@ struct DwcMarkDiveVmTensorInsertSliceOpsPass
     : public darwinn::impl::DwcMarkDiveVmTensorInsertSliceOpsPassBase<
           DwcMarkDiveVmTensorInsertSliceOpsPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // dive_vm.insert_slice carries no source op contract in DiveVmOps.td so only same type slice identities fold.
@@ -5968,6 +6248,10 @@ struct DwcMidToLowLevelLoweringPass
           DwcMidToLowLevelLoweringPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     RewritePatternSet patterns(&getContext());
@@ -6057,6 +6341,10 @@ struct DwcOptimizeDiveVmTensorInsertSlicePass
     : public darwinn::impl::DwcOptimizeDiveVmTensorInsertSlicePassBase<
           DwcOptimizeDiveVmTensorInsertSlicePass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     OpBuilder builder(func.getOperation()->getContext());
@@ -6084,6 +6372,10 @@ struct DwcParameterCachingDiveProgramPass
     : public darwinn::impl::DwcParameterCachingDiveProgramPassBase<
           DwcParameterCachingDiveProgramPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -6198,6 +6490,10 @@ struct DwcR52ReadsDiveBuffersPass
     : public darwinn::impl::DwcR52ReadsDiveBuffersPassBase<
           DwcR52ReadsDiveBuffersPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // There is no r52 op in DarwinnOps.td or DiveVmOps.td and no r52 kernel shape in all_pseudocode.json so only same type dive_vm load identities fold.
@@ -6347,13 +6643,19 @@ struct DwcReinterpretCastRankLegalizePassPass
           DwcReinterpretCastRankLegalizePassPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     OpBuilder builder(func.getOperation()->getContext());
     SmallVector<Operation *> dead;
     SmallVector<Operation *> targets;
     func.getOperation()->walk([&](Operation *op) {
-      if (op->getName().getStringRef() != "darwinn.bitcast")
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.bitcast" && name != "darwinn.reinterpret_cast" &&
+          name != "darwinn.hl_bitcast")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -6470,6 +6772,24 @@ struct DwcRkhyShapeLegalizationPassPass
       return signalPassFailure();
     if (failed(applyDwcLowerScalarArith(func, lowered)))
       return signalPassFailure();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.rkhy_compute_op" &&
+          name != "darwinn.rkhy_unary_compute_op" &&
+          name != "darwinn.rkhy_depth_to_space_op" &&
+          name != "darwinn.rkhy_residual_add_op")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -6696,12 +7016,12 @@ struct DwcSplitOpLoweringPass
     // darwinn.split carries no axis or sizes in DarwinnOps.td and DiveVmOps.td names no split target so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-
     SmallVector<Operation *> dead;
+
     root->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
-          name != "darwinn.bitcast")
+          name != "darwinn.bitcast" && name != "darwinn.split")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -7622,6 +7942,10 @@ struct DwcTflLowerQuantAnnotationsPass
           DwcTflLowerQuantAnnotationsPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
@@ -7644,6 +7968,10 @@ struct DwcTflLowerStaticTensorListPass
     : public darwinn::impl::DwcTflLowerStaticTensorListPassBase<
           DwcTflLowerStaticTensorListPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
@@ -7866,6 +8194,10 @@ struct DwcXlaCpuUseNewXtileLoweringPass
     : public darwinn::impl::DwcXlaCpuUseNewXtileLoweringPassBase<
           DwcXlaCpuUseNewXtileLoweringPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());

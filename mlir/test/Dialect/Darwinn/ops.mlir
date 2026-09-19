@@ -119,3 +119,11 @@ func.func @test_dive_ref_reduction(%arg0: tensor<4x8xf32>) -> tensor<4x1xf32> {
   %0 = darwinn.dive_ref_reduction %arg0 {axes = array<i64: 1>, exclusive = false, reverse = false, acc_type = f32} : (tensor<4x8xf32>) -> tensor<4x1xf32>
   return %0 : tensor<4x1xf32>
 }
+
+// -----
+// CHECK-LABEL: fill_lower
+func.func @test_fill_lower(%arg0: f32) -> tensor<4x4xf32> {
+  // CHECK: darwinn.fill
+  %0 = darwinn.fill %arg0 : (f32) -> tensor<4x4xf32>
+  return %0 : tensor<4x4xf32>
+}
