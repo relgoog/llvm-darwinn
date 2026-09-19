@@ -455,6 +455,10 @@ LogicalResult dwc::RescalingOp::verify() {
 LogicalResult dwc::ReshapeOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
+  if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
+    if (ranked.getRank() != 3 && ranked.getRank() != 4)
+      return (*this)->emitOpError("operand 0 expects Rank 3 or Rank 4 tensor");
+  }
   return success();
 }
 

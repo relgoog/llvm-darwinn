@@ -563,7 +563,7 @@ def Dwc_RescalingOp : Dwc_Op<"rescaling"> {
 def Dwc_ReshapeOp : Dwc_Op<"reshape"> {
   let summary = "DWC reshape operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 Rank 3 or Rank 4 tensor operand per the blob constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

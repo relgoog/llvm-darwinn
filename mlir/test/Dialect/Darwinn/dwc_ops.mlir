@@ -362,10 +362,10 @@ func.func @test_rescaling(%arg0: tensor<4xf16>) -> tensor<4xf16> {
 
 // -----
 // CHECK-LABEL: reshape
-func.func @test_reshape(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_reshape(%arg0: tensor<2x2x2xf32>) -> tensor<2x2x2xf32> {
   // CHECK: dwc.reshape
-  %0 = "dwc.reshape"(%arg0) {} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.reshape"(%arg0) {} : (tensor<2x2x2xf32>) -> tensor<2x2x2xf32>
+  return %0 : tensor<2x2x2xf32>
 }
 
 // -----
