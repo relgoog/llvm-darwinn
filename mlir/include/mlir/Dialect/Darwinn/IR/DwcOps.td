@@ -455,7 +455,7 @@ def Dwc_MultiplyOp : Dwc_Op<"multiply"> {
 def Dwc_NotOp : Dwc_Op<"not"> {
   let summary = "DWC not operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 1-bit signless integer operand per the blob element constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

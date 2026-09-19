@@ -356,6 +356,11 @@ LogicalResult dwc::MultiplyOp::verify() {
 LogicalResult dwc::NotOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  auto integer = llvm::dyn_cast<IntegerType>(element);
+  if (!integer || !integer.isSignless() || integer.getWidth() != 1)
+    return (*this)->emitOpError("operand 0 expects 1-bit signless integer");
   return success();
 }
 

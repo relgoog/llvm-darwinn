@@ -290,10 +290,10 @@ func.func @test_multiply(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: not
-func.func @test_not(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_not(%arg0: tensor<4xi1>) -> tensor<4xi1> {
   // CHECK: dwc.not
-  %0 = "dwc.not"(%arg0) {} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.not"(%arg0) {} : (tensor<4xi1>) -> tensor<4xi1>
+  return %0 : tensor<4xi1>
 }
 
 // -----
