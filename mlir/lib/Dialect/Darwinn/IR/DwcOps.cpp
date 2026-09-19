@@ -232,6 +232,11 @@ LogicalResult dwc::ErfOp::verify() {
 LogicalResult dwc::ExpOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  auto floatElement = llvm::dyn_cast<Float32Type>(element);
+  if (!floatElement)
+    return (*this)->emitOpError("operand 0 expects 32-bit float");
   return success();
 }
 

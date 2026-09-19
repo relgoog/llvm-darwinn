@@ -263,7 +263,7 @@ def Dwc_ErfOp : Dwc_Op<"erf"> {
 def Dwc_ExpOp : Dwc_Op<"exp"> {
   let summary = "DWC exp operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 32-bit float operand per the blob element constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
