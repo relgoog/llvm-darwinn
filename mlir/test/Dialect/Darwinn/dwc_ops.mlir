@@ -308,7 +308,7 @@ func.func @test_one_hot(%arg0: tensor<4xi32>) -> tensor<4xi32> {
 // CHECK-LABEL: padding
 func.func @test_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.padding
-  %0 = "dwc.padding"(%arg0) {dimension = 0 : i64, padding_value = 0.0 : f32, post_padding = 0 : i32, pre_padding = 0 : i32} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.padding"(%arg0) {dimension = 0 : i32, padding_value = 0.0 : f32, post_padding = 0 : i32, pre_padding = 0 : i32} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

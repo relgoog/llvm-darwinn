@@ -682,6 +682,8 @@ LogicalResult dwc::PaddingOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.padding' to have attribute 'pre_padding'");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("dimension")))
     return (*this)->emitOpError("attribute 'dimension' expects IntegerAttr");
+  if (!llvm::cast<IntegerAttr>((*this)->getAttr("dimension")).getType().isSignlessInteger(32))
+    return (*this)->emitOpError("attribute 'dimension' expects I32");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("post_padding")))
     return (*this)->emitOpError("attribute 'post_padding' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("pre_padding")))
@@ -896,6 +898,11 @@ LogicalResult dwc::ScalarOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.scalar' to have attribute 'op_type'");
   if (!llvm::isa<ScalarOpTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects ScalarOpTypeAttr");
+  if ((*this)->hasAttr("immediate")) {
+    auto immediate = llvm::dyn_cast<IntegerAttr>((*this)->getAttr("immediate"));
+    if (!immediate || !immediate.getType().isSignlessInteger(32))
+      return (*this)->emitOpError("attribute 'immediate' expects 32-bit signless integer");
+  }
   return success();
 }
 
