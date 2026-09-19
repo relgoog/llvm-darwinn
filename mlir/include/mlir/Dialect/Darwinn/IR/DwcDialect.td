@@ -103,4 +103,51 @@ def Dwc_ScalarOpTypeEnum : Dwc_I32Enum<
   ]>;
 def Dwc_ScalarOpTypeAttr : Dwc_I32EnumAttr<"scalar_op_type", Dwc_ScalarOpTypeEnum>;
 
+def Dwc_CwiseOpTypeAdd : I32EnumAttrCase<"Add", 0, "ADD">;
+def Dwc_CwiseOpTypeArithmeticLeftShift : I32EnumAttrCase<"ArithmeticLeftShift", 1, "ARITHMETIC_LEFT_SHIFT">;
+def Dwc_CwiseOpTypeArithmeticRightShift : I32EnumAttrCase<"ArithmeticRightShift", 2, "ARITHMETIC_RIGHT_SHIFT">;
+def Dwc_CwiseOpTypeBitwiseAnd : I32EnumAttrCase<"BitwiseAnd", 3, "BITWISE_AND">;
+def Dwc_CwiseOpTypeBitwiseOr : I32EnumAttrCase<"BitwiseOr", 4, "BITWISE_OR">;
+def Dwc_CwiseOpTypeBitwiseXor : I32EnumAttrCase<"BitwiseXor", 5, "BITWISE_XOR">;
+def Dwc_CwiseOpTypeDivide : I32EnumAttrCase<"Divide", 6, "DIVIDE">;
+def Dwc_CwiseOpTypeEqual : I32EnumAttrCase<"Equal", 7, "EQUAL">;
+def Dwc_CwiseOpTypeGreater : I32EnumAttrCase<"Greater", 8, "GREATER">;
+def Dwc_CwiseOpTypeGreaterEqual : I32EnumAttrCase<"GreaterEqual", 9, "GREATER_EQUAL">;
+def Dwc_CwiseOpTypeLess : I32EnumAttrCase<"Less", 10, "LESS">;
+def Dwc_CwiseOpTypeLessEqual : I32EnumAttrCase<"LessEqual", 11, "LESS_EQUAL">;
+def Dwc_CwiseOpTypeLogicalAnd : I32EnumAttrCase<"LogicalAnd", 12, "LOGICAL_AND">;
+def Dwc_CwiseOpTypeLogicalRightShift : I32EnumAttrCase<"LogicalRightShift", 13, "LOGICAL_RIGHT_SHIFT">;
+def Dwc_CwiseOpTypeMaximum : I32EnumAttrCase<"Maximum", 14, "MAXIMUM">;
+def Dwc_CwiseOpTypeMinimum : I32EnumAttrCase<"Minimum", 15, "MINIMUM">;
+def Dwc_CwiseOpTypeModulus : I32EnumAttrCase<"Modulus", 16, "MODULUS">;
+def Dwc_CwiseOpTypeMultiply : I32EnumAttrCase<"Multiply", 17, "MULTIPLY">;
+def Dwc_CwiseOpTypeNotEqual : I32EnumAttrCase<"NotEqual", 18, "NOT_EQUAL">;
+def Dwc_CwiseOpTypePow : I32EnumAttrCase<"Pow", 19, "POW">;
+def Dwc_CwiseOpTypeSubtract : I32EnumAttrCase<"Subtract", 20, "SUBTRACT">;
+def Dwc_CwiseOpTypeEnum : Dwc_I32Enum<
+  "CwiseOpType", "DWC cwise op type", [
+    Dwc_CwiseOpTypeAdd,
+    Dwc_CwiseOpTypeArithmeticLeftShift,
+    Dwc_CwiseOpTypeArithmeticRightShift,
+    Dwc_CwiseOpTypeBitwiseAnd,
+    Dwc_CwiseOpTypeBitwiseOr,
+    Dwc_CwiseOpTypeBitwiseXor,
+    Dwc_CwiseOpTypeDivide,
+    Dwc_CwiseOpTypeEqual,
+    Dwc_CwiseOpTypeGreater,
+    Dwc_CwiseOpTypeGreaterEqual,
+    Dwc_CwiseOpTypeLess,
+    Dwc_CwiseOpTypeLessEqual,
+    Dwc_CwiseOpTypeLogicalAnd,
+    Dwc_CwiseOpTypeLogicalRightShift,
+    Dwc_CwiseOpTypeMaximum,
+    Dwc_CwiseOpTypeMinimum,
+    Dwc_CwiseOpTypeModulus,
+    Dwc_CwiseOpTypeMultiply,
+    Dwc_CwiseOpTypeNotEqual,
+    Dwc_CwiseOpTypePow,
+    Dwc_CwiseOpTypeSubtract
+  ]>;
+def Dwc_CwiseOpTypeAttr : Dwc_I32EnumAttr<"cwise_op_type", Dwc_CwiseOpTypeEnum>;
+
 #endif // DWC_DIALECT
