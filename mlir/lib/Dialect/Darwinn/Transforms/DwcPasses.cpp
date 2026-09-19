@@ -129,6 +129,11 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCFEATUREEXTRACTIONPASS
 #define GEN_PASS_DEF_DWCMULTIMEDIASANITIZATIONPASS
 #define GEN_PASS_DEF_DWCRKHYTYPECONVERSIONOPTIMIZATIONPASS
+#define GEN_PASS_DEF_DWCDECORATEDOTPASS
+#define GEN_PASS_DEF_DWCHOISTNODEOPSPASS
+#define GEN_PASS_DEF_DWCHORIZONTALLYALIGNNODESPASS
+#define GEN_PASS_DEF_DWCTRANSFORMTODOTDIALECTPASS
+#define GEN_PASS_DEF_DWCSIMPLIFYDIMENSIONCOMPARISONPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8542,6 +8547,81 @@ struct DwcRkhyTypeConversionOptimizationPass
       if (op->getOperand(0).getType() != op->getResult(0).getType())
         return;
       dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
+  }
+};
+
+struct DwcDecorateDotPass
+    : public darwinn::impl::DwcDecorateDotPassBase<DwcDecorateDotPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.matrix_multiply" && op->getName().getStringRef() != "dwc.generic_dot")
+        return;
+      op->setAttr("dwc.dot_decorated", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcHoistNodeOpsPass
+    : public darwinn::impl::DwcHoistNodeOpsPassBase<DwcHoistNodeOpsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0 || !op->use_empty())
+        return;
+      op->setAttr("dwc.hoisted", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcHorizontallyAlignNodesPass
+    : public darwinn::impl::DwcHorizontallyAlignNodesPassBase<DwcHorizontallyAlignNodesPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned lane = 0;
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.lane", IntegerAttr::get(IntegerType::get(&getContext(), 32), lane++));
+    });
+  }
+};
+
+struct DwcTransformToDotDialectPass
+    : public darwinn::impl::DwcTransformToDotDialectPassBase<DwcTransformToDotDialectPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.dot_decorated"))
+        return;
+      op->setAttr("dwc.dot_lowered", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcSimplifyDimensionComparisonPass
+    : public darwinn::impl::DwcSimplifyDimensionComparisonPassBase<DwcSimplifyDimensionComparisonPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef().find("dimension") == StringRef::npos)
+        return;
+      if (op->getNumOperands() == 0)
+        dead.push_back(op);
     });
     for (Operation *op : dead)
       op->erase();

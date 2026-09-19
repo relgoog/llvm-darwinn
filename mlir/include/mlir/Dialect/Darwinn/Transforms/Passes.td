@@ -1847,6 +1847,41 @@ def DwcRkhyTypeConversionOptimizationPass : Pass<"rkhy-type-conversion-optimizat
   }];
 }
 
+def DwcDecorateDotPass : Pass<"decorate-dot", "func::FuncOp"> {
+  let summary = "DWC pass decorate-dot";
+  let description = [{
+    Blob-evidenced darwinn pass. Decorate dot. Annotates dot ops with tiling metadata.
+  }];
+}
+
+def DwcHoistNodeOpsPass : Pass<"hoist-node-ops", "func::FuncOp"> {
+  let summary = "DWC pass hoist-node-ops";
+  let description = [{
+    Blob-evidenced darwinn pass. Hoist node ops. Hoists invariant node ops out of regions.
+  }];
+}
+
+def DwcHorizontallyAlignNodesPass : Pass<"horizontally-align-nodes", "func::FuncOp"> {
+  let summary = "DWC pass horizontally-align-nodes";
+  let description = [{
+    Blob-evidenced darwinn pass. Horizontally align nodes. Aligns sibling nodes for parallel issue.
+  }];
+}
+
+def DwcTransformToDotDialectPass : Pass<"transform-to-dot-dialect", "func::FuncOp"> {
+  let summary = "DWC pass transform-to-dot-dialect";
+  let description = [{
+    Blob-evidenced darwinn pass. Transform to dot dialect. Lowers matmul forms to the dot dialect.
+  }];
+}
+
+def DwcSimplifyDimensionComparisonPass : Pass<"simplify-dimension-comparison", "func::FuncOp"> {
+  let summary = "DWC pass simplify-dimension-comparison";
+  let description = [{
+    Blob-evidenced darwinn pass. Simplify dimension comparison. Folds trivial dimension comparisons.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
