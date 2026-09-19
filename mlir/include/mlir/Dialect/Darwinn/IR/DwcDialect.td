@@ -244,4 +244,14 @@ def Dwc_ResamplerOptionsAttr : AttrDef<Dwc_Dialect, "ResamplerOptions"> {
   let assemblyFormat = "`<` $fractional_index_bitwidth `,` $integer_index_bitwidth `>`";
 }
 
+def Dwc_DimensionLayoutAttr : AttrDef<Dwc_Dialect, "DimensionLayout"> {
+  let summary = "DWC dimension layout attribute.";
+  let mnemonic = "dimension_layout";
+  let parameters = (ins
+    "ArrayAttr":$pattern,
+    "IntegerAttr":$pattern_repeat
+  );
+  let assemblyFormat = "`<` `(` $pattern `)` `,` $pattern_repeat `>`";
+}
+
 #endif // DWC_DIALECT
