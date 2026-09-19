@@ -647,14 +647,6 @@ func.func @test_mask_indices(%arg0: tensor<4x8xf32>) -> tensor<4xi32> {
 }
 
 // -----
-// CHECK-LABEL: material
-func.func @test_material() -> tensor<4xf32> {
-  // CHECK: darwinn.material
-  %0 = "darwinn.material"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
 // CHECK-LABEL: materialize_cast
 func.func @test_materialize_cast(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: darwinn.materialize_cast

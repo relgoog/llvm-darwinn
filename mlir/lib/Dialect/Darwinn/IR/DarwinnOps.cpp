@@ -774,10 +774,6 @@ LogicalResult darwinn::MappingOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::MaterialOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
 
 LogicalResult darwinn::MaterializeCastOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);

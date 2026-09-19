@@ -1073,19 +1073,6 @@ def Darwinn_MaskIndicesOp : Darwinn_Op<"mask_indices"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: material
-def Darwinn_MaterialOp : Darwinn_Op<"material"> {
-  let summary = "Darwinn material operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: materialize_cast
 def Darwinn_MaterializeCastOp : Darwinn_Op<"materialize_cast"> {
   let summary = "Darwinn materialize_cast operation.";
