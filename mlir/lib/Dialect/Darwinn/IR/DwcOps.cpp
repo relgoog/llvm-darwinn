@@ -407,6 +407,19 @@ LogicalResult dwc::PopCountOp::verify() {
 LogicalResult dwc::PowOp::verify() {
   if (getInputs().size() != 2)
     return emitOpError("expects 2 operands, got ") << getInputs().size();
+  for (unsigned index = 0; index < 2; ++index) {
+    auto tensor = llvm::dyn_cast<TensorType>(getInputs()[index].getType());
+    Type element = tensor ? tensor.getElementType() : getInputs()[index].getType();
+    if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+      continue;
+    if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+      if (integer.isSignless() && integer.getWidth() == 32)
+        continue;
+      if (integer.isUnsigned() && integer.getWidth() == 32)
+        continue;
+    }
+    return (*this)->emitOpError("operand ") << index << " expects bfloat16, f16, f32, i32, or u32";
+  }
   return success();
 }
 

@@ -503,7 +503,7 @@ def Dwc_PopCountOp : Dwc_Op<"pop_count"> {
 def Dwc_PowOp : Dwc_Op<"pow"> {
   let summary = "DWC pow operation.";
   let description = [{
-    Exactly 2 operands per blob operand constraints.
+    Exactly 2 bfloat16, f16, f32, i32, or u32 operands per the blob element constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
