@@ -177,9 +177,13 @@ def Dwc_ActivationFunctionEnum : Dwc_I32Enum<
 def Dwc_ActivationFunctionAttr : Dwc_I32EnumAttr<"activation_function", Dwc_ActivationFunctionEnum>;
 
 def Dwc_CellOperationMac : I32EnumAttrCase<"Mac", 0, "MAC">;
+def Dwc_CellOperationSsd : I32EnumAttrCase<"Ssd", 1, "SSD">;
+def Dwc_CellOperationSad : I32EnumAttrCase<"Sad", 2, "SAD">;
 def Dwc_CellOperationEnum : Dwc_I32Enum<
   "CellOperation", "DWC cell operation", [
-    Dwc_CellOperationMac
+    Dwc_CellOperationMac,
+    Dwc_CellOperationSsd,
+    Dwc_CellOperationSad
   ]>;
 def Dwc_CellOperationAttr : Dwc_I32EnumAttr<"cell_operation", Dwc_CellOperationEnum>;
 
@@ -203,10 +207,12 @@ def Dwc_PaddingEnum : Dwc_I32Enum<
     Dwc_PaddingNone
   ]>;
 def Dwc_PaddingAttr : Dwc_I32EnumAttr<"padding", Dwc_PaddingEnum>;
-def Dwc_MemoryLocationUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_MemoryLocationTileSram : I32EnumAttrCase<"TileSram", 0, "TILE_SRAM">;
+def Dwc_MemoryLocationHostDram : I32EnumAttrCase<"HostDram", 1, "HOST_DRAM">;
 def Dwc_MemoryLocationEnum : Dwc_I32Enum<
   "MemoryLocation", "DWC memory location", [
-    Dwc_MemoryLocationUnknown
+    Dwc_MemoryLocationTileSram,
+    Dwc_MemoryLocationHostDram
   ]>;
 def Dwc_MemoryLocationAttr : Dwc_I32EnumAttr<"memory_location", Dwc_MemoryLocationEnum>;
 
