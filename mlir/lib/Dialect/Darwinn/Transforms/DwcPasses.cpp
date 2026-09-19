@@ -1453,8 +1453,7 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "_ZN7silicon4dive7kernels4TopKERNS0_"
                  "11interpreter14ResolvedTensorES4_S4_";
       else if (op->getName().getStringRef() == "dive_vm.multinomial")
-        callee = "_ZN9platforms7darwinn4dive11runtime_"
-                 "lib18ComputeMultinomialEPfS3_iiibfiiiPv";
+        callee = "DiveVm_ComputeMultinomial";
       else if (op->getName().getStringRef() == "dive_vm.mask_indices")
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_input_activation")
@@ -1736,8 +1735,7 @@ struct DwcConvertDiveVmToMemrefPass
         callee = "_ZN7silicon4dive7kernels4TopKERNS0_"
                  "11interpreter14ResolvedTensorES4_S4_";
       else if (op->getName().getStringRef() == "dive_vm.multinomial")
-        callee = "_ZN9platforms7darwinn4dive11runtime_"
-                 "lib18ComputeMultinomialEPfS3_iiibfiiiPv";
+        callee = "DiveVm_ComputeMultinomial";
       else if (op->getName().getStringRef() == "dive_vm.mask_indices")
         callee = "DiveVm_MaskIndices";
       else if (op->getName().getStringRef() == "dive_vm.address_of_input_activation")

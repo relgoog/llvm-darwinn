@@ -1326,7 +1326,7 @@ def DiveVm_MulImmOp : DiveVm_Op<"mul_imm"> {
 def DiveVm_MultinomialOp : DiveVm_Op<"multinomial"> {
   let summary = "DiveVM multinomial operation.";
   let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.multinomial to _ZN9platforms7darwinn4dive11runtime_lib18ComputeMultinomialEPfS3_iiibfiiiPv. No darwinn lowering forwarding to dive_vm.multinomial evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.multinomial to DiveVm_ComputeMultinomial, evidenced as a defined wrapper in the embedded vm_utility bitcode modules forwarding to ComputeMultinomial. No darwinn lowering forwarding to dive_vm.multinomial evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
