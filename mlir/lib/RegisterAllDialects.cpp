@@ -155,6 +155,8 @@ void mlir::registerAllDialects(DialectRegistry &registry) {
                   darwinn::DarwinnDialect,
                   dwc::DwcDialect,
                   dive_vm::DiveVmDialect,
+                  dive_vm_tensor::DiveVmTensorDialect,
+                  dwg_tensor::DwgTensorDialect,
                   edgetpu::EdgeTpuDialect,
                   tosa::TosaDialect,
                   transform::TransformDialect,

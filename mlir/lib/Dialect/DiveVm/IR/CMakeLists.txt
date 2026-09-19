@@ -7,6 +7,8 @@ add_mlir_dialect_library(MLIRDiveVmDialect
   DEPENDS
   MLIRDiveVmOpsIncGen
   MLIREdgeTpuOpsIncGen
+  MLIRDiveVmTensorOpsIncGen
+  MLIRDwgTensorOpsIncGen
 
   LINK_LIBS PUBLIC
   MLIRIR

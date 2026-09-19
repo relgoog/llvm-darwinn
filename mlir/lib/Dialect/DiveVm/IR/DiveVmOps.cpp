@@ -17,12 +17,22 @@
 using namespace mlir;
 using namespace mlir::dive_vm;
 using namespace mlir::edgetpu;
+using namespace mlir::dive_vm_tensor;
+using namespace mlir::dwg_tensor;
 
 #include "mlir/Dialect/DiveVm/IR/DiveVmOpsDialect.cpp.inc"
 #include "mlir/Dialect/DiveVm/IR/EdgeTpuOpsDialect.cpp.inc"
+#include "mlir/Dialect/DiveVm/IR/DiveVmTensorOpsDialect.cpp.inc"
+#include "mlir/Dialect/DiveVm/IR/DwgTensorOpsDialect.cpp.inc"
 
 #define GET_OP_CLASSES
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.cpp.inc"
+
+#define GET_OP_CLASSES
+#include "mlir/Dialect/DiveVm/IR/DiveVmTensorOps.cpp.inc"
+
+#define GET_OP_CLASSES
+#include "mlir/Dialect/DiveVm/IR/DwgTensorOps.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // DiveVm and EdgeTpu dialect initialization.
@@ -42,8 +52,61 @@ void EdgeTpuDialect::initialize() {
       >();
 }
 
+void DiveVmTensorDialect::initialize() {
+  addOperations<
+#define GET_OP_LIST
+#include "mlir/Dialect/DiveVm/IR/DiveVmTensorOps.cpp.inc"
+      >();
+}
+
+void DwgTensorDialect::initialize() {
+  addOperations<
+#define GET_OP_LIST
+#include "mlir/Dialect/DiveVm/IR/DwgTensorOps.cpp.inc"
+      >();
+}
+
 #define GET_OP_CLASSES
 #include "mlir/Dialect/DiveVm/IR/EdgeTpuOps.cpp.inc"
+
+LogicalResult dive_vm_tensor::AllocateOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ConstOp::verify() {
+  if (!(*this)->hasAttr("value"))
+    return (*this)->emitOpError(
+        "dive_vm_tensor.const op missing value attribute");
+  return success();
+}
+
+LogicalResult dive_vm_tensor::ExtractSliceOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::InsertSliceOp::verify() {
+  return success();
+}
+
+LogicalResult dive_vm_tensor::TypeCastOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::CodegenOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::ConstOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::DynamicShapeScopeOp::verify() {
+  return success();
+}
+
+LogicalResult dwg_tensor::EvalWithShapeOp::verify() {
+  return success();
+}
 
 static LogicalResult verifyDwcArityN(Operation *op, size_t numOperands,
                                     size_t expected) {

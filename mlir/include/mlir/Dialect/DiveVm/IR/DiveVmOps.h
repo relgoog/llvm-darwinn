@@ -23,10 +23,16 @@
 
 #include "mlir/Dialect/DiveVm/IR/DiveVmOpsDialect.h.inc"
 #include "mlir/Dialect/DiveVm/IR/EdgeTpuOpsDialect.h.inc"
+#include "mlir/Dialect/DiveVm/IR/DiveVmTensorOpsDialect.h.inc"
+#include "mlir/Dialect/DiveVm/IR/DwgTensorOpsDialect.h.inc"
 
 #define GET_OP_CLASSES
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h.inc"
 #define GET_OP_CLASSES
 #include "mlir/Dialect/DiveVm/IR/EdgeTpuOps.h.inc"
+#define GET_OP_CLASSES
+#include "mlir/Dialect/DiveVm/IR/DiveVmTensorOps.h.inc"
+#define GET_OP_CLASSES
+#include "mlir/Dialect/DiveVm/IR/DwgTensorOps.h.inc"
 
 #endif // MLIR_DIALECT_DIVEVM_IR_DIVEVMOPS_H

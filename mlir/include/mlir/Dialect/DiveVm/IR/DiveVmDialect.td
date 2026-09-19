@@ -58,4 +58,32 @@ class DiveVm_Op<string mnemonic, list<Trait> traits = []>
 class EdgeTpu_Op<string mnemonic, list<Trait> traits = []>
     : Op<EdgeTpu_Dialect, mnemonic, traits> {}
 
+def DiveVmTensor_Dialect : Dialect {
+  let name = "dive_vm_tensor";
+
+  let description = [{
+    Tensor-level dive_vm operations observed in pass descriptions,
+    including allocate, const, slice, and cast forms.
+  }];
+
+  let cppNamespace = "::mlir::dive_vm_tensor";
+}
+
+def DwgTensor_Dialect : Dialect {
+  let name = "dwg_tensor";
+
+  let description = [{
+    Tensor-level dwg operations observed in pass descriptions,
+    including const, codegen, and shape scope forms.
+  }];
+
+  let cppNamespace = "::mlir::dwg_tensor";
+}
+
+class DiveVmTensor_Op<string mnemonic, list<Trait> traits = []>
+    : Op<DiveVmTensor_Dialect, mnemonic, traits> {}
+
+class DwgTensor_Op<string mnemonic, list<Trait> traits = []>
+    : Op<DwgTensor_Dialect, mnemonic, traits> {}
+
 #endif // DIVEVM_DIALECT
