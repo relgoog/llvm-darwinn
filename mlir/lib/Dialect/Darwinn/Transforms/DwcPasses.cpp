@@ -731,6 +731,10 @@ struct DwcAddDiveTracingPass
     : public darwinn::impl::DwcAddDiveTracingPassBase<DwcAddDiveTracingPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<LLVM::LLVMDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     if (func->hasAttr("dive.tracing_added"))
@@ -2460,6 +2464,10 @@ struct DwcConvertTpuOffloadToDiveVmPass
           DwcConvertTpuOffloadToDiveVmPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
@@ -2754,6 +2762,10 @@ struct DwcConvertTpuOffloadToLlvmSymbolPass
     : public darwinn::impl::DwcConvertTpuOffloadToLlvmSymbolPassBase<
           DwcConvertTpuOffloadToLlvmSymbolPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
