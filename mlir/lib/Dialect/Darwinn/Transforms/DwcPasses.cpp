@@ -108,6 +108,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCREMOVEREDUNDANTMOVSPASS
 #define GEN_PASS_DEF_DWCSTREAMINGTOSYNCPASS
 #define GEN_PASS_DEF_DWCOPREORDERINGFORSTREAMINGPASS
+#define GEN_PASS_DEF_DWCPARAMETERREORDERINGPASS
+#define GEN_PASS_DEF_DWCPREEMPTIONPOINTSINSERTIONPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8216,6 +8218,35 @@ struct DwcOpReorderingForStreamingPass
       if (op->getNumResults() == 0)
         return;
       op->setAttr("dwc.stream_order", IntegerAttr::get(IntegerType::get(&getContext(), 32), order++));
+    });
+  }
+};
+
+struct DwcParameterReorderingPass
+    : public darwinn::impl::DwcParameterReorderingPassBase<DwcParameterReorderingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumOperands() == 0)
+        return;
+      op->setAttr("dwc.params_reordered", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcPreemptionPointsInsertionPass
+    : public darwinn::impl::DwcPreemptionPointsInsertionPassBase<DwcPreemptionPointsInsertionPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned points = 0;
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.preemption_point", IntegerAttr::get(IntegerType::get(&getContext(), 32), points++));
     });
   }
 };

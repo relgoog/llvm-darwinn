@@ -1700,6 +1700,20 @@ def DwcOpReorderingForStreamingPass : Pass<"op-reordering-for-streaming", "func:
   }];
 }
 
+def DwcParameterReorderingPass : Pass<"parameter-reordering", "func::FuncOp"> {
+  let summary = "DWC pass parameter-reordering";
+  let description = [{
+    Blob-evidenced lisa pass. Parameter reordering. Reorders function parameters for tiling locality.
+  }];
+}
+
+def DwcPreemptionPointsInsertionPass : Pass<"preemption-points-insertion", "func::FuncOp"> {
+  let summary = "DWC pass preemption-points-insertion";
+  let description = [{
+    Blob-evidenced lisa pass. Preemption points insertion. Inserts preemption checkpoints into long kernels.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
