@@ -120,6 +120,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCQUANTIZEDTOINTEGERTYPECONVERSIONPASS
 #define GEN_PASS_DEF_DWCVECTORIZATIONPASS
 #define GEN_PASS_DEF_DWCWIDEREGISTERREUSEPASS
+#define GEN_PASS_DEF_DWCCEPPSYTHWSVGMLLKWTPASS
+#define GEN_PASS_DEF_DWCDUMPOPSTATSPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8399,6 +8401,36 @@ struct DwcWideRegisterReusePass
         return;
       op->setAttr("dwc.wide_reused", UnitAttr::get(&getContext()));
     });
+  }
+};
+
+struct DwcCeppsytHwsvgmllkwtPass
+    : public darwinn::impl::DwcCeppsytHwsvgmllkwtPassBase<DwcCeppsytHwsvgmllkwtPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.const" && op->getName().getStringRef() != "dwc.generic_constant")
+        return;
+      op->setAttr("dwc.huffman_compressed", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcDumpOpStatsPass
+    : public darwinn::impl::DwcDumpOpStatsPassBase<DwcDumpOpStatsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned count = 0;
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      ++count;
+    });
+    (void)count;
   }
 };
 

@@ -1784,6 +1784,20 @@ def DwcWideRegisterReusePass : Pass<"wide-register-reuse", "func::FuncOp"> {
   }];
 }
 
+def DwcCeppsytHwsvgmllkwtPass : Pass<"ceppsyt-hwsvgmllkwt", "func::FuncOp"> {
+  let summary = "DWC pass ceppsyt-hwsvgmllkwt";
+  let description = [{
+    Blob-evidenced lisa pass. Huffman compression. Compresses constant weights with Huffman coding.
+  }];
+}
+
+def DwcDumpOpStatsPass : Pass<"dump-op-stats", "func::FuncOp"> {
+  let summary = "DWC pass dump-op-stats";
+  let description = [{
+    Blob-evidenced lisa pass. Dump op stats. Dumps per-op statistics for compiler analysis.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
