@@ -412,6 +412,8 @@ LogicalResult dwc::FullyConnectedOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.fully_connected' to have attribute 'cell_operation'");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
+    return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
   return success();
 }
 
@@ -436,6 +438,8 @@ LogicalResult dwc::GenericComputeOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_compute' to have attribute 'linear_function'");
   if (!llvm::isa<ArrayAttr>((*this)->getAttr("indexing_maps")))
     return (*this)->emitOpError("attribute 'indexing_maps' expects ArrayAttr");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -722,6 +726,10 @@ LogicalResult dwc::RescalingOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'per_z_out_scales_padding'");
   if (!llvm::isa<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales")))
     return (*this)->emitOpError("attribute 'output_activation_per_z_out_scales' expects ArrayAttr");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<PerZOutScalePaddingAttr>((*this)->getAttr("per_z_out_scales_padding")))
+    return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects PerZOutScalePaddingAttr");
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
   if (llvm::isa<Float16Type, BFloat16Type>(element))

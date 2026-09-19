@@ -196,7 +196,7 @@ func.func @test_floor_div(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<
 // CHECK-LABEL: fully_connected
 func.func @test_fully_connected(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.fully_connected
-  %0 = "dwc.fully_connected"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.fully_connected"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -212,7 +212,7 @@ func.func @test_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: generic_compute
 func.func @test_generic_compute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.generic_compute
-  %0 = "dwc.generic_compute"(%arg0) {activation_function = "x", indexing_maps = [], linear_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.generic_compute"(%arg0) {activation_function = #dwc.activation_function<NONE>, indexing_maps = [], linear_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -356,7 +356,7 @@ func.func @test_remainder(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: rescaling
 func.func @test_rescaling(%arg0: tensor<4xf16>) -> tensor<4xf16> {
   // CHECK: dwc.rescaling
-  %0 = "dwc.rescaling"(%arg0) {activation_function = "x", output_activation_per_z_out_scales = [], per_z_out_scales_padding = "x"} : (tensor<4xf16>) -> tensor<4xf16>
+  %0 = "dwc.rescaling"(%arg0) {activation_function = #dwc.activation_function<NONE>, output_activation_per_z_out_scales = [], per_z_out_scales_padding = #dwc.per_z_out_scale_padding<NONE>} : (tensor<4xf16>) -> tensor<4xf16>
   return %0 : tensor<4xf16>
 }
 
