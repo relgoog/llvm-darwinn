@@ -766,7 +766,7 @@ struct DwcAllowBf16AndF16TypeLegalizationPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -812,7 +812,7 @@ struct DwcArithAssertLowerPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -861,7 +861,7 @@ struct DwcArithLowerPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -888,7 +888,7 @@ struct DwcBitcastConvertPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -1005,7 +1005,7 @@ struct DwcCompositeLoweringPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -1278,7 +1278,7 @@ struct DwcConvertDiveVmToLlvmPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -1547,7 +1547,7 @@ struct DwcConvertDiveVmToMemrefPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -2147,7 +2147,7 @@ struct DwcConvertOpLoweringPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -2316,7 +2316,7 @@ struct DwcConvertSpatialReductionToPoolingPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -2512,7 +2512,7 @@ struct DwcConvertTpuOffloadToLlvmPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -2806,7 +2806,7 @@ struct DwcCopyOpLoweringPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -2976,7 +2976,7 @@ struct DwcDiveIoOptimizationPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -3008,7 +3008,7 @@ struct DwcDiveProgramTpuPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -3121,7 +3121,7 @@ struct DwcDiveUnrollFactorPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -3210,7 +3210,7 @@ struct DwcDiveVmOutlineShareableDiveConstsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4160,7 +4160,7 @@ struct DwcDwcLowerCompositeOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4243,7 +4243,7 @@ struct DwcDwcLowerDepthToFromSpacePass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4270,7 +4270,7 @@ struct DwcDwcLowerGenericConstantsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4296,7 +4296,7 @@ struct DwcDwcLowerHlopsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4349,7 +4349,7 @@ struct DwcDwcLowerInputOutputCastPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4376,7 +4376,7 @@ struct DwcDwcLowerPaddingOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4403,7 +4403,7 @@ struct DwcDwcLowerPseudoOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4430,7 +4430,7 @@ struct DwcDwcLowerResamplerOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4457,7 +4457,7 @@ struct DwcDwcLowerScalarOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4503,7 +4503,7 @@ struct DwcDwcLowerScatterOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4529,7 +4529,7 @@ struct DwcDwcLowerTopKPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4835,7 +4835,7 @@ struct DwcDwcTpuFunctionCsePass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4916,7 +4916,7 @@ struct DwcDwgForkMulticoreTpuOffloadsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4943,7 +4943,7 @@ struct DwcDwgLowerForToWhilePass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4970,7 +4970,7 @@ struct DwcDwgtLowerIndexTypePass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -4997,7 +4997,7 @@ struct DwcDynamicUpdateSliceLoweringPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -5175,7 +5175,7 @@ struct DwcGroupTpuOffloadsByParametersPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -5921,7 +5921,7 @@ struct DwcLegalizeTypesForDiveVmTensorPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6071,7 +6071,7 @@ struct DwcLowerAttentionOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6097,7 +6097,7 @@ struct DwcLowerInputCastPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6123,7 +6123,7 @@ struct DwcLowerJoinPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6149,7 +6149,7 @@ struct DwcLowerOutputCastPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6190,7 +6190,7 @@ struct DwcMarkDiveVmTensorInsertSliceOpsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6304,7 +6304,7 @@ struct DwcMidToLowLevelLoweringPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6398,7 +6398,7 @@ struct DwcOptimizeDiveVmTensorInsertSlicePass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -6429,7 +6429,7 @@ struct DwcParameterCachingDiveProgramPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6547,7 +6547,7 @@ struct DwcR52ReadsDiveBuffersPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -6699,7 +6699,7 @@ struct DwcReinterpretCastRankLegalizePassPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -7997,7 +7997,7 @@ struct DwcTflLowerQuantAnnotationsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -8024,7 +8024,7 @@ struct DwcTflLowerStaticTensorListPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
@@ -8250,7 +8250,7 @@ struct DwcXlaCpuUseNewXtileLoweringPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
