@@ -1542,6 +1542,14 @@ def DwcWrapUpDiveProgramPass : Pass<"wrap-up-dive-program", "func::FuncOp"> {
   }];
 }
 
+def DwcCopyReferencePass : Pass<"copy-reference", "func::FuncOp"> {
+  let summary = "DWC pass copy-reference";
+  let description = [{
+    Blob-evidenced lisa CopyReferencePass. Materializes copy reference edges
+    between producer and consumer ops for downstream slicing and allocation.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

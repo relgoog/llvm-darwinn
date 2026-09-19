@@ -86,6 +86,7 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCCONVERTDIVEVMTENSORTOLINALGSYMBOLPASS
 #define GEN_PASS_DEF_DWCCONVERTTPUOFFLOADTOLLVMSYMBOLPASS
 #define GEN_PASS_DEF_DWCCOPYOPLOWERINGPASS
+#define GEN_PASS_DEF_DWCCOPYREFERENCEPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -7871,6 +7872,20 @@ struct DwcXlaCpuUseNewXtileLoweringPass
     func::FuncOp func = getOperation();
     if (failed(applyLocalCopySliceLowering(func)))
       return signalPassFailure();
+  }
+};
+
+struct DwcCopyReferencePass
+    : public darwinn::impl::DwcCopyReferencePassBase<DwcCopyReferencePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumOperands() == 0 || op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.copy_reference", UnitAttr::get(&getContext()));
+    });
   }
 };
 
