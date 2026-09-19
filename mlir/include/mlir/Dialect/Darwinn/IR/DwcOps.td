@@ -635,7 +635,7 @@ def Dwc_ScatterNdOp : Dwc_Op<"scatter_nd"> {
 def Dwc_SelectOp : Dwc_Op<"select"> {
   let summary = "DWC select operation.";
   let description = [{
-    Exactly 2 operands per blob operand constraints.
+    Operand 0 is a statically shaped 1-bit signless integer tensor per the blob constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

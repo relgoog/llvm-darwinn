@@ -410,9 +410,9 @@ func.func @test_scatter_nd(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: select
-func.func @test_select(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_select(%arg0: tensor<4xi1>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.select
-  %0 = "dwc.select"(%arg0, %arg1) {} : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.select"(%arg0, %arg1) {} : (tensor<4xi1>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

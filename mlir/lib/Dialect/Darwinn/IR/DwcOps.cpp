@@ -566,7 +566,17 @@ LogicalResult dwc::ScatterNdOp::verify() {
 LogicalResult dwc::SelectOp::verify() {
   if (getInputs().size() != 2)
     return emitOpError("expects 2 operands, got ") << getInputs().size();
-  return success();
+  auto tensor0 = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element0 = tensor0 ? tensor0.getElementType() : getInputs()[0].getType();
+  auto integer0 = llvm::dyn_cast<IntegerType>(element0);
+  if (!integer0 || !integer0.isSignless() || integer0.getWidth() != 1)
+    return (*this)->emitOpError("operand 0 expects 1-bit signless integer");
+  if (auto ranked0 = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
+    if (!ranked0.hasStaticShape())
+      return (*this)->emitOpError("operand 0 expects statically shaped tensor");
+    return success();
+  }
+  return (*this)->emitOpError("operand 0 expects statically shaped tensor");
 }
 
 LogicalResult dwc::SignOp::verify() {
