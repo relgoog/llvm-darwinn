@@ -34,10 +34,10 @@ func.func @test_bitcast(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: cast
-func.func @test_cast(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_cast(%arg0: tensor<4xf16>) -> tensor<4xf16> {
   // CHECK: dwc.cast
-  %0 = "dwc.cast"(%arg0) {} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.cast"(%arg0) {} : (tensor<4xf16>) -> tensor<4xf16>
+  return %0 : tensor<4xf16>
 }
 
 // -----

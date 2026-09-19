@@ -76,7 +76,11 @@ LogicalResult dwc::BitcastOp::verify() {
 LogicalResult dwc::CastOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type>(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects 16-bit float or bfloat16");
 }
 
 LogicalResult dwc::CeilOp::verify() {

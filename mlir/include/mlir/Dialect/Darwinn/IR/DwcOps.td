@@ -71,7 +71,7 @@ def Dwc_BitcastOp : Dwc_Op<"bitcast"> {
 def Dwc_CastOp : Dwc_Op<"cast"> {
   let summary = "DWC cast operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 16-bit float or bfloat16 operand per the blob element constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
