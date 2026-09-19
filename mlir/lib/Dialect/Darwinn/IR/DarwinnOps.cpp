@@ -1146,3 +1146,11 @@ LogicalResult darwinn::ZeroPointOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
+
+LogicalResult darwinn::GenericNormOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::PseudoNormOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}

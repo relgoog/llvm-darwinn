@@ -416,7 +416,7 @@ def DiveVm_ChunkSizesOp : DiveVm_Op<"chunk_sizes"> {
 def DiveVm_ComputeNormStatsForRkhyOp : DiveVm_Op<"compute_norm_stats_for_rkhy"> {
   let summary = "DiveVM compute_norm_stats_for_rkhy operation.";
   let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.compute_norm_stats_for_rkhy evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. convert-generic-norm-to-pseudo-op forwards darwinn.generic_norm to dive_vm.compute_norm_stats_for_rkhy with attrs carried across. No callee symbol for it evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

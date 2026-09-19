@@ -2186,4 +2186,28 @@ def Darwinn_ZeroPointOp : Darwinn_Op<"zero_point"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+// Operator: generic_norm
+def Darwinn_GenericNormOp : Darwinn_Op<"generic_norm"> {
+  let summary = "Darwinn generic_norm operation.";
+  let description = [{
+    Takes one operand. convert-generic-norm-to-pseudo-op forwards darwinn.generic_norm to dive_vm.compute_norm_stats_for_rkhy with attrs carried across.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: pseudo_norm
+def Darwinn_PseudoNormOp : Darwinn_Op<"pseudo_norm"> {
+  let summary = "Darwinn pseudo_norm operation.";
+  let description = [{
+    Takes one operand. Historical rename target of darwinn.generic_norm, superseded by the dive_vm.compute_norm_stats_for_rkhy forwarding.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 #endif // DARWINN_OPS

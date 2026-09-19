@@ -2025,11 +2025,16 @@ struct DwcConvertGenericNormToPseudoOpPass
           DwcConvertGenericNormToPseudoOpPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
     if (failed(forwardDwcLowerTo(func, {"darwinn.generic_norm"},
-                                 "darwinn.pseudo_norm", lowered)))
+                                 "dive_vm.compute_norm_stats_for_rkhy",
+                                 lowered)))
       return signalPassFailure();
   }
 };
