@@ -635,7 +635,7 @@ struct DwcAckrModelConverterPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -683,7 +683,7 @@ struct DwcAddBoundLowerPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -1525,20 +1525,28 @@ struct DwcConvertDiveVmToLlvmPass
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
         return signalPassFailure();
       }
-      SmallVector<Type> paramTypes;
-      for (Value v : op->getOperands())
-        paramTypes.push_back(v.getType());
-      Type resultType = op->getNumResults() ? op->getResult(0).getType()
-                                            : LLVM::LLVMVoidType::get(ctx);
+      Type opaque = LLVM::LLVMPointerType::get(ctx);
+      SmallVector<Type> paramTypes(op->getNumOperands(), opaque);
+      Type resultType = op->getNumResults() ? opaque : LLVM::LLVMVoidType::get(ctx);
       FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
           builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
+      SmallVector<Value> bridged;
+      for (Value v : op->getOperands()) {
+        auto cast = UnrealizedConversionCastOp::create(builder, op->getLoc(),
+                                                       opaque, v);
+        bridged.push_back(cast.getResult(0));
+      }
       auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       op->getOperands());
-      if (op->getNumResults())
-        op->getResult(0).replaceAllUsesWith(call.getResult());
+                                       ValueRange(bridged));
+      if (op->getNumResults()) {
+        auto back = UnrealizedConversionCastOp::create(
+            builder, op->getLoc(), op->getResult(0).getType(),
+            call.getResult());
+        op->getResult(0).replaceAllUsesWith(back.getResult(0));
+      }
       op->erase();
       ++lowered;
     }
@@ -1800,20 +1808,28 @@ struct DwcConvertDiveVmToMemrefPass
         op->emitError("unsupported dive_vm op in convert-dive-vm-to-memref");
         return signalPassFailure();
       }
-      SmallVector<Type> paramTypes;
-      for (Value v : op->getOperands())
-        paramTypes.push_back(v.getType());
-      Type resultType = op->getNumResults() ? op->getResult(0).getType()
-                                            : LLVM::LLVMVoidType::get(ctx);
+      Type opaque = LLVM::LLVMPointerType::get(ctx);
+      SmallVector<Type> paramTypes(op->getNumOperands(), opaque);
+      Type resultType = op->getNumResults() ? opaque : LLVM::LLVMVoidType::get(ctx);
       FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
           builder, moduleOp, callee, paramTypes, resultType);
       if (failed(calleeOp))
         return signalPassFailure();
       builder.setInsertionPoint(op);
+      SmallVector<Value> bridged;
+      for (Value v : op->getOperands()) {
+        auto cast = UnrealizedConversionCastOp::create(builder, op->getLoc(),
+                                                       opaque, v);
+        bridged.push_back(cast.getResult(0));
+      }
       auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       op->getOperands());
-      if (op->getNumResults())
-        op->getResult(0).replaceAllUsesWith(call.getResult());
+                                       ValueRange(bridged));
+      if (op->getNumResults()) {
+        auto back = UnrealizedConversionCastOp::create(
+            builder, op->getLoc(), op->getResult(0).getType(),
+            call.getResult());
+        op->getResult(0).replaceAllUsesWith(back.getResult(0));
+      }
       op->erase();
       ++lowered;
     }
@@ -2882,7 +2898,7 @@ struct DwcDarwinnBundlingPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn")
@@ -3277,7 +3293,7 @@ struct DwcDwcCheckIllegalTpuOpsPass
     }
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3318,7 +3334,7 @@ struct DwcDwcConvertInputOutputTypesPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -3372,7 +3388,7 @@ struct DwcDwcFormTpuClustersPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -3426,7 +3442,7 @@ struct DwcDwcLegalizePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3480,7 +3496,7 @@ struct DwcDwcLegalizeHloPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3598,7 +3614,7 @@ struct DwcDwcLegalizeIntAndQuantTypesPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3657,7 +3673,7 @@ struct DwcDwcLegalizeInt64ConstantsPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3715,7 +3731,7 @@ struct DwcDwcLegalizePassSymbol
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3772,7 +3788,7 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3830,7 +3846,7 @@ struct DwcDwcLegalizeStablehloCompositePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -3947,7 +3963,7 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -4005,7 +4021,7 @@ struct DwcDwcLegalizeTflMultinomialPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -4063,7 +4079,7 @@ struct DwcDwcLegalizeTflVariableTensorsPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -4229,7 +4245,7 @@ struct DwcDwcLowerControlFlowPass
     }
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -4576,7 +4592,7 @@ struct DwcDwcPostTruncationTpuFitterPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4616,7 +4632,7 @@ struct DwcDwcPreTpuFitterOptimizeGatherPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4656,7 +4672,7 @@ struct DwcDwcPreTpuFitterOptimizeScatterPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4696,7 +4712,7 @@ struct DwcDwcRegroupTpuFunctionsPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4736,7 +4752,7 @@ struct DwcDwcSerializeTpuOffloadsPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4776,7 +4792,7 @@ struct DwcDwcTestRepeatTpuOpsPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4815,7 +4831,7 @@ struct DwcDwcTpuFitterPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -4905,7 +4921,7 @@ struct DwcDwgCreateDarwinnCustomOpPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn")
@@ -5057,7 +5073,7 @@ struct DwcEdgetpuCustomOp2Pass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
@@ -5112,7 +5128,7 @@ struct DwcFmModelConverterPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -5161,7 +5177,7 @@ struct DwcFpa2bvModelConverterPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -5301,7 +5317,7 @@ struct
     }
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
         failedLegal = true;
@@ -5343,7 +5359,7 @@ struct DwcLegalizePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5397,7 +5413,7 @@ struct DwcLegalizeAffinePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5453,7 +5469,7 @@ struct DwcLegalizeDwcPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5508,7 +5524,7 @@ struct DwcLegalizeDwcInputOutputOpsPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5566,7 +5582,7 @@ struct DwcLegalizeDwgTensorPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5679,7 +5695,7 @@ struct DwcLegalizeScfPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5734,7 +5750,7 @@ struct DwcLegalizeShapeOpsPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5791,7 +5807,7 @@ struct DwcLegalizeTestUsingLayerirFlowPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5849,7 +5865,7 @@ struct DwcLegalizeTfXlacallmoduleOpToStablehloPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect)
@@ -5897,7 +5913,7 @@ struct DwcLegalizeThreadObliviousOpPassPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -5958,7 +5974,7 @@ struct DwcLegalizeTypesForDiveVmTensorPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -6016,7 +6032,7 @@ struct DwcLegalizeStablehloCompositePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect)
@@ -6280,7 +6296,7 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -6371,7 +6387,7 @@ struct DwcMlirDarwinnComputeEnginePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn")
@@ -6635,7 +6651,7 @@ struct DwcRedistributeLoweringPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -6684,7 +6700,7 @@ struct DwcRedistributeLoweringPassRemarksPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -6903,7 +6919,7 @@ struct DwcRunR52OpsOnDivePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dive_vm") {
@@ -7102,7 +7118,7 @@ struct DwcSplitOpLoweringPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn") {
@@ -7153,7 +7169,7 @@ struct DwcStablehloCompositeLegalizeTflCustomPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect)
@@ -7201,7 +7217,7 @@ struct DwcStablehloCustomCallLegalizeCompositePass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect)
@@ -7249,7 +7265,7 @@ struct DwcStablehloLegalizeCompositeToCallPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -7509,7 +7525,7 @@ struct DwcTfLegalizeHloPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -7565,7 +7581,7 @@ struct DwcTflCustomLoweringRewritingPassPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect)
@@ -7614,7 +7630,7 @@ struct DwcTflLegalizeChloPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -7734,7 +7750,7 @@ struct DwcTflLegalizeHloPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -7851,7 +7867,7 @@ struct DwcTflLegalizeTfPass
 
     bool failedLegal = false;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       Dialect *dialect = op->getDialect();
       if (!dialect) {
@@ -8085,7 +8101,7 @@ struct DwcTpuClusteringAlgorithmPass
     std::map<Operation *, unsigned> clusterOf;
     unsigned nextCluster = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
         return WalkResult::advance();
       unsigned cluster = nextCluster;
       bool joined = false;
