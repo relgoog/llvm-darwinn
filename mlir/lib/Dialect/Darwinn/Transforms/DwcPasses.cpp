@@ -6480,6 +6480,10 @@ struct DwcQuantSignednessConvertLoweringPass
           DwcQuantSignednessConvertLoweringPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
+
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
@@ -6783,6 +6787,10 @@ struct DwcRkhyTypeLegalizationPassPass
           DwcRkhyTypeLegalizationPassPass> {
   using Base::Base;
 
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
+
   void runOnOperation() override {
     // Rkhy decodes to Vica. Convert and cast ops lower through the existing
     // convert trunc helper.
@@ -6845,6 +6853,10 @@ struct DwcScalarCoreControlFlowLoweringPass
     : public darwinn::impl::DwcScalarCoreControlFlowLoweringPassBase<
           DwcScalarCoreControlFlowLoweringPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
@@ -7387,6 +7399,10 @@ struct DwcStochasticConvertPass
     : public darwinn::impl::DwcStochasticConvertPassBase<
           DwcStochasticConvertPass> {
   using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+  }
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
