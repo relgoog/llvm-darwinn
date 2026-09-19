@@ -34,8 +34,8 @@ def Darwinn_AuxTensorTypeOp : Darwinn_Op<"aux_tensor_type"> {
 def Darwinn_BinaryMapOp : Darwinn_Op<"binary_map"> {
   let summary = "Darwinn binary_map operation.";
   let description = [{
-    Takes two operands.
-    No kernel shape is evidenced.
+    Takes two operands with a `function` attribute of
+    `::platforms::darwinn::lisa::LinearFunctionTypeAttr` type per the blob verifier string.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
