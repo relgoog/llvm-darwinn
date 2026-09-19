@@ -125,6 +125,10 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDETECTPARAMETERSPARSITYPASS
 #define GEN_PASS_DEF_DWCCUSTOMKERNELSHAPEINSTANTIATIONPASS
 #define GEN_PASS_DEF_DWCRKHYMEMORYREDISTRIBUTESPLITPASS
+#define GEN_PASS_DEF_DWCEXECUTIONMODEASSIGNINGPASS
+#define GEN_PASS_DEF_DWCFEATUREEXTRACTIONPASS
+#define GEN_PASS_DEF_DWCMULTIMEDIASANITIZATIONPASS
+#define GEN_PASS_DEF_DWCRKHYTYPECONVERSIONOPTIMIZATIONPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8476,6 +8480,71 @@ struct DwcRkhyMemoryRedistributeSplitPass
         return;
       op->setAttr("dwc.rkhy_redistribute_split", UnitAttr::get(&getContext()));
     });
+  }
+};
+
+struct DwcExecutionModeAssigningPass
+    : public darwinn::impl::DwcExecutionModeAssigningPassBase<DwcExecutionModeAssigningPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.execution_mode", IntegerAttr::get(IntegerType::get(&getContext(), 32), 0));
+    });
+  }
+};
+
+struct DwcFeatureExtractionPass
+    : public darwinn::impl::DwcFeatureExtractionPassBase<DwcFeatureExtractionPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned features = 0;
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      ++features;
+    });
+    (void)features;
+  }
+};
+
+struct DwcMultimediaSanitizationPass
+    : public darwinn::impl::DwcMultimediaSanitizationPassBase<DwcMultimediaSanitizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getDialect() == nullptr || op->getDialect()->getNamespace() != "darwinn")
+        return;
+      op->removeAttr("dwc.multimedia_unsafe");
+    });
+  }
+};
+
+struct DwcRkhyTypeConversionOptimizationPass
+    : public darwinn::impl::DwcRkhyTypeConversionOptimizationPassBase<DwcRkhyTypeConversionOptimizationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.convert")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 

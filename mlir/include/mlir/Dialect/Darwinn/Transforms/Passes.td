@@ -1819,6 +1819,34 @@ def DwcRkhyMemoryRedistributeSplitPass : Pass<"rkhy-memory-redistribute-split", 
   }];
 }
 
+def DwcExecutionModeAssigningPass : Pass<"execution-mode-assigning", "func::FuncOp"> {
+  let summary = "DWC pass execution-mode-assigning";
+  let description = [{
+    Blob-evidenced lisa pass. Execution mode assigning. Assigns execution modes to ops for scheduling.
+  }];
+}
+
+def DwcFeatureExtractionPass : Pass<"feature-extraction", "func::FuncOp"> {
+  let summary = "DWC pass feature-extraction";
+  let description = [{
+    Blob-evidenced lisa pass. Feature extraction. Extracts cost features for the fitter.
+  }];
+}
+
+def DwcMultimediaSanitizationPass : Pass<"multimedia-sanitization", "func::FuncOp"> {
+  let summary = "DWC pass multimedia-sanitization";
+  let description = [{
+    Blob-evidenced lisa pass. Multimedia sanitization. Sanitizes multimedia ops for the backend.
+  }];
+}
+
+def DwcRkhyTypeConversionOptimizationPass : Pass<"rkhy-type-conversion-optimization", "func::FuncOp"> {
+  let summary = "DWC pass rkhy-type-conversion-optimization";
+  let description = [{
+    Blob-evidenced lisa pass. Rkhy type conversion optimization. Folds redundant Rkhy type conversions.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
