@@ -132,7 +132,7 @@ func.func @test_depthwise_convolution_v2(%arg0: tensor<4xf32>) -> tensor<4xf32> 
 // CHECK-LABEL: divide
 func.func @test_divide(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.divide
-  %0 = "dwc.divide"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.divide"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -268,7 +268,7 @@ func.func @test_matrix_multiply(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: maximum
 func.func @test_maximum(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.maximum
-  %0 = "dwc.maximum"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.maximum"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -276,7 +276,7 @@ func.func @test_maximum(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: minimum
 func.func @test_minimum(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.minimum
-  %0 = "dwc.minimum"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.minimum"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -284,7 +284,7 @@ func.func @test_minimum(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: multiply
 func.func @test_multiply(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.multiply
-  %0 = "dwc.multiply"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.multiply"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -348,7 +348,7 @@ func.func @test_reduction(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: remainder
 func.func @test_remainder(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.remainder
-  %0 = "dwc.remainder"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.remainder"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

@@ -286,6 +286,8 @@ LogicalResult dwc::DepthwiseConvolutionV2Op::verify() {
 LogicalResult dwc::DivideOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.divide' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -512,18 +514,24 @@ LogicalResult dwc::MatrixMultiplyOp::verify() {
 LogicalResult dwc::MaximumOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.maximum' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
 LogicalResult dwc::MinimumOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.minimum' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
 LogicalResult dwc::MultiplyOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.multiply' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -668,6 +676,8 @@ LogicalResult dwc::ReductionOp::verify() {
 LogicalResult dwc::RemainderOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.remainder' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
