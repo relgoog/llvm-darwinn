@@ -95,6 +95,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDEFAULTUNITSLICINGPASS
 #define GEN_PASS_DEF_DWCCOMPUTEMAPCWISEMINMAXPASS
 #define GEN_PASS_DEF_DWCCOMPUTEMAPOPTIMIZEPASS
+#define GEN_PASS_DEF_DWCDYNAMICSLICEINDEXTRANSFORMATIONPASS
+#define GEN_PASS_DEF_DWCDYNAMICSLICEWITHCOPYPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8007,6 +8009,34 @@ struct DwcComputeMapOptimizePass
       if (!op->hasAttr("dwc.cwise_min_max_folded"))
         return;
       op->setAttr("dwc.compute_map_optimized", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcDynamicSliceIndexTransformationPass
+    : public darwinn::impl::DwcDynamicSliceIndexTransformationPassBase<DwcDynamicSliceIndexTransformationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.dynamic_slice")
+        return;
+      op->setAttr("dwc.slice_index_transformed", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcDynamicSliceWithCopyPass
+    : public darwinn::impl::DwcDynamicSliceWithCopyPassBase<DwcDynamicSliceWithCopyPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.slice_index_transformed"))
+        return;
+      op->setAttr("dwc.slice_with_copy", UnitAttr::get(&getContext()));
     });
   }
 };

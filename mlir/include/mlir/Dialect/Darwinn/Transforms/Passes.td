@@ -1609,6 +1609,20 @@ def DwcComputeMapOptimizePass : Pass<"compute-map-optimize", "func::FuncOp"> {
   }];
 }
 
+def DwcDynamicSliceIndexTransformationPass : Pass<"dynamic-slice-index-transformation", "func::FuncOp"> {
+  let summary = "DWC pass dynamic-slice-index-transformation";
+  let description = [{
+    Blob-evidenced lisa pass. Dynamic slice index transformation. Rewrites dynamic slice indices into copy compatible offsets.
+  }];
+}
+
+def DwcDynamicSliceWithCopyPass : Pass<"dynamic-slice-with-copy", "func::FuncOp"> {
+  let summary = "DWC pass dynamic-slice-with-copy";
+  let description = [{
+    Blob-evidenced lisa pass. Dynamic slice with copy. Lowers dynamic slice ops through explicit copy ops.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
