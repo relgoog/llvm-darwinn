@@ -1812,6 +1812,13 @@ def DwcCustomKernelShapeInstantiationPass : Pass<"custom-kernel-shape-instantiat
   }];
 }
 
+def DwcRkhyMemoryRedistributeSplitPass : Pass<"rkhy-memory-redistribute-split", "func::FuncOp"> {
+  let summary = "DWC pass rkhy-memory-redistribute-split";
+  let description = [{
+    Blob-evidenced lisa pass. Rkhy memory redistribute split. Splits Rkhy redistributes across memories.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

@@ -124,6 +124,7 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDUMPOPSTATSPASS
 #define GEN_PASS_DEF_DWCDETECTPARAMETERSPARSITYPASS
 #define GEN_PASS_DEF_DWCCUSTOMKERNELSHAPEINSTANTIATIONPASS
+#define GEN_PASS_DEF_DWCRKHYMEMORYREDISTRIBUTESPLITPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8460,6 +8461,20 @@ struct DwcCustomKernelShapeInstantiationPass
       if (!op->hasAttr("dwc.sparse_parameter"))
         return;
       op->setAttr("dwc.kernel_shape_instantiated", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcRkhyMemoryRedistributeSplitPass
+    : public darwinn::impl::DwcRkhyMemoryRedistributeSplitPassBase<DwcRkhyMemoryRedistributeSplitPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.rkhy_type_legal"))
+        return;
+      op->setAttr("dwc.rkhy_redistribute_split", UnitAttr::get(&getContext()));
     });
   }
 };
