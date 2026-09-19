@@ -48,6 +48,9 @@ LogicalResult dwc::AddOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.add' to have attribute 'activation_function'");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  auto activation = llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue();
+  if (activation != ActivationFunction::None && activation != ActivationFunction::Relu)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE or RELU");
   return success();
 }
 
@@ -191,6 +194,12 @@ LogicalResult dwc::ConvolutionOp::verify() {
     return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
     return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
+  for (const char *name : {"x_dilation_rate", "x_stride", "y_dilation_rate", "y_stride"}) {
+    if (llvm::cast<IntegerAttr>((*this)->getAttr(name)).getInt() != 1)
+      return (*this)->emitOpError("attribute '") << name << "' expects 1";
+  }
   return success();
 }
 
