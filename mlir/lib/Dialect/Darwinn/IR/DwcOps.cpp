@@ -743,6 +743,14 @@ LogicalResult dwc::SortOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.sort' to have attribute 'dimension'");
   if (!(*this)->hasAttr("is_stable"))
     return (*this)->emitOpError("expected op 'dwc.sort' to have attribute 'is_stable'");
+  if (!llvm::isa<ArrayAttr>((*this)->getAttr("compare_tuple_projection")))
+    return (*this)->emitOpError("attribute 'compare_tuple_projection' expects ArrayAttr");
+  if (!llvm::isa<ArrayAttr>((*this)->getAttr("compare_type")))
+    return (*this)->emitOpError("attribute 'compare_type' expects ArrayAttr");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("dimension")))
+    return (*this)->emitOpError("attribute 'dimension' expects IntegerAttr");
+  if (!llvm::isa<BoolAttr>((*this)->getAttr("is_stable")))
+    return (*this)->emitOpError("attribute 'is_stable' expects BoolAttr");
   return success();
 }
 

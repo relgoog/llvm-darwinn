@@ -444,7 +444,7 @@ func.func @test_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: sort
 func.func @test_sort(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.sort
-  %0 = "dwc.sort"(%arg0) {compare_tuple_projection = "x", compare_type = "x", dimension = "x", is_stable = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.sort"(%arg0) {compare_tuple_projection = [], compare_type = [], dimension = 0 : i64, is_stable = true} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
