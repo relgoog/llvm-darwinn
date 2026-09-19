@@ -102,6 +102,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCSIMPLEOUTPUTSLICINGPASS
 #define GEN_PASS_DEF_DWCSLICEOPERANDSPASS
 #define GEN_PASS_DEF_DWCSLICEGRANULARITYASSIGNMENTPASS
+#define GEN_PASS_DEF_DWCPROPAGATINGSLICINGPASS
+#define GEN_PASS_DEF_DWCPBQPSLICINGPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8114,6 +8116,37 @@ struct DwcSliceGranularityAssignmentPass
       if (!op->hasAttr("dwc.operands_sliced"))
         return;
       op->setAttr("dwc.slice_granularity", IntegerAttr::get(IntegerType::get(&getContext(), 32), 1));
+    });
+  }
+};
+
+struct DwcPropagatingSlicingPass
+    : public darwinn::impl::DwcPropagatingSlicingPassBase<DwcPropagatingSlicingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.slicing_assigned"))
+        return;
+      for (Value result : op->getResults())
+        for (Operation *user : result.getUsers())
+          user->setAttr("dwc.slicing_propagated", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcPbqpSlicingPass
+    : public darwinn::impl::DwcPbqpSlicingPassBase<DwcPbqpSlicingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    unsigned cost = 0;
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.slicing_propagated"))
+        return;
+      op->setAttr("dwc.pbqp_cost", IntegerAttr::get(IntegerType::get(&getContext(), 32), cost++));
     });
   }
 };

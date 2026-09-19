@@ -1658,6 +1658,20 @@ def DwcSliceGranularityAssignmentPass : Pass<"slice-granularity-assignment", "fu
   }];
 }
 
+def DwcPropagatingSlicingPass : Pass<"propagating-slicing", "func::FuncOp"> {
+  let summary = "DWC pass propagating-slicing";
+  let description = [{
+    Blob-evidenced lisa pass. Propagating slicing. Propagates slicing decisions forward through use def chains.
+  }];
+}
+
+def DwcPbqpSlicingPass : Pass<"pbqp-slicing", "func::FuncOp"> {
+  let summary = "DWC pass pbqp-slicing";
+  let description = [{
+    Blob-evidenced lisa pass. PBQP slicing. Solves slicing assignment as a partition Boolean quadratic problem.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
