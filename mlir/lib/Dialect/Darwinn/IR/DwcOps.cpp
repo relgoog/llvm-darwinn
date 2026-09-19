@@ -1110,6 +1110,10 @@ LogicalResult dwc::TransposeOp::verify() {
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
     if (ranked.getRank() != 3)
       return (*this)->emitOpError("operand 0 expects Rank 3 tensor");
+    auto perm = llvm::cast<ElementsAttr>((*this)->getAttr("permutation"));
+    auto shaped = llvm::dyn_cast<ShapedType>(perm.getType());
+    if (!shaped || !shaped.hasStaticShape() || shaped.getNumElements() != 3)
+      return (*this)->emitOpError("attribute 'permutation' expects 3 elements for Rank 3 tensor");
   }
   return success();
 }
