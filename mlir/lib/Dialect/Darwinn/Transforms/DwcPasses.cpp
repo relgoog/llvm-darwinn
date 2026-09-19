@@ -142,6 +142,9 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCTESTREPEATINGREGIONCLUSTERTPUOPSPASS
 #define GEN_PASS_DEF_DWCLINEARUNITINPUTCHECKPASS
 #define GEN_PASS_DEF_DWCSLICECHECKPASS
+#define GEN_PASS_DEF_DWCTFCASEORIFREGIONELIMINATEPASS
+#define GEN_PASS_DEF_DWCTFWHILEREGIONELIMINATEPASS
+#define GEN_PASS_DEF_DWCQUANTIMPORTQUANTSTATSPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8744,6 +8747,57 @@ struct DwcSliceCheckPass
         return;
       if (!op->hasAttr("dwc.slice_granularity") && !op->hasAttr("dwc.slicing_propagated"))
         op->emitError("slice-check expects granularity or propagation");
+    });
+  }
+};
+
+struct DwcTfCaseOrIfRegionEliminatePass
+    : public darwinn::impl::DwcTfCaseOrIfRegionEliminatePassBase<DwcTfCaseOrIfRegionEliminatePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "tf.Case" && name != "tf.If")
+        return;
+      if (op->getNumRegions() == 0)
+        dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
+  }
+};
+
+struct DwcTfWhileRegionEliminatePass
+    : public darwinn::impl::DwcTfWhileRegionEliminatePassBase<DwcTfWhileRegionEliminatePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "tf.While")
+        return;
+      if (op->getNumRegions() == 0)
+        dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
+  }
+};
+
+struct DwcQuantImportQuantStatsPass
+    : public darwinn::impl::DwcQuantImportQuantStatsPassBase<DwcQuantImportQuantStatsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() == 0)
+        return;
+      op->setAttr("dwc.quant_stats_imported", UnitAttr::get(&getContext()));
     });
   }
 };

@@ -1938,6 +1938,27 @@ def DwcSliceCheckPass : Pass<"slice-check", "func::FuncOp"> {
   }];
 }
 
+def DwcTfCaseOrIfRegionEliminatePass : Pass<"tf-case-or-if-region-eliminate", "func::FuncOp"> {
+  let summary = "DWC pass tf-case-or-if-region-eliminate";
+  let description = [{
+    Blob-evidenced generic pass. TF case or if region eliminate. Eliminates dead case or if regions.
+  }];
+}
+
+def DwcTfWhileRegionEliminatePass : Pass<"tf-while-region-eliminate", "func::FuncOp"> {
+  let summary = "DWC pass tf-while-region-eliminate";
+  let description = [{
+    Blob-evidenced generic pass. TF while region eliminate. Eliminates dead while regions.
+  }];
+}
+
+def DwcQuantImportQuantStatsPass : Pass<"quant-import-quant-stats", "func::FuncOp"> {
+  let summary = "DWC pass quant-import-quant-stats";
+  let description = [{
+    Blob-evidenced generic pass. Quant import quant stats. Imports quantization statistics into the graph.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{
