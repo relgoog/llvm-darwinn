@@ -46,6 +46,8 @@ void DwcDialect::initialize() {
 LogicalResult dwc::AddOp::verify() {
   if (!(*this)->hasAttr("activation_function"))
     return (*this)->emitOpError("expected op 'dwc.add' to have attribute 'activation_function'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   return success();
 }
 
@@ -135,6 +137,10 @@ LogicalResult dwc::CompareOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.compare' to have attribute 'activation_function'");
   if (!(*this)->hasAttr("compare_type"))
     return (*this)->emitOpError("expected op 'dwc.compare' to have attribute 'compare_type'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<ComparisonTypeAttr>((*this)->getAttr("compare_type")))
+    return (*this)->emitOpError("attribute 'compare_type' expects ComparisonTypeAttr");
   return success();
 }
 
@@ -242,6 +248,10 @@ LogicalResult dwc::CwiseOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.cwise' to have attribute 'activation_function'");
   if (!(*this)->hasAttr("op_type"))
     return (*this)->emitOpError("expected op 'dwc.cwise' to have attribute 'op_type'");
+  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
+    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CwiseOpTypeAttr>((*this)->getAttr("op_type")))
+    return (*this)->emitOpError("attribute 'op_type' expects CwiseOpTypeAttr");
   for (unsigned index = 0; index < 2; ++index) {
     if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[index].getType())) {
       if (ranked.getRank() == 0)

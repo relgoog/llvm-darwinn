@@ -4,7 +4,7 @@
 // CHECK-LABEL: add
 func.func @test_add(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.add
-  %0 = "dwc.add"(%arg0) {activation_function = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.add"(%arg0) {activation_function = #dwc.activation_function<NONE>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -60,7 +60,7 @@ func.func @test_classifier(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: compare
 func.func @test_compare(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.compare
-  %0 = "dwc.compare"(%arg0) {activation_function = "x", compare_type = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.compare"(%arg0) {activation_function = #dwc.activation_function<NONE>, compare_type = #dwc.comparison_type<EQUAL>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -116,7 +116,7 @@ func.func @test_cumulative(%arg0: tensor<4xi32>) -> tensor<4xi32> {
 // CHECK-LABEL: cwise
 func.func @test_cwise(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.cwise
-  %0 = "dwc.cwise"(%arg0, %arg1) {activation_function = "x", op_type = "x"} : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.cwise"(%arg0, %arg1) {activation_function = #dwc.activation_function<NONE>, op_type = #dwc.cwise_op_type<ADD>} : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
