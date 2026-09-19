@@ -232,6 +232,12 @@ LogicalResult dwc::ConvolutionV2Op::verify() {
     return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
     return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
+  if (llvm::cast<CellOperationAttr>((*this)->getAttr("cell_operation")).getValue() != CellOperation::Mac)
+    return (*this)->emitOpError("attribute 'cell_operation' expects MAC");
+  for (const char *name : {"x_dilation_rate", "x_stride", "y_dilation_rate", "y_stride"}) {
+    if (llvm::cast<IntegerAttr>((*this)->getAttr(name)).getInt() != 1)
+      return (*this)->emitOpError("attribute '") << name << "' expects 1";
+  }
   return success();
 }
 
@@ -445,6 +451,10 @@ LogicalResult dwc::FullyConnectedOp::verify() {
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
     return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
+  if (llvm::cast<CellOperationAttr>((*this)->getAttr("cell_operation")).getValue() != CellOperation::Mac)
+    return (*this)->emitOpError("attribute 'cell_operation' expects MAC");
   return success();
 }
 
@@ -473,6 +483,8 @@ LogicalResult dwc::GenericComputeOp::verify() {
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   if (!llvm::isa<LinearFunctionTypeAttr>((*this)->getAttr("linear_function")))
     return (*this)->emitOpError("attribute 'linear_function' expects LinearFunctionTypeAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   return success();
 }
 
@@ -489,6 +501,8 @@ LogicalResult dwc::GenericConvOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_conv' to have attribute 'activation_function'");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   if (!(*this)->hasAttr("batch_group_count"))
     return (*this)->emitOpError("expected op 'dwc.generic_conv' to have attribute 'batch_group_count'");
   if (!(*this)->hasAttr("feature_group_count"))
