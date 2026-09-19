@@ -25,6 +25,7 @@ def Darwinn_AuxTensorTypeOp : Darwinn_Op<"aux_tensor_type"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -36,6 +37,7 @@ def Darwinn_BinaryMapOp : Darwinn_Op<"binary_map"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -47,6 +49,7 @@ def Darwinn_BitcastOp : Darwinn_Op<"bitcast"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -58,6 +61,7 @@ def Darwinn_BroadcastShardOp : Darwinn_Op<"broadcast_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -69,6 +73,7 @@ def Darwinn_BroadcastSliceOp : Darwinn_Op<"broadcast_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -112,6 +117,7 @@ def Darwinn_CeppsytDecompressOp : Darwinn_Op<"ceppsyt_decompress"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -123,6 +129,7 @@ def Darwinn_CeppsytHwsvgmllkwtOp : Darwinn_Op<"ceppsyt_hwsvgmllkwt"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -134,6 +141,7 @@ def Darwinn_ChunkingReshapeOp : Darwinn_Op<"chunking_reshape"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -145,6 +153,7 @@ def Darwinn_CompressionModeOp : Darwinn_Op<"compression_mode"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -156,6 +165,7 @@ def Darwinn_ComputeLoweringHintOp : Darwinn_Op<"compute_lowering_hint"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -167,6 +177,7 @@ def Darwinn_ComputeOpOptionsOp : Darwinn_Op<"compute_op_options"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -178,6 +189,7 @@ def Darwinn_ComputeTypeHintOp : Darwinn_Op<"compute_type_hint"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -189,6 +201,7 @@ def Darwinn_ConditionScopeOp : Darwinn_Op<"condition_scope"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -200,6 +213,7 @@ def Darwinn_ConstBiasScaleOp : Darwinn_Op<"const_bias_scale"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -211,6 +225,7 @@ def Darwinn_ConstTypeOp : Darwinn_Op<"const_type"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -222,6 +237,7 @@ def Darwinn_ConstantGeneratorOp : Darwinn_Op<"constant_generator"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -249,6 +265,7 @@ def Darwinn_ConvolutionOp : Darwinn_Op<"convolution"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -299,6 +316,7 @@ def Darwinn_CostHintOp : Darwinn_Op<"cost_hint"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -310,6 +328,7 @@ def Darwinn_CreateEmptyTensorOp : Darwinn_Op<"create_empty_tensor"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -321,6 +340,7 @@ def Darwinn_CustomTilingOptionsOp : Darwinn_Op<"custom_tiling_options"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -332,6 +352,7 @@ def Darwinn_DeviceTypeOp : Darwinn_Op<"device_type"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -343,6 +364,7 @@ def Darwinn_DiveOpOp : Darwinn_Op<"dive_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -354,6 +376,7 @@ def Darwinn_DiveRefCwiseOp : Darwinn_Op<"dive_ref_cwise"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -390,6 +413,7 @@ def Darwinn_DtcInfoOp : Darwinn_Op<"dtc_info"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -451,6 +475,7 @@ def Darwinn_DynamicUpdateSliceWithOffsetsOp : Darwinn_Op<"dynamic_update_slice_w
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -462,6 +487,7 @@ def Darwinn_FastWalshHadamardTransformOp : Darwinn_Op<"fast_walsh_hadamard_trans
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -473,6 +499,7 @@ def Darwinn_FenceOp : Darwinn_Op<"fence"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -484,6 +511,7 @@ def Darwinn_FillOp : Darwinn_Op<"fill"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -495,6 +523,7 @@ def Darwinn_FilterOp : Darwinn_Op<"filter"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -506,6 +535,7 @@ def Darwinn_FilterCmpOp : Darwinn_Op<"filter_cmp"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -517,6 +547,7 @@ def Darwinn_FilterOutputOp : Darwinn_Op<"filter_output"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -528,6 +559,7 @@ def Darwinn_FilteredIndicesDispatchModeOp : Darwinn_Op<"filtered_indices_dispatc
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -539,6 +571,7 @@ def Darwinn_FullyConnectedZoutIndexedOp : Darwinn_Op<"fully_connected_zout_index
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -550,6 +583,7 @@ def Darwinn_FunctionSymmetryOp : Darwinn_Op<"function_symmetry"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -598,6 +632,7 @@ def Darwinn_GetFullTensorOfDynamicViewOp : Darwinn_Op<"get_full_tensor_of_dynami
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -609,6 +644,7 @@ def Darwinn_GetIndexedSliceOp : Darwinn_Op<"get_indexed_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -620,6 +656,7 @@ def Darwinn_GetTensorOp : Darwinn_Op<"get_tensor"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -650,6 +687,7 @@ def Darwinn_HlBitcastOp : Darwinn_Op<"hl_bitcast"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -661,6 +699,7 @@ def Darwinn_HostToSsramOp : Darwinn_Op<"host_to_ssram"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -672,6 +711,7 @@ def Darwinn_HostToSsramShardOp : Darwinn_Op<"host_to_ssram_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -683,6 +723,7 @@ def Darwinn_HostToTileOp : Darwinn_Op<"host_to_tile"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -694,6 +735,7 @@ def Darwinn_HostToTileShardOp : Darwinn_Op<"host_to_tile_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -705,6 +747,7 @@ def Darwinn_ImageFormatOp : Darwinn_Op<"image_format"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -740,6 +783,7 @@ def Darwinn_InfeedOp : Darwinn_Op<"infeed"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -751,6 +795,7 @@ def Darwinn_InnerOpOp : Darwinn_Op<"inner_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -804,6 +849,7 @@ def Darwinn_InterpolateMethodOp : Darwinn_Op<"interpolate_method"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -815,6 +861,7 @@ def Darwinn_IotaOp : Darwinn_Op<"iota"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -826,6 +873,7 @@ def Darwinn_IsBoolOp : Darwinn_Op<"is_bool"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -837,6 +885,7 @@ def Darwinn_IsParameterOp : Darwinn_Op<"is_parameter"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -848,6 +897,7 @@ def Darwinn_IsSparselyPackedOp : Darwinn_Op<"is_sparsely_packed"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -859,6 +909,7 @@ def Darwinn_JoinAttributesOp : Darwinn_Op<"join_attributes"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -870,6 +921,7 @@ def Darwinn_KernelLevelOp : Darwinn_Op<"kernel_level"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -881,6 +933,7 @@ def Darwinn_LaunchCustomKernelOp : Darwinn_Op<"launch_custom_kernel"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -892,6 +945,7 @@ def Darwinn_LaunchFunctionOp : Darwinn_Op<"launch_function"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -903,6 +957,7 @@ def Darwinn_LegacyInterpolateOp : Darwinn_Op<"legacy_interpolate"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -914,6 +969,7 @@ def Darwinn_LinearFuncOp : Darwinn_Op<"linear_func"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -925,6 +981,7 @@ def Darwinn_LocalCopyAttributesOp : Darwinn_Op<"local_copy_attributes"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -936,6 +993,7 @@ def Darwinn_MappingOp : Darwinn_Op<"mapping"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -965,6 +1023,7 @@ def Darwinn_MaterialOp : Darwinn_Op<"material"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -976,6 +1035,7 @@ def Darwinn_MaterializeCastOp : Darwinn_Op<"materialize_cast"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -987,6 +1047,7 @@ def Darwinn_MaterializePolicyOp : Darwinn_Op<"materialize_policy"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -998,6 +1059,7 @@ def Darwinn_MemSpaceOp : Darwinn_Op<"mem_space"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1009,6 +1071,7 @@ def Darwinn_MeshPadSliceOp : Darwinn_Op<"mesh_pad_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1020,6 +1083,7 @@ def Darwinn_MmaComputeOpOp : Darwinn_Op<"mma_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1031,6 +1095,7 @@ def Darwinn_MultimediaOp : Darwinn_Op<"multimedia"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1042,6 +1107,7 @@ def Darwinn_NarrowToNarrowOp : Darwinn_Op<"narrow_to_narrow"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1053,6 +1119,7 @@ def Darwinn_NarrowToNarrowShardOp : Darwinn_Op<"narrow_to_narrow_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1064,6 +1131,7 @@ def Darwinn_NarrowToNarrowSliceOp : Darwinn_Op<"narrow_to_narrow_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1075,6 +1143,7 @@ def Darwinn_NarrowToWideOp : Darwinn_Op<"narrow_to_wide"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1086,6 +1155,7 @@ def Darwinn_NarrowToWideShardOp : Darwinn_Op<"narrow_to_wide_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1097,6 +1167,7 @@ def Darwinn_NarrowToWideSliceOp : Darwinn_Op<"narrow_to_wide_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1108,6 +1179,7 @@ def Darwinn_NluE8m0RoundingOp : Darwinn_Op<"nlu_e8m0_rounding"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1119,6 +1191,7 @@ def Darwinn_NluFuncOp : Darwinn_Op<"nlu_func"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1130,6 +1203,7 @@ def Darwinn_NluPredicateOp : Darwinn_Op<"nlu_predicate"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1141,6 +1215,7 @@ def Darwinn_NluPreprocessOp : Darwinn_Op<"nlu_preprocess"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1152,6 +1227,7 @@ def Darwinn_OutfeedOp : Darwinn_Op<"outfeed"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1163,6 +1239,7 @@ def Darwinn_PackedIndexOptionsOp : Darwinn_Op<"packed_index_options"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1174,6 +1251,7 @@ def Darwinn_ParallelMeshCopyOp : Darwinn_Op<"parallel_mesh_copy"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1185,6 +1263,7 @@ def Darwinn_PreemptionPointOp : Darwinn_Op<"preemption_point"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1196,6 +1275,7 @@ def Darwinn_ProbeOp : Darwinn_Op<"probe"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1207,6 +1287,7 @@ def Darwinn_ReinterpretCastOp : Darwinn_Op<"reinterpret_cast"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1218,6 +1299,7 @@ def Darwinn_ReluOp : Darwinn_Op<"relu"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1250,6 +1332,7 @@ def Darwinn_ResamplerOptionsOp : Darwinn_Op<"resampler_options"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1261,6 +1344,7 @@ def Darwinn_ReshapeOpOp : Darwinn_Op<"reshape_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1272,6 +1356,7 @@ def Darwinn_RingToTileOptionsOp : Darwinn_Op<"ring_to_tile_options"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1283,6 +1368,7 @@ def Darwinn_RingToTileSliceOp : Darwinn_Op<"ring_to_tile_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1294,6 +1380,7 @@ def Darwinn_RkhyComputeOpOp : Darwinn_Op<"rkhy_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1305,6 +1392,7 @@ def Darwinn_RkhyCustomPaddingOp : Darwinn_Op<"rkhy_custom_padding"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1316,6 +1404,7 @@ def Darwinn_RkhyDepthToSpaceOpOp : Darwinn_Op<"rkhy_depth_to_space_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1327,6 +1416,7 @@ def Darwinn_RkhyResidualAddOpOp : Darwinn_Op<"rkhy_residual_add_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1338,6 +1428,7 @@ def Darwinn_RkhyUnaryComputeOpOp : Darwinn_Op<"rkhy_unary_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1349,6 +1440,7 @@ def Darwinn_RngBitGeneratorOp : Darwinn_Op<"rng_bit_generator"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1360,6 +1452,7 @@ def Darwinn_ScalarRegisterToHostTransferOp : Darwinn_Op<"scalar_register_to_host
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1371,6 +1464,7 @@ def Darwinn_ScalarRegisterToTileTransferOp : Darwinn_Op<"scalar_register_to_tile
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1382,6 +1476,7 @@ def Darwinn_ScaleOp : Darwinn_Op<"scale"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1393,6 +1488,7 @@ def Darwinn_ScatterOp : Darwinn_Op<"scatter"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1404,6 +1500,7 @@ def Darwinn_SelectOp : Darwinn_Op<"select"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1415,6 +1512,7 @@ def Darwinn_Slice1dExtentOp : Darwinn_Op<"slice_1d_extent"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1426,6 +1524,7 @@ def Darwinn_Slice1dExtentWithPaddingInfoOp : Darwinn_Op<"slice_1d_extent_with_pa
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1437,6 +1536,7 @@ def Darwinn_SparseNarrowToWideOp : Darwinn_Op<"sparse_narrow_to_wide"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1448,6 +1548,7 @@ def Darwinn_SparseNarrowToWideSliceOp : Darwinn_Op<"sparse_narrow_to_wide_slice"
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1459,6 +1560,7 @@ def Darwinn_SparseTensorOpOp : Darwinn_Op<"sparse_tensor_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1470,6 +1572,7 @@ def Darwinn_SparsityOp : Darwinn_Op<"sparsity"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1481,6 +1584,7 @@ def Darwinn_SparsityTypeOp : Darwinn_Op<"sparsity_type"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1492,6 +1596,7 @@ def Darwinn_SplineSegmentOp : Darwinn_Op<"spline_segment"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1503,6 +1608,7 @@ def Darwinn_SplitOp : Darwinn_Op<"split"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1514,6 +1620,7 @@ def Darwinn_StartOffsetAndStrideOp : Darwinn_Op<"start_offset_and_stride"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1525,6 +1632,7 @@ def Darwinn_StaticComputeOpOp : Darwinn_Op<"static_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1536,6 +1644,7 @@ def Darwinn_StaticSparseComputeOpOp : Darwinn_Op<"static_sparse_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1547,6 +1656,7 @@ def Darwinn_StaticUnaryComputeOpOp : Darwinn_Op<"static_unary_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1558,6 +1668,7 @@ def Darwinn_StreamingComputeOpOp : Darwinn_Op<"streaming_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1569,6 +1680,7 @@ def Darwinn_StreamingCopyOpOp : Darwinn_Op<"streaming_copy_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1580,6 +1692,7 @@ def Darwinn_StreamingSparseComputeOpOp : Darwinn_Op<"streaming_sparse_compute_op
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1591,6 +1704,7 @@ def Darwinn_StreamingSparseCopyOpOp : Darwinn_Op<"streaming_sparse_copy_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1602,6 +1716,7 @@ def Darwinn_StreamingUnaryComputeOpOp : Darwinn_Op<"streaming_unary_compute_op">
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1613,6 +1728,7 @@ def Darwinn_SwizzlingOp : Darwinn_Op<"swizzling"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1624,6 +1740,7 @@ def Darwinn_SynchronizedComputeOpOp : Darwinn_Op<"synchronized_compute_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1635,6 +1752,7 @@ def Darwinn_SynchronizedCopyOpOp : Darwinn_Op<"synchronized_copy_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1646,6 +1764,7 @@ def Darwinn_SynchronizedSparseComputeOpOp : Darwinn_Op<"synchronized_sparse_comp
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1657,6 +1776,7 @@ def Darwinn_SynchronizedSparseCopyOpOp : Darwinn_Op<"synchronized_sparse_copy_op
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1668,6 +1788,7 @@ def Darwinn_SynchronizedUnaryComputeOpOp : Darwinn_Op<"synchronized_unary_comput
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1679,6 +1800,7 @@ def Darwinn_TensorOpOp : Darwinn_Op<"tensor_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1690,6 +1812,7 @@ def Darwinn_TensorOpShardOp : Darwinn_Op<"tensor_op_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1701,6 +1824,7 @@ def Darwinn_TensorOpSliceOp : Darwinn_Op<"tensor_op_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1712,6 +1836,7 @@ def Darwinn_TerminateOp : Darwinn_Op<"terminate"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1723,6 +1848,7 @@ def Darwinn_TgcElementwiseAddOp : Darwinn_Op<"tgc_elementwise_add"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1734,6 +1860,7 @@ def Darwinn_TgcElementwiseMulOp : Darwinn_Op<"tgc_elementwise_mul"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1745,6 +1872,7 @@ def Darwinn_TgcElementwiseSubOp : Darwinn_Op<"tgc_elementwise_sub"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1756,6 +1884,7 @@ def Darwinn_TileToHostOp : Darwinn_Op<"tile_to_host"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1767,6 +1896,7 @@ def Darwinn_TileToHostShardOp : Darwinn_Op<"tile_to_host_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1778,6 +1908,7 @@ def Darwinn_TileToRingSliceOp : Darwinn_Op<"tile_to_ring_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1789,6 +1920,7 @@ def Darwinn_TileToScalarRegisterTransferOp : Darwinn_Op<"tile_to_scalar_register
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1800,6 +1932,7 @@ def Darwinn_TileToTileOp : Darwinn_Op<"tile_to_tile"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1811,6 +1944,7 @@ def Darwinn_TileToTileShardOp : Darwinn_Op<"tile_to_tile_shard"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1822,6 +1956,7 @@ def Darwinn_UnaryMapOp : Darwinn_Op<"unary_map"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1833,6 +1968,7 @@ def Darwinn_UnaryTensorOpOp : Darwinn_Op<"unary_tensor_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1844,6 +1980,7 @@ def Darwinn_VexInfoOp : Darwinn_Op<"vex_info"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1855,6 +1992,7 @@ def Darwinn_VrgkhOperationModeOp : Darwinn_Op<"vrgkh_operation_mode"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1866,6 +2004,7 @@ def Darwinn_WhileOp : Darwinn_Op<"while"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1877,6 +2016,7 @@ def Darwinn_WideToNarrowOp : Darwinn_Op<"wide_to_narrow"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1888,6 +2028,7 @@ def Darwinn_WideToNarrowSliceOp : Darwinn_Op<"wide_to_narrow_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1899,6 +2040,7 @@ def Darwinn_YieldOp : Darwinn_Op<"yield"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1910,6 +2052,7 @@ def Darwinn_ZeroPointOp : Darwinn_Op<"zero_point"> {
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 

@@ -467,3 +467,686 @@ LogicalResult darwinn::ResamplerOp::verify() {
                            getStride(), getPad(),
                            getOutput());
 }
+
+static LogicalResult verifyDwcArityN(Operation *op, size_t numInputs,
+                                    size_t expected) {
+  if (numInputs != expected)
+    return op->emitOpError("expects ")
+           << expected << " operands, got " << numInputs;
+  return success();
+}
+
+static LogicalResult verifyDwcArityAtLeast(Operation *op, size_t numInputs,
+                                          size_t min) {
+  if (numInputs < min)
+    return op->emitOpError("expects at least ")
+           << min << " operands, got " << numInputs;
+  return success();
+}
+
+static LogicalResult verifyDwcArityAtMost(Operation *op, size_t numInputs,
+                                          size_t max) {
+  if (numInputs > max)
+    return op->emitOpError("expects at most ")
+           << max << " operands, got " << numInputs;
+  return success();
+}
+
+LogicalResult darwinn::AuxTensorTypeOp::verify() {
+  // No shape contract: type descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::BinaryMapOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::BitcastOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::BroadcastShardOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::BroadcastSliceOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::CeppsytDecompressOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::CeppsytHwsvgmllkwtOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ChunkingReshapeOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::CompressionModeOp::verify() {
+  // No shape contract: mode selector carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ComputeLoweringHintOp::verify() {
+  // No shape contract: hint payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ComputeOpOptionsOp::verify() {
+  // No shape contract: option payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ComputeTypeHintOp::verify() {
+  // No shape contract: hint payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ConditionScopeOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ConstBiasScaleOp::verify() {
+  // No shape contract: const descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ConstTypeOp::verify() {
+  // No shape contract: type descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ConstantGeneratorOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ConvolutionOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::CostHintOp::verify() {
+  // No shape contract: hint payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::CreateEmptyTensorOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::CustomTilingOptionsOp::verify() {
+  // No shape contract: option payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::DeviceTypeOp::verify() {
+  // No shape contract: type descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::DiveOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::DiveRefCwiseOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::DtcInfoOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::DynamicUpdateSliceWithOffsetsOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::FastWalshHadamardTransformOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::FenceOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::FillOp::verify() {
+  return verifyDwcArityAtMost(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::FilterOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::FilterCmpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::FilterOutputOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::FilteredIndicesDispatchModeOp::verify() {
+  // No shape contract: mode selector carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::FullyConnectedZoutIndexedOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::FunctionSymmetryOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::GetFullTensorOfDynamicViewOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::GetIndexedSliceOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::GetTensorOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::HlBitcastOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::HostToSsramOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::HostToSsramShardOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::HostToTileOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::HostToTileShardOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ImageFormatOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::InfeedOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::InnerOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::InterpolateMethodOp::verify() {
+  // No shape contract: method selector carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::IotaOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::IsBoolOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::IsParameterOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::IsSparselyPackedOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::JoinAttributesOp::verify() {
+  // No shape contract: attribute payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::KernelLevelOp::verify() {
+  // No shape contract: level descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::LaunchCustomKernelOp::verify() {
+  // No shape contract: region contract absent, kernel body carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::LaunchFunctionOp::verify() {
+  // No shape contract: region contract absent, callee body carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::LegacyInterpolateOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::LinearFuncOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::LocalCopyAttributesOp::verify() {
+  // No shape contract: attribute payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::MappingOp::verify() {
+  // No shape contract: mapping descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::MaterialOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::MaterializeCastOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::MaterializePolicyOp::verify() {
+  // No shape contract: policy descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::MemSpaceOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::MeshPadSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::MmaComputeOpOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::MultimediaOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::NarrowToNarrowOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::NarrowToNarrowShardOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::NarrowToNarrowSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::NarrowToWideOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::NarrowToWideShardOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::NarrowToWideSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::NluE8m0RoundingOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::NluFuncOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::NluPredicateOp::verify() {
+  // No shape contract: predicate descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::NluPreprocessOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::OutfeedOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::PackedIndexOptionsOp::verify() {
+  // No shape contract: option payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ParallelMeshCopyOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::PreemptionPointOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ProbeOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ReinterpretCastOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::ReluOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::ResamplerOptionsOp::verify() {
+  // No shape contract: option payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ReshapeOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::RingToTileOptionsOp::verify() {
+  // No shape contract: option payload carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::RingToTileSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::RkhyComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::RkhyCustomPaddingOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::RkhyDepthToSpaceOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::RkhyResidualAddOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::RkhyUnaryComputeOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::RngBitGeneratorOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ScalarRegisterToHostTransferOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::ScalarRegisterToTileTransferOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::ScaleOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::ScatterOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::SelectOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 3);
+}
+
+LogicalResult darwinn::Slice1dExtentOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::Slice1dExtentWithPaddingInfoOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::SparseNarrowToWideOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::SparseNarrowToWideSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::SparseTensorOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::SparsityOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::SparsityTypeOp::verify() {
+  // No shape contract: type descriptor carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::SplineSegmentOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::SplitOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::StartOffsetAndStrideOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::StaticComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::StaticSparseComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::StaticUnaryComputeOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::StreamingComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::StreamingCopyOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::StreamingSparseComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::StreamingSparseCopyOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::StreamingUnaryComputeOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::SwizzlingOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::SynchronizedComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::SynchronizedCopyOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::SynchronizedSparseComputeOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::SynchronizedSparseCopyOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::SynchronizedUnaryComputeOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TensorOpOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::TensorOpShardOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::TensorOpSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TerminateOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::TgcElementwiseAddOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::TgcElementwiseMulOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::TgcElementwiseSubOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 2);
+}
+
+LogicalResult darwinn::TileToHostOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TileToHostShardOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TileToRingSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TileToScalarRegisterTransferOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TileToTileOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::TileToTileShardOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::UnaryMapOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::UnaryTensorOpOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::VexInfoOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}
+
+LogicalResult darwinn::VrgkhOperationModeOp::verify() {
+  // No shape contract: mode selector carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::WhileOp::verify() {
+  // No shape contract: region contract absent, loop body carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::WideToNarrowOp::verify() {
+  return verifyDwcArityN(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::WideToNarrowSliceOp::verify() {
+  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
+}
+
+LogicalResult darwinn::YieldOp::verify() {
+  // No shape contract: region contract absent, terminator carries no operand shape to check.
+  return success();
+}
+
+LogicalResult darwinn::ZeroPointOp::verify() {
+  // No shape contract: fully generic operands carry no rank to check.
+  return success();
+}

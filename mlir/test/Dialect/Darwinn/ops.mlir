@@ -80,3 +80,42 @@ func.func @test_scatter(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>, %arg2: te
   %0 = darwinn.scatter %arg0, %arg1, %arg2 : (tensor<16x8xf32>, tensor<4xi32>, tensor<4x8xf32>) -> tensor<16x8xf32>
   return %0 : tensor<16x8xf32>
 }
+// -----
+// CHECK-LABEL: tgc_elementwise_add
+func.func @test_tgc_elementwise_add(%arg0: tensor<8x8xf32>, %arg1: tensor<8x8xf32>) -> tensor<8x8xf32> {
+  // CHECK: darwinn.tgc_elementwise_add
+  %0 = darwinn.tgc_elementwise_add %arg0, %arg1 : (tensor<8x8xf32>, tensor<8x8xf32>) -> tensor<8x8xf32>
+  return %0 : tensor<8x8xf32>
+}
+
+// -----
+// CHECK-LABEL: bitcast
+func.func @test_bitcast(%arg0: tensor<8x8xf32>) -> tensor<8x8xf32> {
+  // CHECK: darwinn.bitcast
+  %0 = darwinn.bitcast %arg0 : (tensor<8x8xf32>) -> tensor<8x8xf32>
+  return %0 : tensor<8x8xf32>
+}
+
+// -----
+// CHECK-LABEL: slice_1d_extent
+func.func @test_slice_1d_extent(%arg0: tensor<16xf32>) -> tensor<8xf32> {
+  // CHECK: darwinn.slice_1d_extent
+  %0 = darwinn.slice_1d_extent %arg0 : (tensor<16xf32>) -> tensor<8xf32>
+  return %0 : tensor<8xf32>
+}
+
+// -----
+// CHECK-LABEL: scatter_arity_floor
+func.func @test_scatter_arity_floor(%arg0: tensor<16x8xf32>, %arg1: tensor<4xi32>) -> tensor<16x8xf32> {
+  // CHECK: darwinn.scatter
+  %0 = darwinn.scatter %arg0, %arg1 : (tensor<16x8xf32>, tensor<4xi32>) -> tensor<16x8xf32>
+  return %0 : tensor<16x8xf32>
+}
+
+// -----
+// CHECK-LABEL: dive_ref_reduction
+func.func @test_dive_ref_reduction(%arg0: tensor<4x8xf32>) -> tensor<4x1xf32> {
+  // CHECK: darwinn.dive_ref_reduction
+  %0 = darwinn.dive_ref_reduction %arg0 {axes = array<i64: 1>, exclusive = false, reverse = false, acc_type = f32} : (tensor<4x8xf32>) -> tensor<4x1xf32>
+  return %0 : tensor<4x1xf32>
+}

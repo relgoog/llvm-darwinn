@@ -28,6 +28,7 @@ def DiveVm_AddOp : DiveVm_Op<"add"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -41,6 +42,7 @@ def DiveVm_AddImmOp : DiveVm_Op<"add_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -54,6 +56,7 @@ def DiveVm_AddressOfActivationOp : DiveVm_Op<"address_of_activation"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -67,6 +70,7 @@ def DiveVm_AddressOfInputActivationOp : DiveVm_Op<"address_of_input_activation">
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -80,6 +84,7 @@ def DiveVm_AddressOfOutputActivationOp : DiveVm_Op<"address_of_output_activation
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -93,6 +98,7 @@ def DiveVm_AddressOfParameterOp : DiveVm_Op<"address_of_parameter"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -106,6 +112,7 @@ def DiveVm_AddressOfParameterRegionOp : DiveVm_Op<"address_of_parameter_region">
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -119,6 +126,7 @@ def DiveVm_AddressOfScratchOp : DiveVm_Op<"address_of_scratch"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -132,6 +140,7 @@ def DiveVm_AddressSpaceOp : DiveVm_Op<"address_space"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -145,6 +154,7 @@ def DiveVm_AllocateOp : DiveVm_Op<"allocate"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -158,6 +168,7 @@ def DiveVm_ArithmeticLeftShiftOp : DiveVm_Op<"arithmetic_left_shift"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -171,6 +182,7 @@ def DiveVm_ArithmeticLeftShiftImmOp : DiveVm_Op<"arithmetic_left_shift_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -184,6 +196,7 @@ def DiveVm_ArithmeticRightShiftOp : DiveVm_Op<"arithmetic_right_shift"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -197,6 +210,7 @@ def DiveVm_ArithmeticRightShiftImmOp : DiveVm_Op<"arithmetic_right_shift_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -210,6 +224,7 @@ def DiveVm_BenchmarkOp : DiveVm_Op<"benchmark"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -223,6 +238,7 @@ def DiveVm_BitcastOp : DiveVm_Op<"bitcast"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -236,6 +252,7 @@ def DiveVm_BitwiseAndOp : DiveVm_Op<"bitwise_and"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -249,6 +266,7 @@ def DiveVm_BitwiseAndImmOp : DiveVm_Op<"bitwise_and_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -262,6 +280,7 @@ def DiveVm_BitwiseOrOp : DiveVm_Op<"bitwise_or"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -275,6 +294,7 @@ def DiveVm_BitwiseOrImmOp : DiveVm_Op<"bitwise_or_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -288,6 +308,7 @@ def DiveVm_BitwiseXorOp : DiveVm_Op<"bitwise_xor"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -301,6 +322,7 @@ def DiveVm_BitwiseXorImmOp : DiveVm_Op<"bitwise_xor_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -314,6 +336,7 @@ def DiveVm_BrOp : DiveVm_Op<"br"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -327,6 +350,7 @@ def DiveVm_BufferDirOp : DiveVm_Op<"buffer_dir"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -340,6 +364,7 @@ def DiveVm_CacheCleanInvalidateOp : DiveVm_Op<"cache_clean_invalidate"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -353,6 +378,7 @@ def DiveVm_CastOp : DiveVm_Op<"cast"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -366,6 +392,7 @@ def DiveVm_ChunkOffsetsOp : DiveVm_Op<"chunk_offsets"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -379,6 +406,7 @@ def DiveVm_ChunkSizesOp : DiveVm_Op<"chunk_sizes"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -392,6 +420,7 @@ def DiveVm_ComputeNormStatsForRkhyOp : DiveVm_Op<"compute_norm_stats_for_rkhy"> 
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -405,6 +434,7 @@ def DiveVm_CondBrOp : DiveVm_Op<"cond_br"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -418,6 +448,7 @@ def DiveVm_ConstOp : DiveVm_Op<"const"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -431,6 +462,7 @@ def DiveVm_ConstBytesOp : DiveVm_Op<"const_bytes"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -444,6 +476,7 @@ def DiveVm_CopyOp : DiveVm_Op<"copy"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -457,6 +490,7 @@ def DiveVm_CopyImmOp : DiveVm_Op<"copy_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -470,6 +504,7 @@ def DiveVm_CoreIdOp : DiveVm_Op<"core_id"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -483,6 +518,7 @@ def DiveVm_CudaEmuCustomOpOp : DiveVm_Op<"cuda_emu_custom_op"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -496,6 +532,7 @@ def DiveVm_CumsumOp : DiveVm_Op<"cumsum"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -509,6 +546,7 @@ def DiveVm_CustomOnAddressesOp : DiveVm_Op<"custom_on_addresses"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -522,6 +560,7 @@ def DiveVm_CustomOnBuffersOp : DiveVm_Op<"custom_on_buffers"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -535,6 +574,7 @@ def DiveVm_DisableItcTracingOp : DiveVm_Op<"disable_itc_tracing"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -548,6 +588,7 @@ def DiveVm_DispatchHardwareInstructionOp : DiveVm_Op<"dispatch_hardware_instruct
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -561,6 +602,7 @@ def DiveVm_DivOp : DiveVm_Op<"div"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -574,6 +616,7 @@ def DiveVm_DivImmOp : DiveVm_Op<"div_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -587,6 +630,7 @@ def DiveVm_DiveVmModuleOp : DiveVm_Op<"dive_vm_module"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -600,6 +644,7 @@ def DiveVm_DmaHintOp : DiveVm_Op<"dma_hint"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -613,6 +658,7 @@ def DiveVm_DmaQueueOp : DiveVm_Op<"dma_queue"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -626,6 +672,7 @@ def DiveVm_DtcModeOp : DiveVm_Op<"dtc_mode"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -639,6 +686,7 @@ def DiveVm_DvfsOp : DiveVm_Op<"dvfs"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -652,6 +700,7 @@ def DiveVm_DynamicSliceYOp : DiveVm_Op<"dynamic_slice_y"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -665,6 +714,7 @@ def DiveVm_EnableItcTracingOp : DiveVm_Op<"enable_itc_tracing"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -678,6 +728,7 @@ def DiveVm_EpilogueOp : DiveVm_Op<"epilogue"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -691,6 +742,7 @@ def DiveVm_EqualOp : DiveVm_Op<"equal"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -704,6 +756,7 @@ def DiveVm_EqualImmOp : DiveVm_Op<"equal_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -717,6 +770,7 @@ def DiveVm_ExecutableOp : DiveVm_Op<"executable"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -730,6 +784,7 @@ def DiveVm_ExtractSliceOp : DiveVm_Op<"extract_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -743,6 +798,7 @@ def DiveVm_FillOp : DiveVm_Op<"fill"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -756,6 +812,7 @@ def DiveVm_GatherOp : DiveVm_Op<"gather"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -769,6 +826,7 @@ def DiveVm_GatherNdOp : DiveVm_Op<"gather_nd"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -782,6 +840,7 @@ def DiveVm_GetConstOp : DiveVm_Op<"get_const"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -795,6 +854,7 @@ def DiveVm_GreaterOp : DiveVm_Op<"greater"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -808,6 +868,7 @@ def DiveVm_GreaterEqualOp : DiveVm_Op<"greater_equal"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -821,6 +882,7 @@ def DiveVm_GreaterEqualImmOp : DiveVm_Op<"greater_equal_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -834,6 +896,7 @@ def DiveVm_GreaterImmOp : DiveVm_Op<"greater_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -847,6 +910,7 @@ def DiveVm_HasIdpOp : DiveVm_Op<"has_idp"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -860,6 +924,7 @@ def DiveVm_HeapSizeBytesOp : DiveVm_Op<"heap_size_bytes"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -873,6 +938,7 @@ def DiveVm_HibGatherEditOp : DiveVm_Op<"hib_gather_edit"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -886,6 +952,7 @@ def DiveVm_IdpOp : DiveVm_Op<"idp"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -899,6 +966,7 @@ def DiveVm_IdpInstanceOp : DiveVm_Op<"idp_instance"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -912,6 +980,7 @@ def DiveVm_InsertSliceOp : DiveVm_Op<"insert_slice"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -925,6 +994,7 @@ def DiveVm_InstructionIdOp : DiveVm_Op<"instruction_id"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -938,6 +1008,7 @@ def DiveVm_InstructionIdLiveTensorsOp : DiveVm_Op<"instruction_id_live_tensors">
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -951,6 +1022,7 @@ def DiveVm_LegacyScalarOp : DiveVm_Op<"legacy_scalar"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -964,6 +1036,7 @@ def DiveVm_LessOp : DiveVm_Op<"less"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -977,6 +1050,7 @@ def DiveVm_LessEqualOp : DiveVm_Op<"less_equal"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -990,6 +1064,7 @@ def DiveVm_LessEqualImmOp : DiveVm_Op<"less_equal_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1003,6 +1078,7 @@ def DiveVm_LessImmOp : DiveVm_Op<"less_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1016,6 +1092,7 @@ def DiveVm_LiveTensorOp : DiveVm_Op<"live_tensor"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1029,6 +1106,7 @@ def DiveVm_LoadOp : DiveVm_Op<"load"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1042,6 +1120,7 @@ def DiveVm_LoadIndirectOp : DiveVm_Op<"load_indirect"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1055,6 +1134,7 @@ def DiveVm_LogicalAndOp : DiveVm_Op<"logical_and"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1068,6 +1148,7 @@ def DiveVm_LogicalAndImmOp : DiveVm_Op<"logical_and_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1081,6 +1162,7 @@ def DiveVm_LogicalRightShiftOp : DiveVm_Op<"logical_right_shift"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1094,6 +1176,7 @@ def DiveVm_LogicalRightShiftImmOp : DiveVm_Op<"logical_right_shift_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1107,6 +1190,7 @@ def DiveVm_MarkDiveForHostResidentOp : DiveVm_Op<"mark_dive_for_host_resident"> 
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1120,6 +1204,7 @@ def DiveVm_MarkValueWithShapeOp : DiveVm_Op<"mark_value_with_shape"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1133,6 +1218,7 @@ def DiveVm_MaskIndicesOp : DiveVm_Op<"mask_indices"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1146,6 +1232,7 @@ def DiveVm_MaxOp : DiveVm_Op<"max"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1159,6 +1246,7 @@ def DiveVm_MaxImmOp : DiveVm_Op<"max_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1172,6 +1260,7 @@ def DiveVm_MinOp : DiveVm_Op<"min"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1185,6 +1274,7 @@ def DiveVm_MinImmOp : DiveVm_Op<"min_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1198,6 +1288,7 @@ def DiveVm_ModuleGroupOp : DiveVm_Op<"module_group"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1211,6 +1302,7 @@ def DiveVm_MulOp : DiveVm_Op<"mul"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1224,6 +1316,7 @@ def DiveVm_MulImmOp : DiveVm_Op<"mul_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1237,6 +1330,7 @@ def DiveVm_MultinomialOp : DiveVm_Op<"multinomial"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1250,6 +1344,7 @@ def DiveVm_NotEqualOp : DiveVm_Op<"not_equal"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1263,6 +1358,7 @@ def DiveVm_NotEqualImmOp : DiveVm_Op<"not_equal_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1276,6 +1372,7 @@ def DiveVm_NumInputTensorsOp : DiveVm_Op<"num_input_tensors"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1289,6 +1386,7 @@ def DiveVm_NumOutputTensorsOp : DiveVm_Op<"num_output_tensors"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1302,6 +1400,7 @@ def DiveVm_OneHotOp : DiveVm_Op<"one_hot"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1315,6 +1414,7 @@ def DiveVm_PadOp : DiveVm_Op<"pad"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1328,6 +1428,7 @@ def DiveVm_ParameterArrayOp : DiveVm_Op<"parameter_array"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1341,6 +1442,7 @@ def DiveVm_PatchInstructionForStridedIoOp : DiveVm_Op<"patch_instruction_for_str
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1354,6 +1456,7 @@ def DiveVm_PerformSoftwarePreemptionIfRequestedOp : DiveVm_Op<"perform_software_
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1367,6 +1470,7 @@ def DiveVm_PowOp : DiveVm_Op<"pow"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1380,6 +1484,7 @@ def DiveVm_PowImmOp : DiveVm_Op<"pow_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1393,6 +1498,7 @@ def DiveVm_PrintOp : DiveVm_Op<"print"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1406,6 +1512,7 @@ def DiveVm_ProgramTensorMappingTableOp : DiveVm_Op<"program_tensor_mapping_table
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1419,6 +1526,7 @@ def DiveVm_PrologueOp : DiveVm_Op<"prologue"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1432,6 +1540,7 @@ def DiveVm_PutBitsOp : DiveVm_Op<"put_bits"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1445,6 +1554,7 @@ def DiveVm_ReadGnStatsOp : DiveVm_Op<"read_gn_stats"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1458,6 +1568,7 @@ def DiveVm_ReductionOp : DiveVm_Op<"reduction"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1471,6 +1582,7 @@ def DiveVm_ReductionTypeOp : DiveVm_Op<"reduction_type"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1484,6 +1596,7 @@ def DiveVm_RemOp : DiveVm_Op<"rem"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1497,6 +1610,7 @@ def DiveVm_RemImmOp : DiveVm_Op<"rem_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1510,6 +1624,7 @@ def DiveVm_RollOp : DiveVm_Op<"roll"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1523,6 +1638,7 @@ def DiveVm_ScalarTypeOp : DiveVm_Op<"scalar_type"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1536,6 +1652,7 @@ def DiveVm_ScatterNdOp : DiveVm_Op<"scatter_nd"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1549,6 +1666,7 @@ def DiveVm_SelectOp : DiveVm_Op<"select"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1562,6 +1680,7 @@ def DiveVm_SerializedModelFormatTypeOp : DiveVm_Op<"serialized_model_format_type
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1575,6 +1694,7 @@ def DiveVm_SetDtcModeOp : DiveVm_Op<"set_dtc_mode"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1588,6 +1708,7 @@ def DiveVm_ShapeOfActivationOp : DiveVm_Op<"shape_of_activation"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1601,6 +1722,7 @@ def DiveVm_SharedTensorOp : DiveVm_Op<"shared_tensor"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1614,6 +1736,7 @@ def DiveVm_SignOp : DiveVm_Op<"sign"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1627,6 +1750,7 @@ def DiveVm_StoreOp : DiveVm_Op<"store"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1640,6 +1764,7 @@ def DiveVm_StoreIndirectOp : DiveVm_Op<"store_indirect"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1653,6 +1778,7 @@ def DiveVm_SubOp : DiveVm_Op<"sub"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1666,6 +1792,7 @@ def DiveVm_SubImmOp : DiveVm_Op<"sub_imm"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1679,6 +1806,7 @@ def DiveVm_TopKOp : DiveVm_Op<"top_k"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1692,6 +1820,7 @@ def DiveVm_TpuOffloadOp : DiveVm_Op<"tpu_offload"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1705,6 +1834,7 @@ def DiveVm_TransitionDtcPowerIslandOp : DiveVm_Op<"transition_dtc_power_island">
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1718,6 +1848,7 @@ def DiveVm_TranslateSramAddressOp : DiveVm_Op<"translate_sram_address"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1731,6 +1862,7 @@ def DiveVm_ViewOnAddressOp : DiveVm_Op<"view_on_address"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1744,6 +1876,7 @@ def DiveVm_WaitForFenceCompletionOp : DiveVm_Op<"wait_for_fence_completion"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1757,6 +1890,7 @@ def DiveVm_WaitForPowerIslandTransitionCompleteOp : DiveVm_Op<"wait_for_power_is
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1770,6 +1904,7 @@ def DiveVm_WaitForRkhyCompletionOp : DiveVm_Op<"wait_for_rkhy_completion"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1783,6 +1918,7 @@ def DiveVm_WriteDmaDescriptorOp : DiveVm_Op<"write_dma_descriptor"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1796,6 +1932,7 @@ def DiveVm_WriteHibDataOp : DiveVm_Op<"write_hib_data"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1809,6 +1946,7 @@ def DiveVm_WriteScalarArchRegisterOp : DiveVm_Op<"write_scalar_arch_register"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 

@@ -129,3 +129,34 @@ func.func @test_attention_v1(%arg0: tensor<1x14x19xf32>) -> tensor<1x14x19xf32> 
   %0 = edgetpu.attention_v1 %arg0 : (tensor<1x14x19xf32>) -> tensor<1x14x19xf32>
   return %0 : tensor<1x14x19xf32>
 }
+// -----
+// CHECK-LABEL: sub
+func.func @test_sub(%arg0: tensor<13x21x3xf32>, %arg1: tensor<13x21x3xf32>) -> tensor<13x21x3xf32> {
+  // CHECK: dive_vm.sub
+  %0 = dive_vm.sub %arg0, %arg1 : (tensor<13x21x3xf32>, tensor<13x21x3xf32>) -> tensor<13x21x3xf32>
+  return %0 : tensor<13x21x3xf32>
+}
+
+// -----
+// CHECK-LABEL: load
+func.func @test_load(%arg0: tensor<4xi32>) -> tensor<4xf32> {
+  // CHECK: dive_vm.load
+  %0 = dive_vm.load %arg0 : (tensor<4xi32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: br
+func.func @test_br() {
+  // CHECK: dive_vm.br
+  dive_vm.br : () -> ()
+  return
+}
+
+// -----
+// CHECK-LABEL: convert_yuv_to_rgb
+func.func @test_convert_yuv_to_rgb(%arg0: tensor<1x4x4x4xf32>) -> tensor<1x4x4x4xf32> {
+  // CHECK: edgetpu.convert_yuv_to_rgb
+  %0 = edgetpu.convert_yuv_to_rgb %arg0 : (tensor<1x4x4x4xf32>) -> tensor<1x4x4x4xf32>
+  return %0 : tensor<1x4x4x4xf32>
+}

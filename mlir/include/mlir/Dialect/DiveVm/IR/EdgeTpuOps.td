@@ -28,6 +28,7 @@ def EdgeTpu_AnnotateMaterializePolicyOp : EdgeTpu_Op<"annotate_materialize_polic
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -41,6 +42,7 @@ def EdgeTpu_AttentionV1Op : EdgeTpu_Op<"attention_v1"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -54,6 +56,7 @@ def EdgeTpu_ConvertYuvToRgbOp : EdgeTpu_Op<"convert_yuv_to_rgb"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -67,6 +70,7 @@ def EdgeTpu_ConvolutionSubChannelOp : EdgeTpu_Op<"convolution_sub_channel"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -80,6 +84,7 @@ def EdgeTpu_ConvolutionSubChannelDrqOp : EdgeTpu_Op<"convolution_sub_channel_drq
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -93,6 +98,7 @@ def EdgeTpu_DepthwiseConvolutionFp8Op : EdgeTpu_Op<"depthwise_convolution_fp8"> 
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -106,6 +112,7 @@ def EdgeTpu_FastWalshHadamardTransformOp : EdgeTpu_Op<"fast_walsh_hadamard_trans
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -119,6 +126,7 @@ def EdgeTpu_FullyConnectedFp8Op : EdgeTpu_Op<"fully_connected_fp8"> {
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -132,6 +140,7 @@ def EdgeTpu_FullyConnectedSubChannelOp : EdgeTpu_Op<"fully_connected_sub_channel
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -145,6 +154,7 @@ def EdgeTpu_FullyConnectedSubChannelDrqOp : EdgeTpu_Op<"fully_connected_sub_chan
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -158,6 +168,7 @@ def EdgeTpu_MatrixMultiplySubChannelOp : EdgeTpu_Op<"matrix_multiply_sub_channel
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -171,6 +182,7 @@ def EdgeTpu_MatrixMultiplySubChannelDrqOp : EdgeTpu_Op<"matrix_multiply_sub_chan
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -184,6 +196,7 @@ def EdgeTpu_TransposeConvolutionFp8Op : EdgeTpu_Op<"transpose_convolution_fp8"> 
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -197,6 +210,7 @@ def EdgeTpu_TransposedConvolutionSubChannelOp : EdgeTpu_Op<"transposed_convoluti
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -210,6 +224,7 @@ def EdgeTpu_TransposedConvolutionSubChannelDrqOp : EdgeTpu_Op<"transposed_convol
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
