@@ -234,4 +234,14 @@ def Dwc_ParameterLookupTableAttr : AttrDef<Dwc_Dialect, "ParameterLookupTable"> 
   let assemblyFormat = "`<` $lookup_table `,` $zero_point `>`";
 }
 
+def Dwc_ResamplerOptionsAttr : AttrDef<Dwc_Dialect, "ResamplerOptions"> {
+  let summary = "DWC resampler options attribute.";
+  let mnemonic = "resampler_options";
+  let parameters = (ins
+    "IntegerAttr":$fractional_index_bitwidth,
+    "IntegerAttr":$integer_index_bitwidth
+  );
+  let assemblyFormat = "`<` $fractional_index_bitwidth `,` $integer_index_bitwidth `>`";
+}
+
 #endif // DWC_DIALECT
