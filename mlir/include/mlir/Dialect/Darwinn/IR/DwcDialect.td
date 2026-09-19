@@ -254,4 +254,16 @@ def Dwc_DimensionLayoutAttr : AttrDef<Dwc_Dialect, "DimensionLayout"> {
   let assemblyFormat = "`<` `(` $pattern `)` `,` $pattern_repeat `>`";
 }
 
+def Dwc_MaterializePolicyAttr : AttrDef<Dwc_Dialect, "MaterializePolicy"> {
+  let summary = "DWC materialize policy attribute.";
+  let mnemonic = "materialize_policy";
+  let parameters = (ins
+    "IntegerAttr":$bundle_id,
+    "DenseI32ArrayAttr":$sharding_factors,
+    "DictionaryAttr":$tiling,
+    "ArrayAttr":$transformation_types
+  );
+  let assemblyFormat = "`<` $bundle_id `,` $sharding_factors `,` $tiling `,` $transformation_types `>`";
+}
+
 #endif // DWC_DIALECT
