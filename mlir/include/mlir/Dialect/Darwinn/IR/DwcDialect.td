@@ -197,4 +197,11 @@ def Dwc_PerZOutScalePaddingEnum : Dwc_I32Enum<
   ]>;
 def Dwc_PerZOutScalePaddingAttr : Dwc_I32EnumAttr<"per_z_out_scale_padding", Dwc_PerZOutScalePaddingEnum>;
 
+def Dwc_PaddingNone : I32EnumAttrCase<"None", 0, "NONE">;
+def Dwc_PaddingEnum : Dwc_I32Enum<
+  "Padding", "DWC padding", [
+    Dwc_PaddingNone
+  ]>;
+def Dwc_PaddingAttr : Dwc_I32EnumAttr<"padding", Dwc_PaddingEnum>;
+
 #endif // DWC_DIALECT
