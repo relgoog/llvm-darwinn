@@ -1735,6 +1735,20 @@ def DwcReplaceReshapeWithRedistributePass : Pass<"replace-reshape-with-redistrib
   }];
 }
 
+def DwcDwcLisaFitterPass : Pass<"dwc-lisa-fitter", "func::FuncOp"> {
+  let summary = "DWC pass dwc-lisa-fitter";
+  let description = [{
+    Blob-evidenced lisa pass. DWC lisa fitter. Fits ops to lisa units after legalization.
+  }];
+}
+
+def DwcAnnotateCustomTilingOptionsPass : Pass<"annotate-custom-tiling-options", "func::FuncOp"> {
+  let summary = "DWC pass annotate-custom-tiling-options";
+  let description = [{
+    Blob-evidenced lisa pass. Annotate custom tiling options. Stamps tiling options for custom kernels.
+  }];
+}
+
 def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "func::FuncOp"> {
   let summary = "XLA CPU new-xtile lowering";
   let description = [{

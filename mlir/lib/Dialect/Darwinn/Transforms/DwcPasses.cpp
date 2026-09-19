@@ -113,6 +113,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCLATESIMPLESHARDINGPASS
 #define GEN_PASS_DEF_DWCREDISTRIBUTEOPTIMIZATIONPASS
 #define GEN_PASS_DEF_DWCREPLACERESHAPEWITHREDISTRIBUTEPASS
+#define GEN_PASS_DEF_DWCDWCLISAFITTERPASS
+#define GEN_PASS_DEF_DWCANNOTATECUSTOMTILINGOPTIONSPASS
 #define GEN_PASS_DEF_DWCDARWINNBUNDLINGPASS
 #define GEN_PASS_DEF_DWCDARWINNCONVERTPASS
 #define GEN_PASS_DEF_DWCDARWINNMATHJOINPASS
@@ -8296,6 +8298,34 @@ struct DwcReplaceReshapeWithRedistributePass
   }
 };
 
+
+struct DwcDwcLisaFitterPass
+    : public darwinn::impl::DwcDwcLisaFitterPassBase<DwcDwcLisaFitterPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (op->getNumResults() != 1)
+        return;
+      op->setAttr("dwc.lisa_fitted", UnitAttr::get(&getContext()));
+    });
+  }
+};
+
+struct DwcAnnotateCustomTilingOptionsPass
+    : public darwinn::impl::DwcAnnotateCustomTilingOptionsPassBase<DwcAnnotateCustomTilingOptionsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    func.walk([&](Operation *op) {
+      if (!op->hasAttr("dwc.custom_tiling"))
+        return;
+      op->setAttr("dwc.tiling_annotated", UnitAttr::get(&getContext()));
+    });
+  }
+};
 
 } // namespace
 
