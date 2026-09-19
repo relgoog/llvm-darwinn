@@ -472,7 +472,7 @@ def DiveVm_ConstBytesOp : DiveVm_Op<"const_bytes"> {
 def DiveVm_CopyOp : DiveVm_Op<"copy"> {
   let summary = "DiveVM copy operation.";
   let description = [{
-    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.copy to _ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi. applyDwcLowerCopyLike forwards darwinn.copy_op, darwinn.copy_from_host, and darwinn.copy_using_wide to dive_vm.copy, and LowerCopySlice CopyOpLowering lowers darwinn.copy_op to it.
+    Verifier requires exactly 1 operand. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.copy to DiveVm_MemCpy, evidenced as a defined wrapper in the embedded vm_utility bitcode modules forwarding to Memcpy. applyDwcLowerCopyLike forwards darwinn.copy_op, darwinn.copy_from_host, and darwinn.copy_using_wide to dive_vm.copy, and LowerCopySlice CopyOpLowering lowers darwinn.copy_op to it.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -808,7 +808,7 @@ def DiveVm_FillOp : DiveVm_Op<"fill"> {
 def DiveVm_GatherOp : DiveVm_Op<"gather"> {
   let summary = "DiveVM gather operation.";
   let description = [{
-    Verifier requires at least 2 operands. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.gather to DiveVm_HIBGatherEditE32. applyDwcLowerGatherOob forwards darwinn.gather, darwinn.gather_copy, and darwinn.hib_gather to dive_vm.gather with oob_zero_fill, and LowerCopySlice GatherLowering lowers darwinn.gather, darwinn.gather_copy, and darwinn.hib_gather to it.
+    Verifier requires at least 2 operands. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.gather to DiveVm_Gather, evidenced as a defined wrapper in the embedded vm_utility bitcode modules. applyDwcLowerGatherOob forwards darwinn.gather, darwinn.gather_copy, and darwinn.hib_gather to dive_vm.gather with oob_zero_fill, and LowerCopySlice GatherLowering lowers darwinn.gather, darwinn.gather_copy, and darwinn.hib_gather to it.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

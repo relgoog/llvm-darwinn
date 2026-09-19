@@ -1366,9 +1366,9 @@ struct DwcConvertDiveVmToLlvmPass
       if (op->getName().getStringRef() == "dive_vm.add")
         callee = "DiveRuntime_Log";
       else if (op->getName().getStringRef() == "dive_vm.copy")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+        callee = "DiveVm_MemCpy";
       else if (op->getName().getStringRef() == "dive_vm.gather")
-        callee = "DiveVm_HIBGatherEditE32";
+        callee = "DiveVm_Gather";
       else if (op->getName().getStringRef() == "dive_vm.legacy_scalar")
         callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
                  "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
@@ -1647,9 +1647,9 @@ struct DwcConvertDiveVmToMemrefPass
       if (op->getName().getStringRef() == "dive_vm.add")
         callee = "DiveRuntime_Log";
       else if (op->getName().getStringRef() == "dive_vm.copy")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
+        callee = "DiveVm_MemCpy";
       else if (op->getName().getStringRef() == "dive_vm.gather")
-        callee = "DiveVm_HIBGatherEditE32";
+        callee = "DiveVm_Gather";
       else if (op->getName().getStringRef() == "dive_vm.legacy_scalar")
         callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
                  "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
