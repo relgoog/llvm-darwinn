@@ -204,4 +204,11 @@ def Dwc_PaddingEnum : Dwc_I32Enum<
   ]>;
 def Dwc_PaddingAttr : Dwc_I32EnumAttr<"padding", Dwc_PaddingEnum>;
 
+def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
+def Dwc_MemorySpaceEnum : Dwc_I32Enum<
+  "MemorySpace", "DWC memory space", [
+    Dwc_MemorySpaceHostMemory
+  ]>;
+def Dwc_MemorySpaceAttr : Dwc_I32EnumAttr<"memory_space", Dwc_MemorySpaceEnum>;
+
 #endif // DWC_DIALECT
