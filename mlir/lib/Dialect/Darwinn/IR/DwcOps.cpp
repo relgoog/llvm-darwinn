@@ -52,7 +52,15 @@ LogicalResult dwc::AddOp::verify() {
 LogicalResult dwc::AtanOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
-  return success();
+  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
+  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
+  if (llvm::isa<Float16Type, BFloat16Type, Float32Type>(element))
+    return success();
+  if (auto integer = llvm::dyn_cast<IntegerType>(element)) {
+    if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
+      return success();
+  }
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
 }
 
 LogicalResult dwc::BatchMatrixNmsOp::verify() {

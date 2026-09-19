@@ -35,7 +35,7 @@ def Dwc_AddOp : Dwc_Op<"add"> {
 def Dwc_AtanOp : Dwc_Op<"atan"> {
   let summary = "DWC atan operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints.
+    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
