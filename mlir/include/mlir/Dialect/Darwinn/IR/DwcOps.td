@@ -1699,4 +1699,28 @@ def Dwc_UniformRandomNumberGenerationOp : Dwc_Op<"uniform_random_number_generati
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+// Operator: atan2
+def Dwc_Atan2Op : Dwc_Op<"atan2"> {
+  let summary = "DWC atan2 operation.";
+  let description = [{
+    Correct lowering for atan2(+/-0, +/-0) is flag-gated per the blob pass description. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: gather_nd
+def Dwc_GatherNdOp : Dwc_Op<"gather_nd"> {
+  let summary = "DWC gather_nd operation.";
+  let description = [{
+    TPU tile optimizer handles dwc.gather and dwc.gather_nd per the blob pass description. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 #endif // DWC_OPS

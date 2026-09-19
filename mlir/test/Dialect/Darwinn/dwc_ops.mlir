@@ -1121,3 +1121,19 @@ func.func @test_uniform_random_number_generation(%arg0: tensor<4xf32>) -> tensor
   %0 = "dwc.uniform_random_number_generation"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// -----
+// CHECK-LABEL: atan2
+func.func @test_atan2(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.atan2
+  %0 = "dwc.atan2"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: gather_nd
+func.func @test_gather_nd(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.gather_nd
+  %0 = "dwc.gather_nd"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}

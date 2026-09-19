@@ -878,3 +878,11 @@ LogicalResult dwc::TruncateFloatsOp::verify() {
 LogicalResult dwc::UniformRandomNumberGenerationOp::verify() {
   return success();
 }
+
+LogicalResult dwc::Atan2Op::verify() {
+  return success();
+}
+
+LogicalResult dwc::GatherNdOp::verify() {
+  return success();
+}
