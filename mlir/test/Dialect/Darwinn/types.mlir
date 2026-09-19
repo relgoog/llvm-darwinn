@@ -32,3 +32,11 @@ func.func @test_sparsity_type(%arg0: tensor<4x!darwinn.sparsity_type>) -> tensor
   %0 = darwinn.copy_op %arg0 : (tensor<4x!darwinn.sparsity_type>) -> tensor<4x!darwinn.sparsity_type>
   return %0 : tensor<4x!darwinn.sparsity_type>
 }
+
+// -----
+// CHECK-LABEL: packed
+func.func @test_packed(%arg0: tensor<4x!darwinn.packed<48>>) -> tensor<4x!darwinn.packed<48>> {
+  // CHECK: darwinn.packed
+  %0 = darwinn.copy_op %arg0 : (tensor<4x!darwinn.packed<48>>) -> tensor<4x!darwinn.packed<48>>
+  return %0 : tensor<4x!darwinn.packed<48>>
+}

@@ -153,4 +153,10 @@ def Darwinn_Sparsity : Darwinn_Type<"Sparsity", "sparsity_type"> {
   let summary = "Darwinn sparsity type.";
 }
 
+def Darwinn_Packed : Darwinn_Type<"Packed", "packed", []> {
+  let summary = "Darwinn packed type.";
+  let parameters = (ins "unsigned":$width);
+  let assemblyFormat = "`<` $width `>`";
+}
+
 #endif // DARWINN_DIALECT
