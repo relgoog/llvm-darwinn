@@ -458,7 +458,7 @@ def DiveVm_ConstOp : DiveVm_Op<"const"> {
 def DiveVm_ConstBytesOp : DiveVm_Op<"const_bytes"> {
   let summary = "DiveVM const_bytes operation.";
   let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.const_bytes evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. Both emission switches drop unused dive_vm.const_bytes with the dead-const fold and reject used ones with a named no-callee error. No darwinn lowering forwarding to it evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
