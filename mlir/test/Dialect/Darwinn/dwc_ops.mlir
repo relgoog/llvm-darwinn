@@ -68,7 +68,7 @@ func.func @test_compare(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: concatenation
 func.func @test_concatenation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.concatenation
-  %0 = "dwc.concatenation"(%arg0) {mode = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.concatenation"(%arg0) {mode = 0 : i64} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -76,7 +76,7 @@ func.func @test_concatenation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: const
 func.func @test_const(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: dwc.const
-  %0 = "dwc.const"(%arg0) {value = "x"} : (tensor<4xf32>) -> tensor<4xf32>
+  %0 = "dwc.const"(%arg0) {value = dense<0.0> : tensor<4xf32>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -484,7 +484,7 @@ func.func @test_tanh(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: transpose
 func.func @test_transpose(%arg0: tensor<2x2x2xf32>) -> tensor<2x2x2xf32> {
   // CHECK: dwc.transpose
-  %0 = "dwc.transpose"(%arg0) {permutation = "x"} : (tensor<2x2x2xf32>) -> tensor<2x2x2xf32>
+  %0 = "dwc.transpose"(%arg0) {permutation = dense<[0, 1, 2]> : tensor<3xi64>} : (tensor<2x2x2xf32>) -> tensor<2x2x2xf32>
   return %0 : tensor<2x2x2xf32>
 }
 

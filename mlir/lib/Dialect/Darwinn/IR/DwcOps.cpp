@@ -139,12 +139,16 @@ LogicalResult dwc::CompareOp::verify() {
 LogicalResult dwc::ConcatenationOp::verify() {
   if (!(*this)->hasAttr("mode"))
     return (*this)->emitOpError("expected op 'dwc.concatenation' to have attribute 'mode'");
+  if (!llvm::isa<IntegerAttr>((*this)->getAttr("mode")))
+    return (*this)->emitOpError("attribute 'mode' expects IntegerAttr");
   return success();
 }
 
 LogicalResult dwc::ConstOp::verify() {
   if (!(*this)->hasAttr("value"))
     return (*this)->emitOpError("expected op 'dwc.const' to have attribute 'value'");
+  if (!llvm::isa<ElementsAttr>((*this)->getAttr("value")))
+    return (*this)->emitOpError("attribute 'value' expects ElementsAttr");
   return success();
 }
 
@@ -830,6 +834,8 @@ LogicalResult dwc::TransposeOp::verify() {
     return emitOpError("expects 1 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("permutation"))
     return (*this)->emitOpError("expected op 'dwc.transpose' to have attribute 'permutation'");
+  if (!llvm::isa<ElementsAttr>((*this)->getAttr("permutation")))
+    return (*this)->emitOpError("attribute 'permutation' expects ElementsAttr");
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
     if (ranked.getRank() != 3)
       return (*this)->emitOpError("operand 0 expects Rank 3 tensor");
