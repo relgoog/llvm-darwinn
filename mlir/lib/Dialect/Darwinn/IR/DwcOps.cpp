@@ -548,6 +548,10 @@ LogicalResult dwc::TransposeOp::verify() {
     return emitOpError("expects 1 operands, got ") << getInputs().size();
   if (!(*this)->hasAttr("permutation"))
     return (*this)->emitOpError("expected op 'dwc.transpose' to have attribute 'permutation'");
+  if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
+    if (ranked.getRank() != 3)
+      return (*this)->emitOpError("operand 0 expects Rank 3 tensor");
+  }
   return success();
 }
 

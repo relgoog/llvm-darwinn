@@ -743,7 +743,7 @@ def Dwc_TanhOp : Dwc_Op<"tanh"> {
 def Dwc_TransposeOp : Dwc_Op<"transpose"> {
   let summary = "DWC transpose operation.";
   let description = [{
-    Exactly 1 operand per blob operand constraints. Requires `permutation`.
+    Exactly 1 Rank 3 tensor operand per the blob constraint. Requires `permutation`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
