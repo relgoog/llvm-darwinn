@@ -604,27 +604,45 @@ struct DwcAckrModelConverterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // Kernel shapes are absent from all_pseudocode.json for this converter so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("ackr-model-converter accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("(ackr-model-converter.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("(ackr-model-converter.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -634,27 +652,45 @@ struct DwcAddBoundLowerPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // There is no bound op in DarwinnOps.td and no bound kernel shape in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("add_bound_lower accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("add_bound_lower.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("add_bound_lower.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -665,27 +701,20 @@ struct DwcAddDiveAbiArgumentsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("add-dive-abi-arguments.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("add-dive-abi-arguments.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (func->hasAttr("dive.abi_args_added"))
+      return;
+    FunctionType type = func.getFunctionType();
+    MLIRContext *ctx = &getContext();
+    SmallVector<Type> inputs(type.getInputs().begin(), type.getInputs().end());
+    inputs.push_back(IntegerType::get(ctx, 64));
+    func.setFunctionType(FunctionType::get(ctx, inputs, type.getResults()));
+    if (!func.getBody().empty()) {
+      Block &entry = func.getBody().front();
+      entry.addArgument(inputs.back(), func.getLoc());
+    }
+    OpBuilder builder(ctx);
+    func->setAttr("dive.abi_args_added", builder.getUnitAttr());
   }
 };
 
@@ -695,27 +724,30 @@ struct DwcAddDiveTracingPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("add-dive-tracing.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    if (func->hasAttr("dive.tracing_added"))
+      return;
+    if (func.getBody().empty())
+      return;
+    MLIRContext *ctx = &getContext();
+    OpBuilder builder(ctx);
+    auto moduleOp = func->getParentOfType<ModuleOp>();
+    if (!moduleOp) {
+      func.emitError("add-dive-tracing needs a parent module");
       return signalPassFailure();
-    root->setAttr("add-dive-tracing.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    }
+    SmallVector<Type> traceParams{LLVM::LLVMPointerType::get(ctx)};
+    auto callee = LLVM::lookupOrCreateFn(builder, moduleOp,
+                                         "DiveRuntime_TraceEntry", traceParams,
+                                         LLVM::LLVMVoidType::get(ctx));
+    if (failed(callee))
+      return signalPassFailure();
+    Block &entry = func.getBody().front();
+    builder.setInsertionPointToStart(&entry);
+    Value probe = LLVM::UndefOp::create(builder, func.getLoc(),
+                                       LLVM::LLVMPointerType::get(ctx));
+    LLVM::CallOp::create(builder, func.getLoc(), *callee, ValueRange({probe}));
+    func->setAttr("dive.tracing_added", builder.getUnitAttr());
   }
 };
 
@@ -726,28 +758,38 @@ struct DwcAllowBf16AndF16TypeLegalizationPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("allow-bf16-and-f16-type-legalization.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> targets;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.convert" && name != "darwinn.cast_in" &&
+          name != "darwinn.cast_out")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      targets.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("allow-bf16-and-f16-type-legalization.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : targets) {
+      Value input = op->getOperand(0);
+      Type inElem = dwcLowerElementOf(input.getType());
+      Type outElem = dwcLowerElementOf(op->getResult(0).getType());
+      bool inLow = inElem.isBF16() || inElem.isF16();
+      bool outLow = outElem.isBF16() || outElem.isF16();
+      if (!inLow && !outLow)
+        continue;
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      SmallVector<Value> operands{input};
+      SmallVector<Type> results{op->getResult(0).getType()};
+      SmallVector<NamedAttribute> empty;
+      Operation *cast =
+          makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.cast",
+                           ValueRange(operands), TypeRange(results), empty);
+      op->getResult(0).replaceAllUsesWith(cast->getResult(0));
+      op->erase();
+    }
   }
 };
 
@@ -758,27 +800,42 @@ struct DwcArithAssertLowerPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("arith assert lower.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    darwinn::populateLowerConvertPatterns(patterns);
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("arith assert lower.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
+    if (failed(applyLocalConvertLowering(func)))
+      return signalPassFailure();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "cf.assert")
+        return;
+      if (op->getNumOperands() != 1)
+        return;
+      Value cond = op->getOperand(0);
+      Operation *def = cond.getDefiningOp();
+      if (!def || def->getName().getStringRef() != "arith.constant")
+        return;
+      Attribute value = def->getAttr("value");
+      bool isTrue = false;
+      if (auto intAttr = dyn_cast<IntegerAttr>(value))
+        isTrue = intAttr.getValue().isOne();
+      else if (auto boolAttr = dyn_cast<BoolAttr>(value))
+        isTrue = boolAttr.getValue();
+      else if (auto dense = dyn_cast<DenseElementsAttr>(value))
+        isTrue = dense.isSplat() &&
+                 dense.getSplatValue<IntegerAttr>().getValue().isOne();
+      if (isTrue)
+        dead.push_back(op);
+    });
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 
@@ -788,27 +845,20 @@ struct DwcArithLowerPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("arith-lower.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    darwinn::populateLowerConvertPatterns(patterns);
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("arith-lower.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
+    if (failed(applyLocalConvertLowering(func)))
+      return signalPassFailure();
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -818,27 +868,46 @@ struct DwcBitcastConvertPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("bitcast-convert.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> dead;
+    SmallVector<Operation *> targets;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() == op->getResult(0).getType())
+        dead.push_back(op);
+      else
+        targets.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("bitcast-convert.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    for (Operation *op : targets) {
+      auto src = dyn_cast<RankedTensorType>(op->getOperand(0).getType());
+      auto dst = dyn_cast<RankedTensorType>(op->getResult(0).getType());
+      if (!src || !dst || !src.hasStaticShape() || !dst.hasStaticShape())
+        continue;
+      if (src.getNumElements() != dst.getNumElements())
+        continue;
+      if (src.getElementType().getIntOrFloatBitWidth() !=
+          dst.getElementType().getIntOrFloatBitWidth())
+        continue;
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      SmallVector<Value> operands{op->getOperand(0)};
+      SmallVector<Type> results{op->getResult(0).getType()};
+      SmallVector<NamedAttribute> empty;
+      Operation *next =
+          makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.bitcast",
+                           ValueRange(operands), TypeRange(results), empty);
+      op->getResult(0).replaceAllUsesWith(next->getResult(0));
+      op->erase();
+    }
   }
 };
 
@@ -849,10 +918,29 @@ struct DwcChloLegalizeToHloPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No chlo op name exists in DarwinnOps.td or DiveVmOps.td and the upstream LegalizeChloToHlo pass is absent so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "chlo" && ns != "mhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -873,6 +961,10 @@ struct DwcChloLegalizeToHloPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -887,27 +979,26 @@ struct DwcCompositeLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("composite-lowering.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    darwinn::populateLowerConvertPatterns(patterns);
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("composite-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
+    if (failed(applyLocalConvertLowering(func)))
+      return signalPassFailure();
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScatterInline(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerSelectInline(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerTopKInline(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -918,27 +1009,26 @@ struct DwcConcatModelConverterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("concat-model-converter.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.concat" && name != "darwinn.concat_v2")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    (void)builder;
+    if (failed(applyLocalCopySliceLowering(func)))
       return signalPassFailure();
-    root->setAttr("concat-model-converter.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -949,27 +1039,27 @@ struct DwcConcatProofConverterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No honest rewrite exists. There is no concat op in DarwinnOps.td to
+    // match, and no concat kernel shape in all_pseudocode.json, so the pass
+    // only folds the single input identity and leaves the rest in place.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("concat-proof-converter.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.concat" && name != "darwinn.concat_v2")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    if (failed(applyLocalCopySliceLowering(func)))
       return signalPassFailure();
-    root->setAttr("concat-proof-converter.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -981,25 +1071,13 @@ struct DwcConvertArithToLlvmPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
     unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "arith")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("arith.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
+    if (failed(applyDwcLowerConstInline(func, lowered)))
       return signalPassFailure();
-    root->setAttr("arith.lowered_count", builder.getI64IntegerAttr(lowered));
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -1009,26 +1087,40 @@ struct DwcConvertCfToLlvmPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. cf to LLVM uses the upstream ConvertCfToLLVM
+    // pass elsewhere in the tree so this pass only accepts cf ops at typed
+    // shapes and leaves lowering to that pass.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "cf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "cf")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("cf.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("cf.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1040,55 +1132,9 @@ struct DwcConvertConv1x1ToFcPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
     unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "darwinn")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("darwinn.lowered", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
-  }
-};
-
-// TSV row: "convert-dive-vm-tensor-to-linalg" at 0xde1ad1.
-struct DwcConvertDiveVmTensorToLinalgPass
-    : public darwinn::impl::DwcConvertDiveVmTensorToLinalgPassBase<
-          DwcConvertDiveVmTensorToLinalgPass> {
-  using Base::Base;
-
-  void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("dive_vm.lowered", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
-      return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1099,26 +1145,39 @@ struct DwcConvertDiveVmTensorToScfPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DiveVmOps.td names no scf target for dive_vm
+    // tensor ops and all_pseudocode.json carries no scf loop shape for them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dive_vm")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dive_vm.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1129,26 +1188,40 @@ struct DwcConvertDiveVmTensorToTensorPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DiveVmOps.td names no tensor target for
+    // dive_vm tensor ops and all_pseudocode.json carries no tensor shape
+    // contract for them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dive_vm")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dive_vm.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1649,26 +1722,40 @@ struct DwcConvertDwcToDiveVmTensorPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DiveVmOps.td names no dive_vm tensor form for
+    // darwinn ops and all_pseudocode.json carries no tensor type contract.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("darwinn.lowered_to_dive_vm", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1679,26 +1766,39 @@ struct DwcConvertDwgToDiveVmPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. The walk filtered darwinn while the pass name
+    // promises dwg, and DiveVmOps.td names no dive_vm form for either.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "darwinn")
+      if (!dialect || dialect->getNamespace() != "dwg")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwg")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("darwinn.lowered_to_dive_vm", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1709,26 +1809,45 @@ struct DwcConvertDynamicShapeScopeToDiveVmPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. No dynamic shape scope op appears in
+    // DarwinnOps.td and DiveVmOps.td names no dive_vm scope target.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "darwinn")
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "shape" && ns != "tensor")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return WalkResult::advance();
+      StringRef ns = dialect->getNamespace();
+      if (ns != "shape" && ns != "tensor")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("darwinn.lowered_to_dive_vm", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1739,26 +1858,40 @@ struct DwcConvertFuncToLlvmPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. func to LLVM uses the upstream ConvertFuncToLLVM
+    // pass elsewhere in the tree so this pass only accepts func ops at typed
+    // shapes and leaves lowering to that pass.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "func")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "func")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("func.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("func.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1770,25 +1903,10 @@ struct DwcConvertGenericNormToPseudoOpPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
     unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "darwinn")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("darwinn.lowered", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
+    if (failed(forwardDwcLowerTo(func, {"darwinn.generic_norm"},
+                                 "darwinn.pseudo_norm", lowered)))
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1799,26 +1917,40 @@ struct DwcConvertLinalgToLoopsPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. Loops need the upstream ConvertLinalgToLoops
+    // pass elsewhere in the tree so this pass only accepts linalg ops at
+    // typed shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "linalg")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "linalg")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("linalg.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("linalg.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1829,26 +1961,40 @@ struct DwcConvertMathToLibmPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. libm calls need the upstream ConvertMathToLibm
+    // pass elsewhere in the tree so this pass only accepts math ops at typed
+    // shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "math")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "math")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("math.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("math.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1859,26 +2005,40 @@ struct DwcConvertMathToLlvmPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. LLVM calls need the upstream ConvertMathToLLVM
+    // pass elsewhere in the tree so this pass only accepts math ops at typed
+    // shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "math")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "math")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("math.lowered_to_llvm", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("math.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1890,25 +2050,15 @@ struct DwcConvertOpLoweringPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "darwinn")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("darwinn.lowered", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerConvertPatterns(patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
+    if (failed(applyLocalConvertLowering(func)))
+      return signalPassFailure();
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -1919,26 +2069,40 @@ struct DwcConvertPdlToPdlInterpPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. pdl_interp lowering needs the upstream
+    // ConvertPdlToPdlInterp pass elsewhere in the tree so this pass only
+    // accepts pdl ops at typed shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "pdl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "pdl")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("pdl.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("pdl.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -1949,55 +2113,83 @@ struct DwcConvertScatterToGenericScatterPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DarwinnOps.td names no generic scatter op and
+    // all_pseudocode.json carries no scatter kernel shape, so the pass only
+    // accepts darwinn ops at typed shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("darwinn.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
-
 // TSV row: "convert-scf-to-cf" at 0xde4728.
 struct DwcConvertScfToCfPass
     : public darwinn::impl::DwcConvertScfToCfPassBase<DwcConvertScfToCfPass> {
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. scf to cf uses the upstream ConvertScfToCf
+    // pass elsewhere in the tree so this pass only accepts scf ops at typed
+    // shapes and leaves lowering to that pass.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "scf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "scf")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("scf.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("scf.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -2009,25 +2201,9 @@ struct DwcConvertSignedIntWithRescalingOpsPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
     unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "arith")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("arith.lowered", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    root->setAttr("arith.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -2039,25 +2215,10 @@ struct DwcConvertSpatialReductionToPoolingPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
     unsigned lowered = 0;
-    bool failedConvert = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "linalg")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("linalg.lowered", builder.getUnitAttr());
-      ++lowered;
-      return WalkResult::advance();
-    });
-    if (failedConvert)
+    if (failed(forwardDwcLowerTo(func, {"darwinn.spatial_reduction"},
+                                 "dive_vm.reduce", lowered)))
       return signalPassFailure();
-    root->setAttr("linalg.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -2067,26 +2228,40 @@ struct DwcConvertTfToDwcPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DarwinnOps.td names no per-op tf source form
+    // and all_pseudocode.json carries no tf to dwc kernel shape, so the pass
+    // only accepts tf ops at typed shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "tf")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("tf.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("tf.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -2097,29 +2272,43 @@ struct DwcConvertToKInMSparsityPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DarwinnOps.td carries a sparsity skeleton with
+    // no k in m attributes and all_pseudocode.json carries no sparsity kernel
+    // shape.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "darwinn")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("darwinn.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("darwinn.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
-
 // TSV row: "convert-tpu-offload-to-dive-vm" at 0xdcb8da.
 struct DwcConvertTpuOffloadToDiveVmPass
     : public darwinn::impl::DwcConvertTpuOffloadToDiveVmPassBase<
@@ -2286,27 +2475,84 @@ struct DwcConvertXlaSupportedStablehloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. No XLA support table appears in
+    // all_pseudocode.json and no per-op stablehlo decomposition is evidenced,
+    // so the pass only accepts stablehlo ops at typed shapes.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "stablehlo")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("stablehlo.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("stablehlo.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+  }
+};
+
+// TSV row: "convert-dive-vm-tensor-to-linalg" (lowercase, no TSV addr).
+struct DwcConvertDiveVmTensorToLinalgPass
+    : public darwinn::impl::DwcConvertDiveVmTensorToLinalgPassBase<
+          DwcConvertDiveVmTensorToLinalgPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    // No honest rewrite exists. DiveVmOps.td names no linalg target for
+    // dive_vm tensor ops and all_pseudocode.json carries no linalg
+    // decomposition shape for them.
+    func::FuncOp func = getOperation();
+    Operation *root = func.getOperation();
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return WalkResult::advance();
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
   }
 };
 
@@ -2317,26 +2563,40 @@ struct DwcConvertDiveVmTensorToLinalgSymbolPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No honest rewrite exists. DiveVmOps.td names no linalg target for
+    // dive_vm tensor ops and all_pseudocode.json carries no linalg
+    // decomposition shape for them.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned lowered = 0;
-    bool failedConvert = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dive_vm")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedConvert = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dive_vm.lowered", builder.getUnitAttr());
-      ++lowered;
       return WalkResult::advance();
     });
-    if (failedConvert)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
   }
 };
 
@@ -2422,27 +2682,16 @@ struct DwcCopyOpLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("copy-op-lowering.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("copy-op-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerCopyLike(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -2452,27 +2701,42 @@ struct DwcDarwinnBundlingPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No bundle layout is evidenced in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("darwinn-bundling.marked", builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("darwinn-bundling.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -2482,27 +2746,12 @@ struct DwcDarwinnConvertPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // darwinn.convert lowers through the cast Fallback kernel shape, same
+    // helper as ConvertOpLowering.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("darwinn.convert.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    root->setAttr("darwinn.convert.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -2512,27 +2761,12 @@ struct DwcDarwinnMathJoinPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // darwinn.math.join covers the tgc elementwise family, same scalar
+    // helper as the arith lowerings.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("darwinn.math.join.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
       return signalPassFailure();
-    root->setAttr("darwinn.math.join.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -2542,27 +2776,24 @@ struct DwcDarwinnSparsityPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No sparsity kernel shape in all_pseudocode.json. Identity sparsity
+    // folds; everything else only checks convertible types.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("darwinn.sparsity.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.sparsity")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("darwinn.sparsity.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -2572,26 +2803,23 @@ struct DwcDiveDcePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("dive-dce.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+        return;
+      if (!op->use_empty())
+        return;
+      if (op->mightHaveTrait<OpTrait::IsTerminator>())
+        return;
+      if (op->getNumRegions() != 0)
+        return;
+      if (op->getName().getStringRef() == "dive_vm.const" ||
+          op->getName().getStringRef() == "dive_vm.copy")
+        dead.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("dive-dce.marked_count", builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 
@@ -2602,27 +2830,25 @@ struct DwcDiveIoOptimizationPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No copy folding contract is evidenced in all_pseudocode.json, so the
+    // pass only folds single-use dive_vm.copy chains.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("dive-io-optimization.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dive_vm.copy")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      if (!op->getResult(0).hasOneUse())
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("dive-io-optimization.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -2741,27 +2967,39 @@ struct DwcDiveUnrollFactorPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No unroll factor contract is evidenced in all_pseudocode.json so only same type dive_vm loop identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      StringRef name = op->getName().getStringRef();
+      if (name != "dive_vm.loop" && name != "dive_vm.for")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "dive_vm.loop" && name != "dive_vm.for")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dive-unroll-factor.marked", builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("dive-unroll-factor.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -2771,27 +3009,39 @@ struct DwcDiveVmBufferizePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No buffer layout is evidenced in all_pseudocode.json so only same type dive_vm identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
         return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dive-vm-bufferize.marked", builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("dive-vm-bufferize.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -2802,28 +3052,27 @@ struct DwcDiveVmOutlineShareableDiveConstsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
+    DenseMap<Attribute, Operation *> seen;
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dive_vm.const")
+        return;
+      if (op->getNumResults() != 1)
+        return;
+      Attribute value = op->getAttr("value");
+      if (!value)
+        return;
+      auto it = seen.find(value);
+      if (it == seen.end()) {
+        seen.insert({value, op});
+        return;
       }
-      op->setAttr("dive-vm-outline-shareable-dive-consts.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+      op->getResult(0).replaceAllUsesWith(it->second->getResult(0));
+      dead.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("dive-vm-outline-shareable-dive-consts.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 
@@ -2834,36 +3083,49 @@ struct DwcDwcCheckIllegalTpuOpsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
+      Dialect *dialect = op->getDialect();
+      if (!dialect) {
+        op->emitError() << "dwc-check-illegal-tpu-ops rejects unregistered "
+                        << op->getName().getStringRef();
+        failedLegal = true;
+        return WalkResult::interrupt();
       }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
+      StringRef ns = dialect->getNamespace();
+      if (ns != "darwinn" && ns != "dive_vm" && ns != "edgetpu") {
+        op->emitError() << "dwc-check-illegal-tpu-ops rejects dialect " << ns;
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    if (failedLegal)
+      return signalPassFailure();
   }
 };
 
@@ -2914,36 +3176,10 @@ struct DwcDwcCopyStridedBuffersOnTpuPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
-      }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
-      return WalkResult::advance();
-    });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerCopyLike(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -2993,10 +3229,27 @@ struct DwcDwcLegalizePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // Only copy convert and bitcast identities fold here. No other kernel shape for this family appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3014,6 +3267,10 @@ struct DwcDwcLegalizePass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3027,10 +3284,26 @@ struct DwcDwcLegalizeHloPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No mhlo op name exists in DarwinnOps.td or DiveVmOps.td and no hlo legalization mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "mhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3049,6 +3322,10 @@ struct DwcDwcLegalizeHloPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3063,10 +3340,29 @@ struct DwcDwcLegalizeHloToTfPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No mhlo or tf op name exists in DarwinnOps.td or DiveVmOps.td and no hlo to tf mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "mhlo" && ns != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -3088,6 +3384,10 @@ struct DwcDwcLegalizeHloToTfPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -3102,10 +3402,26 @@ struct DwcDwcLegalizeIntAndQuantTypesPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No quant op name exists in DarwinnOps.td or DiveVmOps.td and no int and quant type mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "quant")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3126,6 +3442,10 @@ struct DwcDwcLegalizeIntAndQuantTypesPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3140,10 +3460,27 @@ struct DwcDwcLegalizeInt64ConstantsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // Darwinn int64 constant shapes are out of scope here so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3164,6 +3501,10 @@ struct DwcDwcLegalizeInt64ConstantsPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3177,10 +3518,27 @@ struct DwcDwcLegalizePassSymbol
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // Only copy convert and bitcast identities fold here. No other kernel shape for this family appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3199,6 +3557,10 @@ struct DwcDwcLegalizePassSymbol
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3214,10 +3576,26 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No stablehlo op name exists in DarwinnOps.td or DiveVmOps.td and no materialize policy mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3238,6 +3616,10 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3252,10 +3634,26 @@ struct DwcDwcLegalizeStablehloCompositePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No stablehlo op name exists in DarwinnOps.td or DiveVmOps.td and no stablehlo composite mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3276,6 +3674,10 @@ struct DwcDwcLegalizeStablehloCompositePass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3290,10 +3692,26 @@ struct DwcDwcLegalizeTfPipelinePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No tf op name exists in DarwinnOps.td or DiveVmOps.td and no tf pipeline mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -3315,6 +3733,10 @@ struct DwcDwcLegalizeTfPipelinePass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -3329,10 +3751,26 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No tfl op name exists in DarwinnOps.td or DiveVmOps.td and no tfl cudaemu custom op emitter is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tfl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3353,6 +3791,10 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3367,10 +3809,26 @@ struct DwcDwcLegalizeTflMultinomialPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No tfl op name exists in DarwinnOps.td or DiveVmOps.td and no tfl multinomial mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tfl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3391,6 +3849,10 @@ struct DwcDwcLegalizeTflMultinomialPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3405,10 +3867,26 @@ struct DwcDwcLegalizeTflVariableTensorsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No tfl op name exists in DarwinnOps.td or DiveVmOps.td and no variable tensor mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tfl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -3429,6 +3907,10 @@ struct DwcDwcLegalizeTflVariableTensorsPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -3443,10 +3925,26 @@ struct DwcDwcLegalizeUint32TypesPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No uint32 type mapping is evidenced so the fold walk covers only same-type identities.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -3468,6 +3966,10 @@ struct DwcDwcLegalizeUint32TypesPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -3482,18 +3984,9 @@ struct DwcDwcLowerArgmaxIndexUnpoolPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerArgmaxInline(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -3528,18 +4021,41 @@ struct DwcDwcLowerControlFlowPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    Operation *root = func.getOperation();
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op))
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("dwc-lower-control-flow accepts darwinn ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
       return signalPassFailure();
   }
 };
@@ -4058,36 +4574,27 @@ struct DwcDwcTpuFunctionCsePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
+    DenseMap<Attribute, Operation *> seen;
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dive_vm.const")
+        return;
+      if (op->getNumResults() != 1)
+        return;
+      Attribute value = op->getAttr("value");
+      if (!value)
+        return;
+      auto it = seen.find(value);
+      if (it == seen.end()) {
+        seen.insert({value, op});
+        return;
       }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
-      return WalkResult::advance();
+      op->getResult(0).replaceAllUsesWith(it->second->getResult(0));
+      dead.push_back(op);
     });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 
@@ -4098,27 +4605,42 @@ struct DwcDwgCreateDarwinnCustomOpPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No custom op schema is evidenced in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("dwg-create-darwinn-custom-op.marked", builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("dwg-create-darwinn-custom-op.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4129,36 +4651,19 @@ struct DwcDwgForkMulticoreTpuOffloadsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
+    SmallVector<Operation *> offloads;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
-      }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
-      return WalkResult::advance();
+      if (op->getName().getStringRef() == "dive_vm.tpu_offload")
+        offloads.push_back(op);
     });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    unsigned core = 0;
+    for (Operation *op : offloads)
+      op->setAttr("tpu.core_id", builder.getI64IntegerAttr(core++));
+    root->setAttr("tpu.core_count",
+                  builder.getI64IntegerAttr(offloads.size()));
   }
 };
 
@@ -4215,28 +4720,11 @@ struct DwcDynamicUpdateSliceLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("dynamic-update-slice-lowering.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("dynamic-update-slice-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4287,27 +4775,45 @@ struct DwcFmModelConverterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // Kernel shapes are absent from all_pseudocode.json for this converter so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("fm-model-converter accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("(fm-model-converter.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("(fm-model-converter.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4318,27 +4824,45 @@ struct DwcFpa2bvModelConverterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // Kernel shapes are absent from all_pseudocode.json for this converter so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("fpa2bv-model-converter accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("(fpa2bv-model-converter.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("(fpa2bv-model-converter.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4349,36 +4873,27 @@ struct DwcGroupTpuOffloadsByParametersPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
     OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
+    std::map<std::string, unsigned> groupOf;
+    unsigned nextGroup = 0;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      if (op->getName().getStringRef() != "dive_vm.tpu_offload")
         return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
-      }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
+      std::string key;
+      llvm::raw_string_ostream os(key);
+      for (Type t : op->getOperandTypes())
+        t.print(os);
+      os.flush();
+      auto it = groupOf.find(key);
+      unsigned group = (it == groupOf.end()) ? nextGroup++ : it->second;
+      groupOf.insert_or_assign(key, group);
+      op->setAttr("tpu.param_group", builder.getI64IntegerAttr(group));
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    root->setAttr("tpu.param_group_count",
+                  builder.getI64IntegerAttr(nextGroup));
   }
 };
 
@@ -4389,27 +4904,51 @@ struct DwcInterpolateLoweringPassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // DiveVmOps.td names no interpolate target and all_pseudocode.json carries no interpolate kernel shape so only same type interpolate identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.interpolate" &&
+          name != "darwinn.interpolate_hardware" &&
+          name != "darwinn.interpolate_method" &&
+          name != "darwinn.legacy_interpolate")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.interpolate" &&
+          name != "darwinn.interpolate_hardware" &&
+          name != "darwinn.interpolate_method" &&
+          name != "darwinn.legacy_interpolate")
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("interpolate-lowering-pass accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("interpolate-lowering-pass.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("interpolate-lowering-pass.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4459,10 +4998,27 @@ struct DwcLegalizePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // Only copy convert and bitcast identities fold here. No other kernel shape for this family appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4480,6 +5036,10 @@ struct DwcLegalizePass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4493,10 +5053,26 @@ struct DwcLegalizeAffinePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No affine op name exists in DarwinnOps.td or DiveVmOps.td and no affine legalization mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "affine")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4515,6 +5091,10 @@ struct DwcLegalizeAffinePass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4528,10 +5108,27 @@ struct DwcLegalizeDwcPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // Only copy convert and bitcast identities fold here. No other kernel shape for this family appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4549,6 +5146,10 @@ struct DwcLegalizeDwcPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4563,10 +5164,26 @@ struct DwcLegalizeDwcInputOutputOpsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // DarwinnOps.td documents copy_from_host with same shape and element type so only same type copy and copy_from_host identities fold. No other input output kernel shape appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.copy_from_host")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4587,6 +5204,10 @@ struct DwcLegalizeDwcInputOutputOpsPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4601,10 +5222,26 @@ struct DwcLegalizeDwgTensorPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No dwg op name exists in DarwinnOps.td or DiveVmOps.td and no dwg tensor kernel shape is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwg")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4623,6 +5260,10 @@ struct DwcLegalizeDwgTensorPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4637,10 +5278,26 @@ struct DwcLegalizeQuantTypesPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No quant op name exists in DarwinnOps.td or DiveVmOps.td and no quant type mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "quant")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -4661,6 +5318,10 @@ struct DwcLegalizeQuantTypesPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -4674,10 +5335,26 @@ struct DwcLegalizeScfPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No scf op name exists in DarwinnOps.td or DiveVmOps.td and no scf legalization mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "scf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4695,6 +5372,10 @@ struct DwcLegalizeScfPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4709,10 +5390,26 @@ struct DwcLegalizeShapeOpsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No shape op name exists in DarwinnOps.td or DiveVmOps.td and no shape legalization mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "shape")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4731,6 +5428,10 @@ struct DwcLegalizeShapeOpsPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4745,10 +5446,27 @@ struct DwcLegalizeTestUsingLayerirFlowPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No layerir kernel shape is evidenced so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4769,6 +5487,10 @@ struct DwcLegalizeTestUsingLayerirFlowPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4783,28 +5505,43 @@ struct DwcLegalizeTfXlacallmoduleOpToStablehloPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No honest rewrite exists. No XlaCallModule to stablehlo mapping appears
+    // in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return WalkResult::advance();
+      if (dialect->getNamespace() != "tf")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("Legalize TF_XlaCallModule Op to stablehlo.marked",
-                  builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("Legalize TF_XlaCallModule Op to stablehlo.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4815,10 +5552,27 @@ struct DwcLegalizeThreadObliviousOpPassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // No thread oblivious kernel shape is evidenced so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4839,6 +5593,10 @@ struct DwcLegalizeThreadObliviousOpPassPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4853,10 +5611,25 @@ struct DwcLegalizeTypesForDiveVmTensorPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Ops outside the canonical pipeline have no kernel shape evidence, reject
-    // them.
+    // DiveVmOps.td documents dive_vm.copy with an honest same type fold so it folds here. No other dive_vm tensor kernel shape appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dive_vm.copy")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -4877,6 +5650,10 @@ struct DwcLegalizeTypesForDiveVmTensorPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -4891,27 +5668,43 @@ struct DwcLegalizeStablehloCompositePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No stablehlo op name exists in DarwinnOps.td or DiveVmOps.td and no stablehlo composite mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return WalkResult::advance();
+      if (dialect->getNamespace() != "stablehlo")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("LegalizeStablehloComposite.marked", builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("LegalizeStablehloComposite.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -4921,18 +5714,9 @@ struct DwcLowerAffinePass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConstInline(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -4944,18 +5728,9 @@ struct DwcLowerAllFunctionsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerPadInline(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -4966,18 +5741,11 @@ struct DwcLowerAllPadsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerPadInline(func, lowered)))
       return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    if (failed(applyDwcLowerCopyLike(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -5078,18 +5846,9 @@ struct DwcLowerArgmaxIndexUnpoolPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerArgmaxInline(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -5101,28 +5860,48 @@ struct DwcMarkDiveVmTensorInsertSliceOpsPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // dive_vm.insert_slice carries no source op contract in DiveVmOps.td so only same type slice identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      StringRef name = op->getName().getStringRef();
+      if (name != "dive_vm.insert_slice" &&
+          name != "dive_vm.extract_slice")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "dive_vm.insert_slice" &&
+          name != "dive_vm.extract_slice")
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm") {
+        op->emitError(
+            "mark-dive-vm-tensor-insert-slice-ops accepts dive_vm ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("mark-dive-vm-tensor-insert-slice-ops.marked",
-                  builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("mark-dive-vm-tensor-insert-slice-ops.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5133,8 +5912,26 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No mhlo op name exists in DarwinnOps.td or DiveVmOps.td and the upstream MhloLegalizeEinsumToDotGeneral pass is absent so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "mhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -5155,6 +5952,10 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -5169,27 +5970,24 @@ struct DwcMidToLowLevelLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("mid-to-low-level-lowering.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    darwinn::populateLowerConvertPatterns(patterns);
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("mid-to-low-level-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
+    if (failed(applyLocalConvertLowering(func)))
+      return signalPassFailure();
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerCopyLike(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -5200,28 +5998,42 @@ struct DwcMlirDarwinnComputeEnginePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No Engine op is evidenced in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("::mlir::darwinn::compute::Engine.marked",
-                  builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("::mlir::darwinn::compute::Engine.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5234,30 +6046,10 @@ struct DwcOnlyDenseelementsattrAreSupportedForConstantLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr(
-          "Only DenseElementsAttr are supported for constant lowering.marked",
-          builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConstInline(func, lowered)))
       return signalPassFailure();
-    root->setAttr("Only DenseElementsAttr are supported for constant "
-                  "lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5266,30 +6058,25 @@ struct DwcOptimizeDiveVmTensorInsertSlicePass
     : public darwinn::impl::DwcOptimizeDiveVmTensorInsertSlicePassBase<
           DwcOptimizeDiveVmTensorInsertSlicePass> {
   using Base::Base;
-
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("optimize-dive-vm-tensor-insert-slice.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dive_vm.tensor_insert_slice")
+        return;
+      if (op->getNumOperands() != 3 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      if (op->getOperand(1) != op->getOperand(2))
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("optimize-dive-vm-tensor-insert-slice.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
   }
 };
 
@@ -5300,36 +6087,27 @@ struct DwcParameterCachingDiveProgramPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
+    DenseMap<Attribute, Operation *> seen;
+    SmallVector<Operation *> dead;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dive_vm.const")
+        return;
+      if (op->getNumResults() != 1)
+        return;
+      Attribute value = op->getAttr("value");
+      if (!value)
+        return;
+      auto it = seen.find(value);
+      if (it == seen.end()) {
+        seen.insert({value, op});
+        return;
       }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
-      return WalkResult::advance();
+      op->getResult(0).replaceAllUsesWith(it->second->getResult(0));
+      dead.push_back(op);
     });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    for (Operation *op : dead)
+      op->erase();
   }
 };
 
@@ -5341,29 +6119,28 @@ struct DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No Entry Score type is evidenced in all_pseudocode.json so only same type func identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("platforms.darwinn.code_generator.Entry.Score.type.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "func")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    if (failed(checkDwcConvertibleTypes(func.getOperation())))
       return signalPassFailure();
-    root->setAttr(
-        "platforms.darwinn.code_generator.Entry.Score.type.marked_count",
-        builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5378,30 +6155,28 @@ struct
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No probe location contract is evidenced in all_pseudocode.json so only same type func identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("platforms.darwinn.compiler.ProbeInstrumentationLocation."
-                  "Constraints.functions.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "func")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
     });
-    if (failedMark)
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    if (failed(checkDwcConvertibleTypes(func.getOperation())))
       return signalPassFailure();
-    root->setAttr("platforms.darwinn.compiler.ProbeInstrumentationLocation."
-                  "Constraints.functions.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5412,28 +6187,10 @@ struct DwcQuantSignednessConvertLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("quant-signedness-convert-lowering.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    root->setAttr("quant-signedness-convert-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5444,27 +6201,45 @@ struct DwcR52ReadsDiveBuffersPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // There is no r52 op in DarwinnOps.td or DiveVmOps.td and no r52 kernel shape in all_pseudocode.json so only same type dive_vm load identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      StringRef name = op->getName().getStringRef();
+      if (name != "dive_vm.load" && name != "dive_vm.load_indirect")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "dive_vm.load" && name != "dive_vm.load_indirect")
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm") {
+        op->emitError("r52-reads-dive-buffers accepts dive_vm ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("r52-reads-dive-buffers.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("r52-reads-dive-buffers.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5475,18 +6250,44 @@ struct DwcRedistributeLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
+    // There is no redistribute op in DarwinnOps.td and no redistribute kernel shape in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op))
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("redistribute-lowering accepts darwinn ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
       return signalPassFailure();
   }
 };
@@ -5498,18 +6299,45 @@ struct DwcRedistributeLoweringPassRemarksPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
+    // There is no redistribute op in DarwinnOps.td and no redistribute kernel shape in all_pseudocode.json so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op))
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError(
+            "redistribute-lowering-pass-remarks accepts darwinn ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
       return signalPassFailure();
   }
 };
@@ -5521,28 +6349,45 @@ struct DwcReinterpretCastRankLegalizePassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("reinterpret-cast-rank-legalize-pass.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
+    OpBuilder builder(func.getOperation()->getContext());
+    SmallVector<Operation *> dead;
+    SmallVector<Operation *> targets;
+    func.getOperation()->walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() == op->getResult(0).getType())
+        dead.push_back(op);
+      else
+        targets.push_back(op);
     });
-    if (failedMark)
-      return signalPassFailure();
-    root->setAttr("reinterpret-cast-rank-legalize-pass.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+    for (Operation *op : targets) {
+      auto src = dyn_cast<RankedTensorType>(op->getOperand(0).getType());
+      auto dst = dyn_cast<RankedTensorType>(op->getResult(0).getType());
+      if (!src || !dst || !src.hasStaticShape() || !dst.hasStaticShape())
+        continue;
+      if (src.getNumElements() != dst.getNumElements())
+        continue;
+      if (src.getElementTypeBitWidth() != dst.getElementTypeBitWidth())
+        continue;
+      if (failed(checkDwcConvertibleTypes(op)))
+        return signalPassFailure();
+      builder.setInsertionPoint(op);
+      SmallVector<Value> operands{op->getOperand(0)};
+      SmallVector<Type> results{op->getResult(0).getType()};
+      SmallVector<NamedAttribute> empty;
+      Operation *next =
+          makeDwcLowerVmOp(builder, op->getLoc(), "dive_vm.bitcast",
+                           ValueRange(operands), TypeRange(results), empty);
+      op->getResult(0).replaceAllUsesWith(next->getResult(0));
+      op->erase();
+    }
   }
 };
 
@@ -5553,27 +6398,12 @@ struct DwcRenameDiveEntryFunctionPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("rename-dive-entry-function.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    if (func.getSymName() == "dive_entry")
+      return;
+    if (failed(checkDwcConvertibleTypes(func.getOperation())))
       return signalPassFailure();
-    root->setAttr("rename-dive-entry-function.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    SymbolTable::setSymbolName(func.getOperation(), "dive_entry");
   }
 };
 
@@ -5584,27 +6414,45 @@ struct DwcResamplerLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // DiveVmOps.td names no resample target and all_pseudocode.json carries no resample kernel shape so only same type resample identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.resampler" && name != "darwinn.resampler_options")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.resampler" && name != "darwinn.resampler_options")
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("resampler-lowering accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("resampler-lowering.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("resampler-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5615,27 +6463,14 @@ struct DwcRkhyShapeLegalizationPassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // Rkhy decodes to Vica. Pads and residual adds lower through the
+    // existing pad and scalar helpers.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("rkhy-shape-legalization-pass.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerPadInline(func, lowered)))
       return signalPassFailure();
-    root->setAttr("rkhy-shape-legalization-pass.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -5646,27 +6481,12 @@ struct DwcRkhyTypeLegalizationPassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // Rkhy decodes to Vica. Convert and cast ops lower through the existing
+    // convert trunc helper.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("rkhy-type-legalization-pass.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    root->setAttr("rkhy-type-legalization-pass.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5676,27 +6496,44 @@ struct DwcRunR52OpsOnDivePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // There is no r52 op in DarwinnOps.td or DiveVmOps.td and no r52 kernel shape in all_pseudocode.json so only same type dive_vm identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dive_vm") {
+        op->emitError("run-r52-ops-on-dive accepts dive_vm ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("run-r52-ops-on-dive.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("run-r52-ops-on-dive.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5707,18 +6544,13 @@ struct DwcScalarCoreControlFlowLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerSelectInline(func, lowered)))
       return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    if (failed(applyDwcLowerCopyLike(func, lowered)))
+      return signalPassFailure();
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -5730,18 +6562,9 @@ struct DwcScalarCoreStdOpsLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // The sibling-owned LowerCopySlice and LowerConvert sets do the real
-    // lowering, identity folds below only clean up what patterns leave behind.
-    RewritePatternSet patterns(&getContext());
-    darwinn::populateLowerCopySlicePatterns(patterns);
-    darwinn::populateLowerConvertPatterns(patterns);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(patterns))))
-      return signalPassFailure();
     func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
       return signalPassFailure();
   }
 };
@@ -5753,27 +6576,10 @@ struct DwcScalarOpsLegalizePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("scalar-ops-legalize.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerScalarArith(func, lowered)))
       return signalPassFailure();
-    root->setAttr("scalar-ops-legalize.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5784,27 +6590,12 @@ struct DwcScatterGatherLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("scatter-gather-lowering.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerGatherOob(func, lowered)))
       return signalPassFailure();
-    root->setAttr("scatter-gather-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    if (failed(applyDwcLowerScatterInline(func, lowered)))
+      return signalPassFailure();
   }
 };
 
@@ -5814,27 +6605,10 @@ struct DwcSelectLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("select-lowering.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerSelectInline(func, lowered)))
       return signalPassFailure();
-    root->setAttr("select-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5845,27 +6619,59 @@ struct DwcShardingUsingDivePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // The shard ops in DarwinnOps.td carry no sharding layout and DiveVmOps.td names no shard target so only same type shard identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
     root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.broadcast_shard" &&
+          name != "darwinn.host_to_ssram_shard" &&
+          name != "darwinn.host_to_tile_shard" &&
+          name != "darwinn.narrow_to_narrow_shard" &&
+          name != "darwinn.narrow_to_wide_shard" &&
+          name != "darwinn.tensor_op_shard" &&
+          name != "darwinn.tile_to_host_shard" &&
+          name != "darwinn.tile_to_tile_shard")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.broadcast_shard" &&
+          name != "darwinn.host_to_ssram_shard" &&
+          name != "darwinn.host_to_tile_shard" &&
+          name != "darwinn.narrow_to_narrow_shard" &&
+          name != "darwinn.narrow_to_wide_shard" &&
+          name != "darwinn.tensor_op_shard" &&
+          name != "darwinn.tile_to_host_shard" &&
+          name != "darwinn.tile_to_tile_shard")
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("sharding-using-dive accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("sharding-using-dive.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("sharding-using-dive.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5876,28 +6682,9 @@ struct DwcSkippingFoldOfFloatConvertPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("skipping fold of float convert.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    if (failed(applyLocalConvertLowering(func)))
       return signalPassFailure();
-    root->setAttr("skipping fold of float convert.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5907,27 +6694,45 @@ struct DwcSplitOpLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // darwinn.split carries no axis or sizes in DarwinnOps.td and DiveVmOps.td names no split target so only same type copy convert and bitcast identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      StringRef name = op->getName().getStringRef();
+      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
+          name != "darwinn.bitcast")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "darwinn") {
+        op->emitError("split-op-lowering accepts darwinn ops only");
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("split-op-lowering.marked", builder.getUnitAttr());
-      ++marked;
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("split-op-lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5938,28 +6743,47 @@ struct DwcStablehloCompositeLegalizeTflCustomPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No honest rewrite exists. No stablehlo composite to tfl custom mapping
+    // appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "stablehlo" && ns != "tfl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return WalkResult::advance();
+      StringRef ns = dialect->getNamespace();
+      if (ns != "stablehlo" && ns != "tfl")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("stablehlo-composite-legalize-tfl-custom.marked",
-                  builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("stablehlo-composite-legalize-tfl-custom.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -5970,28 +6794,44 @@ struct DwcStablehloCustomCallLegalizeCompositePass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No honest rewrite exists. No stablehlo custom call to composite mapping
+    // appears in all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return WalkResult::advance();
+      StringRef ns = dialect->getNamespace();
+      if (ns != "stablehlo")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("stablehlo-custom-call-legalize-composite.marked",
-                  builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("stablehlo-custom-call-legalize-composite.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -6002,8 +6842,26 @@ struct DwcStablehloLegalizeCompositeToCallPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No stablehlo op name exists in DarwinnOps.td or DiveVmOps.td and no composite to call mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -6024,6 +6882,10 @@ struct DwcStablehloLegalizeCompositeToCallPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -6038,8 +6900,29 @@ struct DwcStablehloLegalizeToHloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No stablehlo or mhlo op name exists in DarwinnOps.td or DiveVmOps.td and no stablehlo to hlo mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "stablehlo" && ns != "mhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6061,6 +6944,10 @@ struct DwcStablehloLegalizeToHloPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6075,8 +6962,29 @@ struct DwcStablehloLegalizeToVhloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No stablehlo or vhlo op name exists in DarwinnOps.td or DiveVmOps.td and no stablehlo to vhlo mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "stablehlo" && ns != "vhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6098,6 +7006,10 @@ struct DwcStablehloLegalizeToVhloPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6112,8 +7024,29 @@ struct DwcStablehloLegalizeVhloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No stablehlo or vhlo op name exists in DarwinnOps.td or DiveVmOps.td and no vhlo version mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "stablehlo" && ns != "vhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6135,6 +7068,10 @@ struct DwcStablehloLegalizeVhloPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6149,27 +7086,10 @@ struct DwcStochasticConvertPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("stochastic-convert.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerConvertTrunc(func, lowered)))
       return signalPassFailure();
-    root->setAttr("stochastic-convert.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -6179,8 +7099,29 @@ struct DwcTfLegalizeHloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tf or mhlo op name exists in DarwinnOps.td or DiveVmOps.td and no tf to hlo mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tf" && ns != "mhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -6199,6 +7140,10 @@ struct DwcTfLegalizeHloPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -6213,28 +7158,43 @@ struct DwcTflCustomLoweringRewritingPassPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
+    // No honest rewrite exists. No tfl custom lowering appears in
+    // all_pseudocode.json.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tfl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
+    bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
         return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return WalkResult::advance();
+      if (dialect->getNamespace() != "tfl")
+        return WalkResult::advance();
       if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
+        failedLegal = true;
         return WalkResult::interrupt();
       }
-      op->setAttr("tfl-custom-lowering-rewriting-pass.marked",
-                  builder.getUnitAttr());
-      ++marked;
       return WalkResult::advance();
     });
-    if (failedMark)
+    if (failedLegal)
       return signalPassFailure();
-    root->setAttr("tfl-custom-lowering-rewriting-pass.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -6244,8 +7204,29 @@ struct DwcTflLegalizeChloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tfl or chlo op name exists in DarwinnOps.td or DiveVmOps.td and no tfl to chlo mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tfl" && ns != "chlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -6264,6 +7245,10 @@ struct DwcTflLegalizeChloPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -6278,8 +7263,29 @@ struct DwcTflLegalizeHashtablesTfPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tfl or tf op name exists in DarwinnOps.td or DiveVmOps.td and the upstream hashtable legalization is absent so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tfl" && ns != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6301,6 +7307,10 @@ struct DwcTflLegalizeHashtablesTfPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6314,8 +7324,29 @@ struct DwcTflLegalizeHloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tfl or mhlo op name exists in DarwinnOps.td or DiveVmOps.td and no tfl to hlo mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tfl" && ns != "mhlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -6334,6 +7365,10 @@ struct DwcTflLegalizeHloPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -6348,8 +7383,26 @@ struct DwcTflLegalizeTensorlistPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tfl op name exists in DarwinnOps.td or DiveVmOps.td and no tensorlist mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "tfl")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6371,6 +7424,10 @@ struct DwcTflLegalizeTensorlistPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6384,8 +7441,29 @@ struct DwcTflLegalizeTfPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tfl or tf op name exists in DarwinnOps.td or DiveVmOps.td and no tfl to tf mapping is evidenced so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tfl" && ns != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk([&](Operation *op) {
       if (isa<func::FuncOp>(op))
@@ -6404,6 +7482,10 @@ struct DwcTflLegalizeTfPass
         failedLegal = true;
         return WalkResult::interrupt();
       }
+      if (failed(checkDwcConvertibleTypes(op))) {
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
       return WalkResult::advance();
     });
     if (failedLegal)
@@ -6418,8 +7500,29 @@ struct DwcTflLegalizeTfWhilePass
   using Base::Base;
 
   void runOnOperation() override {
+    // While to tfl needs the upstream while legalization elsewhere in the tree so only same type tfl and tf identities fold.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tfl" && ns != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6441,6 +7544,10 @@ struct DwcTflLegalizeTfWhilePass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6455,8 +7562,29 @@ struct DwcTflLegalizeVariablesTfPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No tfl or tf op name exists in DarwinnOps.td or DiveVmOps.td and the upstream variable legalization is absent so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "tfl" && ns != "tf")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6475,6 +7603,10 @@ struct DwcTflLegalizeVariablesTfPass
             op->emitError()
                 << "tfl-legalize-variables-tf rejects operation from dialect "
                 << ns;
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
+          if (failed(checkDwcConvertibleTypes(op))) {
             failedLegal = true;
             return WalkResult::interrupt();
           }
@@ -6538,27 +7670,10 @@ struct DwcTopKLoweringPolicyPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("top-k-lowering-policy.marked", builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    unsigned lowered = 0;
+    if (failed(applyDwcLowerTopKInline(func, lowered)))
       return signalPassFailure();
-    root->setAttr("top-k-lowering-policy.marked_count",
-                  builder.getI64IntegerAttr(marked));
   }
 };
 
@@ -6609,8 +7724,29 @@ struct DwcVhloLegalizeStablehloPass
   using Base::Base;
 
   void runOnOperation() override {
+    // No vhlo or stablehlo op name exists in DarwinnOps.td or DiveVmOps.td and the upstream VhloLegalizeStablehlo pass is absent so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "vhlo" && ns != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6632,6 +7768,10 @@ struct DwcVhloLegalizeStablehloPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6644,10 +7784,30 @@ struct DwcVhloLegalizeToStablehloPass
     : public darwinn::impl::DwcVhloLegalizeToStablehloPassBase<
           DwcVhloLegalizeToStablehloPass> {
   using Base::Base;
-
   void runOnOperation() override {
+    // No vhlo or stablehlo op name exists in DarwinnOps.td or DiveVmOps.td and the upstream VhloLegalizeToStablehlo pass is absent so the fold walk finds nothing.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
+
+    SmallVector<Operation *> dead;
+    root->walk([&](Operation *op) {
+      Dialect *dialect = op->getDialect();
+      if (!dialect)
+        return;
+      StringRef ns = dialect->getNamespace();
+      if (ns != "vhlo" && ns != "stablehlo")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+
     bool failedLegal = false;
     root->walk(
         [&](Operation *op) {
@@ -6669,6 +7829,10 @@ struct DwcVhloLegalizeToStablehloPass
             failedLegal = true;
             return WalkResult::interrupt();
           }
+          if (failed(checkDwcConvertibleTypes(op))) {
+            failedLegal = true;
+            return WalkResult::interrupt();
+          }
           return WalkResult::advance();
         });
     if (failedLegal)
@@ -6683,36 +7847,18 @@ struct DwcWrapUpDiveProgramPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
     func::FuncOp func = getOperation();
     Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
+    SmallVector<Operation *> ops;
+    root->walk([&](Operation *op) { ops.push_back(op); });
+    for (Operation *op : ops) {
+      for (NamedAttribute attr : op->getAttrs()) {
+        StringRef name = attr.getName().getValue();
+        if (name == "tpu.cluster_id" || name == "tpu.packet_id" ||
+            name == "tpu.packet_order")
+          op->removeAttr(attr.getName());
       }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
-      return WalkResult::advance();
-    });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    }
   }
 };
 
@@ -6723,28 +7869,14 @@ struct DwcXlaCpuUseNewXtileLoweringPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Per-op lowering waits on kernel shapes in all_pseudocode.json.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    unsigned marked = 0;
-    bool failedMark = false;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op))
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedMark = true;
-        return WalkResult::interrupt();
-      }
-      op->setAttr("xla_cpu_use_new_xtile_lowering.marked",
-                  builder.getUnitAttr());
-      ++marked;
-      return WalkResult::advance();
-    });
-    if (failedMark)
+    RewritePatternSet patterns(&getContext());
+    darwinn::populateLowerCopySlicePatterns(patterns);
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    root->setAttr("xla_cpu_use_new_xtile_lowering.marked_count",
-                  builder.getI64IntegerAttr(marked));
+    func::FuncOp func = getOperation();
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
   }
 };
 
