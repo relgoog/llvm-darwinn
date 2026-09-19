@@ -1723,4 +1723,16 @@ def Dwc_GatherNdOp : Dwc_Op<"gather_nd"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+// Operator: annotate_materialize_policy
+def Dwc_AnnotateMaterializePolicyOp : Dwc_Op<"annotate_materialize_policy"> {
+  let summary = "DWC annotate_materialize_policy operation.";
+  let description = [{
+    Blocks are optimized, inlined into the parent region, and adjusted by cloning neighbor rescaling ops per the blob pass descriptions. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 #endif // DWC_OPS

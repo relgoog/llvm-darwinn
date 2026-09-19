@@ -1137,3 +1137,11 @@ func.func @test_gather_nd(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   %0 = "dwc.gather_nd"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// -----
+// CHECK-LABEL: annotate_materialize_policy
+func.func @test_annotate_materialize_policy(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.annotate_materialize_policy
+  %0 = "dwc.annotate_materialize_policy"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}

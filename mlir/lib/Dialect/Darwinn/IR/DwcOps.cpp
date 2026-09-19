@@ -886,3 +886,7 @@ LogicalResult dwc::Atan2Op::verify() {
 LogicalResult dwc::GatherNdOp::verify() {
   return success();
 }
+
+LogicalResult dwc::AnnotateMaterializePolicyOp::verify() {
+  return success();
+}
