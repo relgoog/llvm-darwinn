@@ -514,7 +514,7 @@ def DiveVm_CoreIdOp : DiveVm_Op<"core_id"> {
 def DiveVm_CudaEmuCustomOpOp : DiveVm_Op<"cuda_emu_custom_op"> {
   let summary = "DiveVM cuda_emu_custom_op operation.";
   let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.cuda_emu_custom_op evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.cuda_emu_custom_op to DiveVm_InitializeAndReturnGlobalCustomOpContext, evidenced as a defined function in the embedded vm_utility bitcode modules. No darwinn lowering forwarding to it evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
