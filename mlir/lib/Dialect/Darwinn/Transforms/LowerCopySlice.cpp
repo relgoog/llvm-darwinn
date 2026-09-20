@@ -780,6 +780,56 @@ struct ConvolutionLowering : public RewritePattern {
   }
 };
 
+struct PaddingLowering : public RewritePattern {
+  PaddingLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.padding", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto dim = dyn_cast<IntegerAttr>(op->getAttr("dimension"));
+    auto pre = dyn_cast<IntegerAttr>(op->getAttr("pre_padding"));
+    auto post = dyn_cast<IntegerAttr>(op->getAttr("post_padding"));
+    if (!dim || !pre || !post)
+      return failure();
+    int64_t axis = dim.getInt();
+    int64_t lo = pre.getInt();
+    int64_t hi = post.getInt();
+    if (lo < 0 || hi < 0)
+      return failure();
+    Value padValue;
+    if (auto floatAttr = dyn_cast<FloatAttr>(op->getAttr("padding_value")))
+      padValue = rewriter.create<arith::ConstantOp>(op->getLoc(), floatAttr);
+    else
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getRank() != dstRanked.getRank())
+      return failure();
+    int64_t rank = srcRanked.getRank();
+    if (axis < 0 || axis >= rank)
+      return failure();
+    for (int64_t d = 0; d < rank; ++d) {
+      int64_t expect = srcRanked.getDimSize(d) + (d == axis ? lo + hi : 0);
+      if (dstRanked.getDimSize(d) != expect)
+        return failure();
+    }
+    if (srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    SmallVector<OpFoldResult> lows(rank, rewriter.getIndexAttr(0));
+    SmallVector<OpFoldResult> highs(rank, rewriter.getIndexAttr(0));
+    lows[axis] = rewriter.getIndexAttr(lo);
+    highs[axis] = rewriter.getIndexAttr(hi);
+    rewriter.replaceOpWithNewOp<tensor::PadOp>(op, dstTy, input, lows, highs, padValue);
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
@@ -813,4 +863,5 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<BroadcastLowering>(ctx);
   patterns.add<ConcatenationLowering>(ctx);
   patterns.add<SliceLowering>(ctx);
+  patterns.add<PaddingLowering>(ctx);
 }
