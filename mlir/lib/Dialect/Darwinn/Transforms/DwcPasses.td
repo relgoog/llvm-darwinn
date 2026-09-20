@@ -1882,7 +1882,7 @@ def DwcSimplifyDimensionComparisonPass : Pass<"simplify-dimension-comparison", "
   }];
 }
 
-def DwcAddDummyFakeQuantForResidualAddPass : Pass<"add-dummy-fake-quant-for-residual-add", "func::FuncOp"> {
+def DwcAddDummyFakeQuantForResidualAddPass : Pass<"dwc-add-dummy-fake-quant-for-residual-add", "func::FuncOp"> {
   let summary = "DWC pass add-dummy-fake-quant-for-residual-add";
   let description = [{
     Blob-evidenced darwinn pass. Add dummy fake quant for residual add. Inserts fake quant ops on residual inputs.
@@ -2512,6 +2512,70 @@ def DwcDwcBroadcastRepeatedConstantsPass : Pass<"dwc-broadcast-repeated-constant
   let summary = "DWC pass dwc-broadcast-repeated-constants";
   let description = [{
     Blob-evidenced dwc pass. Broadcast repeated constants, failing with dwc-broadcast-repeated-constants failed.
+  }];
+}
+
+def DwcDwcIdentityInsertionPass : Pass<"dwc-identity-insertion", "func::FuncOp"> {
+  let summary = "DWC pass dwc-identity-insertion";
+  let description = [{
+    Blob-evidenced dwc pass. Insert identity ops along concatenation inputs.
+  }];
+}
+
+def DwcDwcInsertIdentityBeforeConcatPass : Pass<"dwc-insert-identity-before-concat", "func::FuncOp"> {
+  let summary = "DWC pass dwc-insert-identity-before-concat";
+  let description = [{
+    Blob-evidenced dwc pass. Insert identity ops before concatenation.
+  }];
+}
+
+def DwcDwcInlineControlFlowOpsPass : Pass<"dwc-inline-control-flow-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-inline-control-flow-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Inline control flow ops.
+  }];
+}
+
+def DwcDwcInputOutputReschedulingPass : Pass<"dwc-input-output-rescheduling", "func::FuncOp"> {
+  let summary = "DWC pass dwc-input-output-rescheduling";
+  let description = [{
+    Blob-evidenced dwc pass. Reschedule input output ops.
+  }];
+}
+
+def DwcDwcCompressConstantsPass : Pass<"dwc-compress-constants", "func::FuncOp"> {
+  let summary = "DWC pass dwc-compress-constants";
+  let description = [{
+    Blob-evidenced dwc pass. Compress constants.
+  }];
+}
+
+def DwcDwcEmulateI32GatherScatterPass : Pass<"dwc-emulate-i32-gather-scatter", "func::FuncOp"> {
+  let summary = "DWC pass dwc-emulate-i32-gather-scatter";
+  let description = [{
+    Blob-evidenced dwc pass. Emulate i32 gather scatter.
+  }];
+}
+
+def DwcDwcEmulatePerAxisHybridOpsPass : Pass<"dwc-emulate-per-axis-hybrid-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-emulate-per-axis-hybrid-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Emulate per axis hybrid ops.
+  }];
+}
+
+def DwcDwcDequantizeAndDensifyWeightsPass : Pass<"dwc-dequantize-and-densify-weights", "func::FuncOp"> {
+  let summary = "DWC pass dwc-dequantize-and-densify-weights";
+  let description = [{
+    Blob-evidenced dwc pass. Dequantize and densify weights.
+  }];
+}
+
+
+def DwcDwcOutlineOpRegionsPass : Pass<"dwc-outline-op-regions", "func::FuncOp"> {
+  let summary = "DWC pass dwc-outline-op-regions";
+  let description = [{
+    Blob-evidenced dwc pass. Outline op regions.
   }];
 }
 
