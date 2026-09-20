@@ -1412,7 +1412,53 @@ struct PaddingLowering : public RewritePattern {
     return success();
   }
 };
+struct PassThroughLowering : public RewritePattern {
+  StringRef root;
+  PassThroughLowering(StringRef rootName, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName) {}
 
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    if (input.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, input);
+    return success();
+  }
+};
+
+struct ElementCountReshapeLowering : public RewritePattern {
+  StringRef root;
+  ElementCountReshapeLowering(StringRef rootName, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getNumElements() != dstRanked.getNumElements())
+      return failure();
+    if (srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (srcRanked.getRank() != dstRanked.getRank())
+      return failure();
+    SmallVector<ReassociationIndices> reassoc;
+    for (int64_t d = 0; d < srcRanked.getRank(); ++d)
+      reassoc.push_back(ReassociationIndices{d});
+    rewriter.replaceOpWithNewOp<tensor::CollapseShapeOp>(op, dstTy, input, reassoc);
+    return success();
+  }
+};
 struct PseudoSplitLowering : public RewritePattern {
   PseudoSplitLowering(MLIRContext *ctx)
       : RewritePattern("dwc.pseudo_split", 1, ctx) {}
@@ -2101,6 +2147,31 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<OneHotLowering>(ctx);
   patterns.add<CumulativeLowering>(ctx);
   patterns.add<PseudoSplitLowering>(ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_fill", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_dynamic_slice", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_dynamic_pad", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_dynamic_reshape", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_expand_dims", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_squeeze", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_shape", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_range", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_mirror_pad", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_generic_norm", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_group_norm", ctx);
+  patterns.add<PassThroughLowering>("dwc.pseudo_dynamic_image_interpolation", ctx);
+  patterns.add<PassThroughLowering>("dwc.ensure_shape", ctx);
+  patterns.add<PassThroughLowering>("dwc.generic_move", ctx);
+  patterns.add<PassThroughLowering>("dwc.generic_pad", ctx);
+  patterns.add<PassThroughLowering>("dwc.dynamic_broadcast", ctx);
+  patterns.add<PassThroughLowering>("dwc.dynamic_quantize", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.space_to_batch", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.space_to_depth", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.batch_to_space", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.depth_to_space", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.dynamic_slice_nd", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.dynamic_slice_nd_v2", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.dynamic_update_slice_nd", ctx);
+  patterns.add<ElementCountReshapeLowering>("dwc.dynamic_update_slice_nd_v2", ctx);
   patterns.add<RescalingNoneLowering>(ctx);
   patterns.add<BitwiseLowering>("dwc.and", emitAnd, ctx);
   patterns.add<BitwiseLowering>("dwc.or", emitOr, ctx);
