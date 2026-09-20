@@ -935,7 +935,7 @@ def Dwc_ConvolutionSubChannelOp : Dwc_Op<"convolution_sub_channel"> {
 def Dwc_CostVolumeOp : Dwc_Op<"cost_volume"> {
   let summary = "DWC cost_volume operation.";
   let description = [{
-    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+    Takes any number of operands. All quantized types must have 8 or 16 bit StorageTypeIntegralWidth for cost volume op.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

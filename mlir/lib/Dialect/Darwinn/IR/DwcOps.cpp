@@ -1331,6 +1331,15 @@ LogicalResult dwc::ConvolutionSubChannelOp::verify() {
 }
 
 LogicalResult dwc::CostVolumeOp::verify() {
+  for (auto input : getInputs()) {
+    auto tensor = llvm::dyn_cast<TensorType>(input.getType());
+    Type element = tensor ? tensor.getElementType() : input.getType();
+    if (auto quantized = llvm::dyn_cast<quant::QuantizedType>(element)) {
+      unsigned width = quantized.getStorageTypeIntegralWidth();
+      if (width != 8 && width != 16)
+        return (*this)->emitOpError("quantized type must have 8 or 16 bit StorageTypeIntegralWidth for cost volume op");
+    }
+  }
   return success();
 }
 
