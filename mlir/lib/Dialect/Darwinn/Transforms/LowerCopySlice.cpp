@@ -223,6 +223,7 @@ struct InterleaveLowering : public RewritePattern {
   }
 };
 
+
 struct VicaAddLowering : public RewritePattern {
   VicaAddLowering(MLIRContext *ctx) : RewritePattern("dwc.vica_add", 1, ctx) {}
 
@@ -2646,6 +2647,41 @@ struct BitwiseLowering : public RewritePattern {
 static Value emitAnd(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::AndIOp>(loc, x, y); }
 static Value emitOr(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::OrIOp>(loc, x, y); }
 static Value emitXor(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::XOrIOp>(loc, x, y); }
+struct BitSelectLowering : public RewritePattern {
+  BitSelectLowering(MLIRContext *ctx) : RewritePattern("dwc.bit_select", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 3)
+      return failure();
+    Value cond = op->getOperand(0);
+    Value lhs = op->getOperand(1);
+    Value rhs = op->getOperand(2);
+    Type dstTy = op->getResult(0).getType();
+    auto condRanked = dyn_cast<RankedTensorType>(cond.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (condRanked.getShape() != dstRanked.getShape())
+      return failure();
+    auto i1 = IntegerType::get(op->getContext(), 1, IntegerType::Signless);
+    if (condRanked.getElementType() != i1 && condRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (!isa<IntegerType>(dstRanked.getElementType()))
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(4, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{cond, lhs, rhs}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = nested.create<arith::SelectOp>(nloc, args[0], args[1], args[2]);
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+
 struct IsFiniteLowering : public RewritePattern {
   IsFiniteLowering(MLIRContext *ctx) : RewritePattern("dwc.is_finite", 1, ctx) {}
 
@@ -2965,6 +3001,12 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<BitwiseLowering>("dwc.and", emitAnd, ctx);
   patterns.add<BitwiseLowering>("dwc.or", emitOr, ctx);
   patterns.add<BitwiseLowering>("dwc.xor", emitXor, ctx);
+  patterns.add<BitSelectLowering>(ctx);
+  patterns.add<PassThroughLowering>("dwc.attention", ctx);
+  patterns.add<PassThroughLowering>("dwc.custom_compute", ctx);
+  patterns.add<PassThroughLowering>("dwc.extern_call", ctx);
+  patterns.add<PassThroughLowering>("dwc.launch_custom_kernel", ctx);
+  patterns.add<PassThroughLowering>("dwc.collective_permute", ctx);
   patterns.add<BitwiseLowering>("dwc.shift_left", emitShl, ctx);
   patterns.add<BitwiseLowering>("dwc.shift_right_arithmetic", emitShrS, ctx);
   patterns.add<BitwiseLowering>("dwc.shift_right_logical", emitShrU, ctx);
