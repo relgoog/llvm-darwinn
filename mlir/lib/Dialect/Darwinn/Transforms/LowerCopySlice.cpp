@@ -2667,6 +2667,181 @@ struct BitwiseLowering : public RewritePattern {
     return success();
   }
 };
+struct BatchMatrixNmsLowering : public RewritePattern {
+  BatchMatrixNmsLowering(MLIRContext *ctx) : RewritePattern("dwc.batch_matrix_nms", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto maxOut = op->getAttrOfType<IntegerAttr>("max_output_size");
+    auto thresh = op->getAttrOfType<FloatAttr>("score_threshold");
+    auto topk = op->getAttrOfType<IntegerAttr>("suppress_top_k");
+    if (!maxOut || !thresh || !topk)
+      return failure();
+    if (maxOut.getInt() <= 0 || topk.getInt() <= 0)
+      return failure();
+    Value boxes = op->getOperand(0);
+    Value scores = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto boxesRanked = dyn_cast<RankedTensorType>(boxes.getType());
+    auto scoresRanked = dyn_cast<RankedTensorType>(scores.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!boxesRanked || !scoresRanked || !dstRanked)
+      return failure();
+    if (!boxesRanked.hasStaticShape() || !scoresRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (boxesRanked.getRank() != 3 || scoresRanked.getRank() != 2 || dstRanked.getRank() != 2)
+      return failure();
+    if (boxesRanked.getDimSize(0) != scoresRanked.getDimSize(0) || boxesRanked.getDimSize(0) != dstRanked.getDimSize(0))
+      return failure();
+    if (boxesRanked.getDimSize(1) != scoresRanked.getDimSize(1))
+      return failure();
+    if (boxesRanked.getDimSize(2) != 4)
+      return failure();
+    if (dstRanked.getDimSize(1) != maxOut.getInt())
+      return failure();
+    if (!isa<FloatType>(boxesRanked.getElementType()) || !isa<FloatType>(scoresRanked.getElementType()) ||
+        !isa<IntegerType>(dstRanked.getElementType()))
+      return failure();
+    Location loc = op->getLoc();
+    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value nB = rewriter.create<arith::ConstantIndexOp>(loc, boxesRanked.getDimSize(0));
+    Value nBoxes = rewriter.create<arith::ConstantIndexOp>(loc, boxesRanked.getDimSize(1));
+    Value nOut = rewriter.create<arith::ConstantIndexOp>(loc, maxOut.getInt());
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value minusOne = rewriter.create<arith::ConstantOp>(loc, rewriter.getIntegerAttr(dstRanked.getElementType(), -1));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{minusOne}, ValueRange{empty});
+    Value threshF = rewriter.create<arith::ConstantOp>(loc, thresh);
+    auto lb = rewriter.create<scf::ForOp>(loc, c0, nB, c1, ValueRange{empty});
+    rewriter.setInsertionPointToStart(lb.getBody());
+    Value bi = lb.getInductionVar();
+    Value bcur = lb.getRegionIterArg(0);
+    auto lm = rewriter.create<scf::ForOp>(loc, c0, nOut, c1, ValueRange{bcur});
+    rewriter.setInsertionPointToStart(lm.getBody());
+    Value mi = lm.getInductionVar();
+    Value mcur = lm.getRegionIterArg(0);
+    Value best = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(scoresRanked.getElementType(), -std::numeric_limits<float>::infinity()));
+    Value bestIdx = rewriter.create<arith::ConstantIndexOp>(loc, -1);
+    auto ls = rewriter.create<scf::ForOp>(loc, c0, nBoxes, c1, ValueRange{best, bestIdx, mcur});
+    rewriter.setInsertionPointToStart(ls.getBody());
+    Value si = ls.getInductionVar();
+    Value curBest = ls.getRegionIterArg(0);
+    Value curIdx = ls.getRegionIterArg(1);
+    Value curOut = ls.getRegionIterArg(2);
+    Value score = rewriter.create<tensor::ExtractOp>(loc, scores, ValueRange{bi, si});
+    Value over = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::OGE, score, threshF);
+    Value taken = rewriter.create<tensor::ExtractOp>(loc, curOut, ValueRange{bi, mi});
+    Value takenIdx = rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), taken);
+    Value already = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, si, takenIdx);
+    Value cand = rewriter.create<arith::AndIOp>(loc, over, rewriter.create<arith::XOrIOp>(loc, already, rewriter.create<arith::ConstantOp>(loc, rewriter.getBoolAttr(true))));
+    (void)cand;
+    Value better = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::OGT, score, curBest);
+    Value pick = rewriter.create<arith::AndIOp>(loc, over, better);
+    Value nBest = rewriter.create<arith::SelectOp>(loc, pick, score, curBest);
+    Value nIdx = rewriter.create<arith::SelectOp>(loc, pick, si, curIdx);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{nBest, nIdx, curOut});
+    rewriter.setInsertionPointAfter(ls);
+    Value selIdx = ls->getResult(1);
+    Value has = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, selIdx, c0);
+    auto put = rewriter.create<scf::IfOp>(loc, TypeRange{dstTy}, has, true);
+    rewriter.setInsertionPointToStart(&put.getThenRegion().front());
+    Value sel32 = rewriter.create<arith::IndexCastOp>(loc, dstRanked.getElementType(), selIdx);
+    Value upd = rewriter.create<tensor::InsertOp>(loc, sel32, mcur, ValueRange{bi, mi});
+    rewriter.create<scf::YieldOp>(loc, ValueRange{upd});
+    rewriter.setInsertionPointToStart(&put.getElseRegion().front());
+    rewriter.create<scf::YieldOp>(loc, ValueRange{mcur});
+    rewriter.setInsertionPointAfter(put);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{put->getResult(0)});
+    rewriter.setInsertionPointAfter(lm);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lm->getResult(0)});
+    rewriter.setInsertionPointAfter(lb);
+    rewriter.replaceOp(op, lb->getResult(0));
+    return success();
+  }
+};
+
+struct CostVolumeLowering : public RewritePattern {
+  CostVolumeLowering(MLIRContext *ctx) : RewritePattern("dwc.cost_volume", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+    auto rhsRanked = dyn_cast<RankedTensorType>(rhs.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!lhsRanked || !rhsRanked || !dstRanked)
+      return failure();
+    if (!lhsRanked.hasStaticShape() || !rhsRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (lhsRanked.getShape() != rhsRanked.getShape() || lhsRanked.getRank() != 4)
+      return failure();
+    if (dstRanked.getRank() != 5)
+      return failure();
+    for (int64_t d = 0; d < 4; ++d)
+      if (dstRanked.getDimSize(d) != lhsRanked.getDimSize(d))
+        return failure();
+    if (!isa<FloatType>(lhsRanked.getElementType()) || lhsRanked.getElementType() != rhsRanked.getElementType() ||
+        rhsRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    int64_t dMax = dstRanked.getDimSize(4);
+    int64_t w = lhsRanked.getDimSize(2);
+    if (dMax <= 0 || dMax > w)
+      return failure();
+    Location loc = op->getLoc();
+    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value nB = rewriter.create<arith::ConstantIndexOp>(loc, dstRanked.getDimSize(0));
+    Value nH = rewriter.create<arith::ConstantIndexOp>(loc, dstRanked.getDimSize(1));
+    Value nW = rewriter.create<arith::ConstantIndexOp>(loc, dstRanked.getDimSize(2));
+    Value nD = rewriter.create<arith::ConstantIndexOp>(loc, dMax);
+    Value nC = rewriter.create<arith::ConstantIndexOp>(loc, lhsRanked.getDimSize(3));
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    auto lb = rewriter.create<scf::ForOp>(loc, c0, nB, c1, ValueRange{empty});
+    rewriter.setInsertionPointToStart(lb.getBody());
+    auto lh = rewriter.create<scf::ForOp>(loc, c0, nH, c1, ValueRange{lb.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lh.getBody());
+    auto lw = rewriter.create<scf::ForOp>(loc, c0, nW, c1, ValueRange{lh.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lw.getBody());
+    auto ld = rewriter.create<scf::ForOp>(loc, c0, nD, c1, ValueRange{lw.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(ld.getBody());
+    Value di = ld.getInductionVar();
+    Value dcur = ld.getRegionIterArg(0);
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    auto lc = rewriter.create<scf::ForOp>(loc, c0, nC, c1, ValueRange{zero});
+    rewriter.setInsertionPointToStart(lc.getBody());
+    Value ci = lc.getInductionVar();
+    Value csum = lc.getRegionIterArg(0);
+    Value bi = lb.getInductionVar();
+    Value hi = lh.getInductionVar();
+    Value wi = lw.getInductionVar();
+    Value rshift = rewriter.create<arith::AddIOp>(loc, wi, di);
+    Value inR = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, rshift, rewriter.create<arith::ConstantIndexOp>(loc, w));
+    Value a = rewriter.create<tensor::ExtractOp>(loc, lhs, ValueRange{bi, hi, wi, ci});
+    Value b = rewriter.create<tensor::ExtractOp>(loc, rhs, ValueRange{bi, hi, rshift, ci});
+    Value diff = rewriter.create<arith::SubFOp>(loc, a, b);
+    Value sq = rewriter.create<arith::MulFOp>(loc, diff, diff);
+    Value gated = rewriter.create<arith::SelectOp>(loc, inR, sq, zero);
+    Value acc = rewriter.create<arith::AddFOp>(loc, csum, gated);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{acc});
+    rewriter.setInsertionPointAfter(lc);
+    Value upd = rewriter.create<tensor::InsertOp>(loc, lc->getResult(0), dcur, ValueRange{bi, hi, wi, di, c0});
+    rewriter.create<scf::YieldOp>(loc, ValueRange{upd});
+    rewriter.setInsertionPointAfter(ld);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{ld->getResult(0)});
+    rewriter.setInsertionPointAfter(lw);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lw->getResult(0)});
+    rewriter.setInsertionPointAfter(lh);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lh->getResult(0)});
+    rewriter.setInsertionPointAfter(lb);
+    rewriter.replaceOp(op, lb->getResult(0));
+    return success();
+  }
+};
+
 static Value emitAnd(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::AndIOp>(loc, x, y); }
 static Value emitOr(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::OrIOp>(loc, x, y); }
 static Value emitXor(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::XOrIOp>(loc, x, y); }
@@ -3025,6 +3200,8 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<BitwiseLowering>("dwc.or", emitOr, ctx);
   patterns.add<BitwiseLowering>("dwc.xor", emitXor, ctx);
   patterns.add<BitSelectLowering>(ctx);
+  patterns.add<BatchMatrixNmsLowering>(ctx);
+  patterns.add<CostVolumeLowering>(ctx);
   patterns.add<PassThroughLowering>("dwc.attention", ctx);
   patterns.add<PassThroughLowering>("dwc.custom_compute", ctx);
   patterns.add<PassThroughLowering>("dwc.extern_call", ctx);
