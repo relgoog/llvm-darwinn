@@ -14,4 +14,5 @@ add_mlir_dialect_library(MLIRDarwinnDialect
   LINK_LIBS PUBLIC
   MLIRIR
   MLIRDialect
+  MLIRQuantDialect
   )

@@ -35,7 +35,7 @@ def Dwc_AddOp : Dwc_Op<"add"> {
 def Dwc_AtanOp : Dwc_Op<"atan"> {
   let summary = "DWC atan operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -83,7 +83,7 @@ def Dwc_CastOp : Dwc_Op<"cast"> {
 def Dwc_CeilOp : Dwc_Op<"ceil"> {
   let summary = "DWC ceil operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, i32, f16, bf16, or f32 operand per the blob constraints excluding quant types.
+    Exactly 1 i1, i8, i16, i32, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -167,7 +167,7 @@ def Dwc_ConvolutionV2Op : Dwc_Op<"convolution_v2"> {
 def Dwc_CosOp : Dwc_Op<"cos"> {
   let summary = "DWC cos operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -251,7 +251,7 @@ def Dwc_DynamicUpdateSliceOp : Dwc_Op<"dynamic_update_slice"> {
 def Dwc_ErfOp : Dwc_Op<"erf"> {
   let summary = "DWC erf operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -275,7 +275,7 @@ def Dwc_ExpOp : Dwc_Op<"exp"> {
 def Dwc_Expm1Op : Dwc_Op<"expm1"> {
   let summary = "DWC expm1 operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -287,7 +287,7 @@ def Dwc_Expm1Op : Dwc_Op<"expm1"> {
 def Dwc_FloorOp : Dwc_Op<"floor"> {
   let summary = "DWC floor operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, i32, f16, bf16, or f32 operand per the blob constraints excluding quant types.
+    Exactly 1 i1, i8, i16, i32, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraints.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -383,7 +383,7 @@ def Dwc_GenericDotOp : Dwc_Op<"generic_dot"> {
 def Dwc_Log1pOp : Dwc_Op<"log1p"> {
   let summary = "DWC log1p operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -395,7 +395,7 @@ def Dwc_Log1pOp : Dwc_Op<"log1p"> {
 def Dwc_LogisticOp : Dwc_Op<"logistic"> {
   let summary = "DWC logistic operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -575,7 +575,7 @@ def Dwc_ReshapeOp : Dwc_Op<"reshape"> {
 def Dwc_RoundOp : Dwc_Op<"round"> {
   let summary = "DWC round operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -587,7 +587,7 @@ def Dwc_RoundOp : Dwc_Op<"round"> {
 def Dwc_RoundNearestAfzOp : Dwc_Op<"round_nearest_afz"> {
   let summary = "DWC round_nearest_afz operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -599,7 +599,7 @@ def Dwc_RoundNearestAfzOp : Dwc_Op<"round_nearest_afz"> {
 def Dwc_RsqrtOp : Dwc_Op<"rsqrt"> {
   let summary = "DWC rsqrt operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -647,7 +647,7 @@ def Dwc_SelectOp : Dwc_Op<"select"> {
 def Dwc_SignOp : Dwc_Op<"sign"> {
   let summary = "DWC sign operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, i32, i64, f16, bf16, or f32 operand per the blob constraints excluding quant types. Requires `preserve_negative_zero`.
+    Exactly 1 i1, i8, i16, i32, i64, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraints. Requires `preserve_negative_zero`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -659,7 +659,7 @@ def Dwc_SignOp : Dwc_Op<"sign"> {
 def Dwc_SinOp : Dwc_Op<"sin"> {
   let summary = "DWC sin operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -695,7 +695,7 @@ def Dwc_SortOp : Dwc_Op<"sort"> {
 def Dwc_SqrtOp : Dwc_Op<"sqrt"> {
   let summary = "DWC sqrt operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -719,7 +719,7 @@ def Dwc_SubtractOp : Dwc_Op<"subtract"> {
 def Dwc_TanOp : Dwc_Op<"tan"> {
   let summary = "DWC tan operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -731,7 +731,7 @@ def Dwc_TanOp : Dwc_Op<"tan"> {
 def Dwc_TanhOp : Dwc_Op<"tanh"> {
   let summary = "DWC tanh operation.";
   let description = [{
-    Exactly 1 i1, i8, i16, f16, bf16, or f32 operand per the blob constraint excluding quant types.
+    Exactly 1 i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16 operand per the blob constraint.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

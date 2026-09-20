@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Darwinn/IR/DwcOps.h"
+#include "mlir/Dialect/Quant/IR/QuantTypes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -54,6 +55,14 @@ LogicalResult dwc::AddOp::verify() {
   return success();
 }
 
+static bool isTrigQuantElement(Type element) {
+  auto quantized = llvm::dyn_cast<quant::QuantizedType>(element);
+  if (!quantized)
+    return false;
+  unsigned width = quantized.getStorageTypeIntegralWidth();
+  return width == 8 || width == 16;
+}
+
 LogicalResult dwc::AtanOp::verify() {
   if (getInputs().size() != 1)
     return emitOpError("expects 1 operands, got ") << getInputs().size();
@@ -65,7 +74,9 @@ LogicalResult dwc::AtanOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 LogicalResult dwc::BatchMatrixNmsOp::verify() {
@@ -117,7 +128,9 @@ LogicalResult dwc::CeilOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16 || integer.getWidth() == 32))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -261,7 +274,9 @@ LogicalResult dwc::CosOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -453,7 +468,9 @@ LogicalResult dwc::ErfOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -479,7 +496,9 @@ LogicalResult dwc::Expm1Op::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -494,7 +513,9 @@ LogicalResult dwc::FloorOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16 || integer.getWidth() == 32))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 LogicalResult dwc::FloorDivOp::verify() {
@@ -636,7 +657,9 @@ LogicalResult dwc::Log1pOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -651,7 +674,9 @@ LogicalResult dwc::LogisticOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -833,6 +858,10 @@ LogicalResult dwc::PseudoSplitOp::verify() {
     if ((integer1.isSignless() && (integer1.getWidth() == 16 || integer1.getWidth() == 32 || integer1.getWidth() == 64)))
       return success();
   }
+  if (auto quantized1 = llvm::dyn_cast<quant::QuantizedType>(element1)) {
+    if (quantized1.getStorageTypeIntegralWidth() == 8)
+      return success();
+  }
   return (*this)->emitOpError("operand 1 expects f32, i16, i32, i64, QI8, or QUI8");
 }
 
@@ -934,7 +963,9 @@ LogicalResult dwc::RoundOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -949,7 +980,9 @@ LogicalResult dwc::RoundNearestAfzOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -964,7 +997,9 @@ LogicalResult dwc::RsqrtOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -1029,7 +1064,9 @@ LogicalResult dwc::SignOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16 || integer.getWidth() == 32 || integer.getWidth() == 64))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, i64, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, i32, i64, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 LogicalResult dwc::SinOp::verify() {
@@ -1043,7 +1080,9 @@ LogicalResult dwc::SinOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -1102,7 +1141,9 @@ LogicalResult dwc::SqrtOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 LogicalResult dwc::SubtractOp::verify() {
@@ -1127,7 +1168,9 @@ LogicalResult dwc::TanOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
@@ -1142,7 +1185,9 @@ LogicalResult dwc::TanhOp::verify() {
     if (integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 8 || integer.getWidth() == 16))
       return success();
   }
-  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, or f32");
+  if (isTrigQuantElement(element))
+    return success();
+  return (*this)->emitOpError("operand 0 expects i1, i8, i16, f16, bf16, f32, QI8, QI16, QUI8, or QUI16");
 }
 
 
