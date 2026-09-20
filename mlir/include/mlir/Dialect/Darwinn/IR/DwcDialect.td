@@ -272,6 +272,48 @@ def Dwc_CustomPadValueTypeEnum : Dwc_I32Enum<
   ]>;
 def Dwc_CustomPadValueTypeAttr : Dwc_I32EnumAttr<"custom_pad_value_type", Dwc_CustomPadValueTypeEnum>;
 
+def Dwc_DeviceTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_DeviceTypeEnum : Dwc_I32Enum<
+  "DeviceType", "DWC device type", [
+    Dwc_DeviceTypeUnknown
+  ]>;
+def Dwc_DeviceTypeAttr : Dwc_I32EnumAttr<"device_type", Dwc_DeviceTypeEnum>;
+
+def Dwc_EngineUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_EngineEnum : Dwc_I32Enum<
+  "Engine", "DWC engine", [
+    Dwc_EngineUnknown
+  ]>;
+def Dwc_EngineAttr : Dwc_I32EnumAttr<"engine", Dwc_EngineEnum>;
+
+def Dwc_HibGatherFilterUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_HibGatherFilterEnum : Dwc_I32Enum<
+  "HibGatherFilter", "DWC HIB gather filter", [
+    Dwc_HibGatherFilterUnknown
+  ]>;
+def Dwc_HibGatherFilterAttr : Dwc_I32EnumAttr<"hib_gather_filter", Dwc_HibGatherFilterEnum>;
+
+def Dwc_HostSpaceUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_HostSpaceEnum : Dwc_I32Enum<
+  "HostSpace", "DWC host space", [
+    Dwc_HostSpaceUnknown
+  ]>;
+def Dwc_HostSpaceAttr : Dwc_I32EnumAttr<"host_space", Dwc_HostSpaceEnum>;
+
+def Dwc_ImageFormatUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_ImageFormatEnum : Dwc_I32Enum<
+  "ImageFormat", "DWC image format", [
+    Dwc_ImageFormatUnknown
+  ]>;
+def Dwc_ImageFormatAttr : Dwc_I32EnumAttr<"image_format", Dwc_ImageFormatEnum>;
+
+def Dwc_KernelLevelUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_KernelLevelEnum : Dwc_I32Enum<
+  "KernelLevel", "DWC kernel level", [
+    Dwc_KernelLevelUnknown
+  ]>;
+def Dwc_KernelLevelAttr : Dwc_I32EnumAttr<"kernel_level", Dwc_KernelLevelEnum>;
+
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   "MemorySpace", "DWC memory space", [
