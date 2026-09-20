@@ -830,6 +830,58 @@ struct PaddingLowering : public RewritePattern {
   }
 };
 
+struct UnaryLowering : public RewritePattern {
+  StringRef root;
+  using EmitFn = Value (*)(OpBuilder &, Location, Value);
+  EmitFn emit;
+  UnaryLowering(StringRef rootName, EmitFn fn, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName), emit(fn) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (!isa<FloatType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(2, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{input}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = emit(nested, nloc, args[0]);
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+
+static Value emitSin(OpBuilder &b, Location loc, Value x) { return b.create<math::SinOp>(loc, x); }
+static Value emitCos(OpBuilder &b, Location loc, Value x) { return b.create<math::CosOp>(loc, x); }
+static Value emitExp(OpBuilder &b, Location loc, Value x) { return b.create<math::ExpOp>(loc, x); }
+static Value emitLog(OpBuilder &b, Location loc, Value x) { return b.create<math::LogOp>(loc, x); }
+static Value emitSqrt(OpBuilder &b, Location loc, Value x) { return b.create<math::SqrtOp>(loc, x); }
+static Value emitRsqrt(OpBuilder &b, Location loc, Value x) { return b.create<math::RsqrtOp>(loc, x); }
+static Value emitTanh(OpBuilder &b, Location loc, Value x) { return b.create<math::TanhOp>(loc, x); }
+static Value emitNeg(OpBuilder &b, Location loc, Value x) { return b.create<arith::NegFOp>(loc, x); }
+static Value emitAbs(OpBuilder &b, Location loc, Value x) { return b.create<math::AbsFOp>(loc, x); }
+static Value emitCeil(OpBuilder &b, Location loc, Value x) { return b.create<math::CeilOp>(loc, x); }
+static Value emitFloor(OpBuilder &b, Location loc, Value x) { return b.create<math::FloorOp>(loc, x); }
+static Value emitRound(OpBuilder &b, Location loc, Value x) { return b.create<math::RoundOp>(loc, x); }
+
 } // namespace
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
@@ -864,4 +916,16 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<ConcatenationLowering>(ctx);
   patterns.add<SliceLowering>(ctx);
   patterns.add<PaddingLowering>(ctx);
+  patterns.add<UnaryLowering>("dwc.sin", emitSin, ctx);
+  patterns.add<UnaryLowering>("dwc.cos", emitCos, ctx);
+  patterns.add<UnaryLowering>("dwc.exp", emitExp, ctx);
+  patterns.add<UnaryLowering>("dwc.logistic", emitLog, ctx);
+  patterns.add<UnaryLowering>("dwc.sqrt", emitSqrt, ctx);
+  patterns.add<UnaryLowering>("dwc.rsqrt", emitRsqrt, ctx);
+  patterns.add<UnaryLowering>("dwc.tanh", emitTanh, ctx);
+  patterns.add<UnaryLowering>("dwc.negate", emitNeg, ctx);
+  patterns.add<UnaryLowering>("dwc.abs", emitAbs, ctx);
+  patterns.add<UnaryLowering>("dwc.ceil", emitCeil, ctx);
+  patterns.add<UnaryLowering>("dwc.floor", emitFloor, ctx);
+  patterns.add<UnaryLowering>("dwc.round", emitRound, ctx);
 }
