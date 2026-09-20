@@ -342,7 +342,6 @@ def Darwinn_CostHintOp : Darwinn_Op<"cost_hint"> {
 def Darwinn_CreateEmptyTensorOp : Darwinn_Op<"create_empty_tensor"> {
   let summary = "Darwinn create_empty_tensor operation.";
   let description = [{
-    Takes any number of operands.
     Takes any number of operands. Sibling spellings `darwinn.communicated.create_empty_tensor` and `darwinn.lisa.empty_tensor` name the same constructor in the packed registry; no distinct sibling dialects are evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
@@ -2221,7 +2220,6 @@ def Darwinn_VrgkhOperationModeOp : Darwinn_Op<"vrgkh_operation_mode"> {
 def Darwinn_WhileOp : Darwinn_Op<"while"> {
   let summary = "Darwinn while operation.";
   let description = [{
-    Takes any number of operands.
     Takes any number of operands. Sibling spelling `darwinn.scalar.while` names the same loop in the packed registry; no distinct `darwinn.scalar` dialect is evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
@@ -2260,7 +2258,6 @@ def Darwinn_WideToNarrowSliceOp : Darwinn_Op<"wide_to_narrow_slice"> {
 def Darwinn_YieldOp : Darwinn_Op<"yield"> {
   let summary = "Darwinn yield operation.";
   let description = [{
-    Takes any number of operands.
     Takes any number of operands. Sibling spelling `darwinn.scalar.yield` names the same terminator in the packed registry; no distinct `darwinn.scalar` dialect is evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
