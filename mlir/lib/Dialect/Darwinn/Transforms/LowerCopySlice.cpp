@@ -526,6 +526,68 @@ static LogicalResult lowerDwcBinaryOp(Operation *op, PatternRewriter &rewriter) 
   return lowerDwcBinaryToLinalg<LinalgOp>(op, rewriter);
 }
 
+struct ReshapeLowering : public RewritePattern {
+  ReshapeLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.reshape", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getNumElements() != dstRanked.getNumElements())
+      return failure();
+    if (srcRanked.getRank() > dstRanked.getRank()) {
+      SmallVector<ReassociationIndices> reassoc(dstRanked.getRank());
+      for (int64_t d = 0; d < srcRanked.getRank(); ++d)
+        reassoc[d < dstRanked.getRank() ? d : dstRanked.getRank() - 1].push_back(d);
+      rewriter.replaceOpWithNewOp<tensor::CollapseShapeOp>(op, dstTy, input, reassoc);
+      return success();
+    }
+    if (srcRanked.getRank() < dstRanked.getRank())
+      return failure();
+    SmallVector<ReassociationIndices> reassoc;
+    for (int64_t d = 0; d < srcRanked.getRank(); ++d)
+      reassoc.push_back(ReassociationIndices{d});
+    rewriter.replaceOpWithNewOp<tensor::CollapseShapeOp>(op, dstTy, input, reassoc);
+    return success();
+  }
+};
+
+struct TransposeLowering : public RewritePattern {
+  TransposeLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.transpose", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto perm = dyn_cast<DenseIntElementsAttr>(op->getAttr("permutation"));
+    if (!perm)
+      return failure();
+    SmallVector<int64_t> permutation;
+    for (auto v : perm.getValues<APInt>())
+      permutation.push_back(v.getSExtValue());
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (static_cast<int64_t>(permutation.size()) != srcRanked.getRank())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    rewriter.replaceOpWithNewOp<linalg::TransposeOp>(op, input, empty, permutation);
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
@@ -551,4 +613,6 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<DwcBinaryLowering>("dwc.maximum", lowerDwcBinaryOp<linalg::MaxOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.minimum", lowerDwcBinaryOp<linalg::MinOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.subtract", lowerDwcBinaryOp<linalg::SubOp>, ctx);
+  patterns.add<ReshapeLowering>(ctx);
+  patterns.add<TransposeLowering>(ctx);
 }
