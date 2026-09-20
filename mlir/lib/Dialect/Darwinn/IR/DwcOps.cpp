@@ -1114,6 +1114,18 @@ LogicalResult dwc::TransposeOp::verify() {
     auto shaped = llvm::dyn_cast<ShapedType>(perm.getType());
     if (!shaped || !shaped.hasStaticShape() || shaped.getNumElements() != 3)
       return (*this)->emitOpError("attribute 'permutation' expects 3 elements for Rank 3 tensor");
+    SmallVector<int64_t> values;
+    for (auto element : perm.getValues<IntegerAttr>())
+      values.push_back(element.getInt());
+    if (values.size() != 3)
+      return (*this)->emitOpError("attribute 'permutation' expects integer elements");
+    llvm::SmallDenseSet<int64_t, 4> seen;
+    for (int64_t value : values) {
+      if (value < 0 || value >= 3)
+        return (*this)->emitOpError("attribute 'permutation' expects values in [0, 3)");
+      if (!seen.insert(value).second)
+        return (*this)->emitOpError("attribute 'permutation' expects distinct values");
+    }
   }
   return success();
 }
