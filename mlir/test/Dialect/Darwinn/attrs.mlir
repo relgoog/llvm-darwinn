@@ -176,3 +176,99 @@ func.func @test_vrgkh_operation_mode(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   %0 = darwinn.copy_op %arg0 {darwinn.vrgkh_operation_mode = #darwinn.vrgkh_operation_mode<*>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// -----
+// CHECK-LABEL: fence
+func.func @test_fence(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.fence
+  %0 = darwinn.copy_op %arg0 {darwinn.fence = #darwinn.fence<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: filter_cmp
+func.func @test_filter_cmp(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.filter_cmp
+  %0 = darwinn.copy_op %arg0 {darwinn.filter_cmp = #darwinn.filter_cmp<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: filter_for_hib_gather
+func.func @test_filter_for_hib_gather(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.filter_for_hib_gather
+  %0 = darwinn.copy_op %arg0 {darwinn.filter_for_hib_gather = #darwinn.filter_for_hib_gather<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: inner_op
+func.func @test_inner_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.inner_op
+  %0 = darwinn.copy_op %arg0 {darwinn.inner_op = #darwinn.inner_op<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: interpolate_method
+func.func @test_interpolate_method(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.interpolate_method
+  %0 = darwinn.copy_op %arg0 {darwinn.interpolate_method = #darwinn.interpolate_method<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: linear_func
+func.func @test_linear_func(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.linear_func
+  %0 = darwinn.copy_op %arg0 {darwinn.linear_func = #darwinn.linear_func<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: memory_space
+func.func @test_memory_space(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.memory_space
+  %0 = darwinn.copy_op %arg0 {darwinn.memory_space = #darwinn.memory_space<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: nlu_e8m0_rounding
+func.func @test_nlu_e8m0_rounding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.nlu_e8m0_rounding
+  %0 = darwinn.copy_op %arg0 {darwinn.nlu_e8m0_rounding = #darwinn.nlu_e8m0_rounding<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: nlu_func
+func.func @test_nlu_func(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.nlu_func
+  %0 = darwinn.copy_op %arg0 {darwinn.nlu_func = #darwinn.nlu_func<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: nlu_preprocess
+func.func @test_nlu_preprocess(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.nlu_preprocess
+  %0 = darwinn.copy_op %arg0 {darwinn.nlu_preprocess = #darwinn.nlu_preprocess<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: nlu_predicate
+func.func @test_nlu_predicate(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.nlu_predicate
+  %0 = darwinn.copy_op %arg0 {darwinn.nlu_predicate = #darwinn.nlu_predicate<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: vica_custom_padding
+func.func @test_vica_custom_padding_attr(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.vica_custom_padding
+  %0 = darwinn.copy_op %arg0 {darwinn.vica_custom_padding = #darwinn.vica_custom_padding<*>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
