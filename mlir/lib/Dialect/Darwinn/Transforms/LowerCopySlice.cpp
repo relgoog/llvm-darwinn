@@ -175,6 +175,75 @@ struct GatherLowering : public RewritePattern {
     return success();
   }
 };
+struct InterleaveLowering : public RewritePattern {
+  InterleaveLowering(MLIRContext *ctx) : RewritePattern("dwc.interleave", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+    auto rhsRanked = dyn_cast<RankedTensorType>(rhs.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!lhsRanked || !rhsRanked || !dstRanked)
+      return failure();
+    if (!lhsRanked.hasStaticShape() || !rhsRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (lhsRanked.getRank() != 1 || rhsRanked.getRank() != 1 || dstRanked.getRank() != 1)
+      return failure();
+    if (lhsRanked.getShape() != rhsRanked.getShape())
+      return failure();
+    if (lhsRanked.getDimSize(0) * 2 != dstRanked.getDimSize(0))
+      return failure();
+    if (lhsRanked.getElementType() != dstRanked.getElementType() ||
+        rhsRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value c2 = rewriter.create<arith::ConstantIndexOp>(loc, 2);
+    Value n = rewriter.create<arith::ConstantIndexOp>(loc, lhsRanked.getDimSize(0));
+    auto loop = rewriter.create<scf::ForOp>(loc, c0, n, c1, ValueRange{empty});
+    rewriter.setInsertionPointToStart(loop.getBody());
+    Value iv = loop.getInductionVar();
+    Value cur = loop.getRegionIterArg(0);
+    Value a = rewriter.create<tensor::ExtractOp>(loc, lhs, ValueRange{iv});
+    Value b = rewriter.create<tensor::ExtractOp>(loc, rhs, ValueRange{iv});
+    Value even = rewriter.create<arith::MulIOp>(loc, iv, c2);
+    Value odd = rewriter.create<arith::AddIOp>(loc, even, c1);
+    Value ins0 = rewriter.create<tensor::InsertOp>(loc, a, cur, ValueRange{even});
+    Value ins1 = rewriter.create<tensor::InsertOp>(loc, b, ins0, ValueRange{odd});
+    rewriter.create<scf::YieldOp>(loc, ValueRange{ins1});
+    rewriter.setInsertionPointAfter(loop);
+    rewriter.replaceOp(op, loop->getResult(0));
+    return success();
+  }
+};
+
+struct VicaAddLowering : public RewritePattern {
+  VicaAddLowering(MLIRContext *ctx) : RewritePattern("dwc.vica_add", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    if (!hasSameElementType(lhs.getType(), dstTy) || !hasSameElementType(rhs.getType(), dstTy))
+      return failure();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    rewriter.replaceOpWithNewOp<linalg::AddOp>(op, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty});
+    return success();
+  }
+};
+
 struct ForwardLowering : public RewritePattern {
   StringRef root;
   StringRef target;
@@ -2302,6 +2371,20 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<TransposeLowering>(ctx);
   patterns.add<MatmulLowering>("dwc.matrix_multiply", ctx);
   patterns.add<MatmulLowering>("dwc.fully_connected", ctx);
+  patterns.add<MatmulLowering>("dwc.fully_connected_sub_channel", ctx);
+  patterns.add<MatmulLowering>("dwc.fully_connected_sub_channel_v2", ctx);
+  patterns.add<MatmulLowering>("dwc.matrix_multiply_sub_channel", ctx);
+  patterns.add<MatmulLowering>("dwc.sparse_fully_connected", ctx);
+  patterns.add<MatmulLowering>("dwc.sparse_fully_connected_sub_byte_param", ctx);
+  patterns.add<InterleaveLowering>(ctx);
+  patterns.add<VicaAddLowering>(ctx);
+  patterns.add<ForwardLowering>("dwc.gather_operation", "dive_vm.gather", ctx);
+  patterns.add<ForwardLowering>("dwc.tensor_op_gather", "dive_vm.gather", ctx);
+  patterns.add<ForwardLowering>("dwc.tensor_ls_gather", "dive_vm.gather", ctx);
+  patterns.add<ForwardLowering>("dwc.dma_op_gather", "dive_vm.gather", ctx);
+  patterns.add<ForwardLowering>("dwc.scatter_operation", "dive_vm.scatter_nd", ctx);
+  patterns.add<ForwardLowering>("dwc.tensor_ls_scatter", "dive_vm.scatter_nd", ctx);
+  patterns.add<ForwardLowering>("dwc.tensor_ls_scatter_operation", "dive_vm.scatter_nd", ctx);
   patterns.add<ConvolutionLowering>(ctx);
   patterns.add<DepthwiseConvLowering>(ctx);
   patterns.add<Conv3DLowering>(ctx);
