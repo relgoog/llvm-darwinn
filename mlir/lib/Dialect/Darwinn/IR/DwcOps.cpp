@@ -346,6 +346,10 @@ LogicalResult dwc::CwiseOp::verify() {
     bool isF32 = llvm::isa<Float32Type>(element);
     bool isBf16 = llvm::isa<BFloat16Type>(element);
     bool isF16 = llvm::isa<Float16Type>(element);
+    auto isQuantWidth = [&](unsigned width) {
+      auto quantized = llvm::dyn_cast<quant::QuantizedType>(element);
+      return quantized && quantized.getStorageTypeIntegralWidth() == width;
+    };
     switch (opType) {
     case CwiseOpType::Add:
     case CwiseOpType::Subtract:
@@ -354,7 +358,7 @@ LogicalResult dwc::CwiseOp::verify() {
     case CwiseOpType::Maximum:
     case CwiseOpType::Minimum:
     case CwiseOpType::Pow:
-      ok = isF32 || isBf16 || isF16;
+      ok = isF32 || isBf16 || isF16 || isQuantWidth(4) || isQuantWidth(8) || isQuantWidth(16);
       break;
     case CwiseOpType::Equal:
     case CwiseOpType::NotEqual:
