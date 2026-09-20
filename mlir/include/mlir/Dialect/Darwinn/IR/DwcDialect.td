@@ -356,6 +356,48 @@ def Dwc_PoolEnum : Dwc_I32Enum<
   ]>;
 def Dwc_PoolAttr : Dwc_I32EnumAttr<"pool", Dwc_PoolEnum>;
 
+def Dwc_ReduceWindowTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_ReduceWindowTypeEnum : Dwc_I32Enum<
+  "ReduceWindowType", "DWC reduce window type", [
+    Dwc_ReduceWindowTypeUnknown
+  ]>;
+def Dwc_ReduceWindowTypeAttr : Dwc_I32EnumAttr<"reduce_window_type", Dwc_ReduceWindowTypeEnum>;
+
+def Dwc_ScatterOperationUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_ScatterOperationEnum : Dwc_I32Enum<
+  "ScatterOperation", "DWC scatter operation", [
+    Dwc_ScatterOperationUnknown
+  ]>;
+def Dwc_ScatterOperationAttr : Dwc_I32EnumAttr<"scatter_operation", Dwc_ScatterOperationEnum>;
+
+def Dwc_ScatterTensorLsOperationUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_ScatterTensorLsOperationEnum : Dwc_I32Enum<
+  "ScatterTensorLsOperation", "DWC scatter tensor LS operation", [
+    Dwc_ScatterTensorLsOperationUnknown
+  ]>;
+def Dwc_ScatterTensorLsOperationAttr : Dwc_I32EnumAttr<"scatter_tensor_ls_operation", Dwc_ScatterTensorLsOperationEnum>;
+
+def Dwc_SpillLocationUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_SpillLocationEnum : Dwc_I32Enum<
+  "SpillLocation", "DWC spill location", [
+    Dwc_SpillLocationUnknown
+  ]>;
+def Dwc_SpillLocationAttr : Dwc_I32EnumAttr<"spill_location", Dwc_SpillLocationEnum>;
+
+def Dwc_StrideMethodUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_StrideMethodEnum : Dwc_I32Enum<
+  "StrideMethod", "DWC stride method", [
+    Dwc_StrideMethodUnknown
+  ]>;
+def Dwc_StrideMethodAttr : Dwc_I32EnumAttr<"stride_method", Dwc_StrideMethodEnum>;
+
+def Dwc_TensorOpGatherOperationUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_TensorOpGatherOperationEnum : Dwc_I32Enum<
+  "TensorOpGatherOperation", "DWC tensor op gather operation", [
+    Dwc_TensorOpGatherOperationUnknown
+  ]>;
+def Dwc_TensorOpGatherOperationAttr : Dwc_I32EnumAttr<"tensor_op_gather_operation", Dwc_TensorOpGatherOperationEnum>;
+
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   "MemorySpace", "DWC memory space", [
