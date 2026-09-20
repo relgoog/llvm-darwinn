@@ -23,6 +23,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   MLIRMathToLLVM
   MLIRMathToLibm
   MLIRPass
+  MLIRSCFDialect
   MLIRSCFToControlFlow
   MLIRTensorDialect
   MLIRTransformUtils

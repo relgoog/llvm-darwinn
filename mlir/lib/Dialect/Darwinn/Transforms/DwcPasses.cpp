@@ -32,6 +32,8 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -4137,7 +4139,7 @@ struct DwcDwcLowerHlopsPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect, linalg::LinalgDialect, tensor::TensorDialect, arith::ArithDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect, linalg::LinalgDialect, tensor::TensorDialect, arith::ArithDialect, scf::SCFDialect, math::MathDialect>();
   }
 
   void runOnOperation() override {
