@@ -311,13 +311,59 @@ LogicalResult dwc::CwiseOp::verify() {
   default:
     return (*this)->emitOpError("attribute 'activation_function' expects NONE, RELU, TANH, or RECIPROCAL_SQRT");
   }
+  auto opType = llvm::cast<CwiseOpTypeAttr>((*this)->getAttr("op_type")).getValue();
   for (unsigned index = 0; index < 2; ++index) {
-    if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[index].getType())) {
-      if (ranked.getRank() == 0)
-        return (*this)->emitOpError("operand ") << index << " expects non-0-ranked tensor";
-      continue;
+    auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[index].getType());
+    if (!ranked)
+      return (*this)->emitOpError("operand ") << index << " expects ranked tensor";
+    if (ranked.getRank() == 0)
+      return (*this)->emitOpError("operand ") << index << " expects non-0-ranked tensor";
+    Type element = ranked.getElementType();
+    bool ok = false;
+    auto isSignless = [&](unsigned width) {
+      auto integer = llvm::dyn_cast<IntegerType>(element);
+      return integer && integer.isSignless() && integer.getWidth() == width;
+    };
+    auto isUnsigned = [&](unsigned width) {
+      auto integer = llvm::dyn_cast<IntegerType>(element);
+      return integer && integer.isUnsigned() && integer.getWidth() == width;
+    };
+    bool isF32 = llvm::isa<Float32Type>(element);
+    bool isBf16 = llvm::isa<BFloat16Type>(element);
+    bool isF16 = llvm::isa<Float16Type>(element);
+    switch (opType) {
+    case CwiseOpType::Add:
+    case CwiseOpType::Subtract:
+    case CwiseOpType::Multiply:
+    case CwiseOpType::Divide:
+    case CwiseOpType::Maximum:
+    case CwiseOpType::Minimum:
+    case CwiseOpType::Pow:
+      ok = isF32 || isBf16 || isF16;
+      break;
+    case CwiseOpType::Equal:
+    case CwiseOpType::NotEqual:
+    case CwiseOpType::Greater:
+    case CwiseOpType::GreaterEqual:
+    case CwiseOpType::Less:
+    case CwiseOpType::LessEqual:
+    case CwiseOpType::LogicalAnd:
+      ok = isSignless(1) || isSignless(8) || isSignless(16) || isSignless(32) || isSignless(64);
+      break;
+    case CwiseOpType::BitwiseAnd:
+    case CwiseOpType::BitwiseOr:
+    case CwiseOpType::BitwiseXor:
+      ok = isSignless(8) || isSignless(16);
+      break;
+    case CwiseOpType::ArithmeticLeftShift:
+    case CwiseOpType::ArithmeticRightShift:
+    case CwiseOpType::LogicalRightShift:
+    case CwiseOpType::Modulus:
+      ok = isUnsigned(32) || isUnsigned(64);
+      break;
     }
-    return (*this)->emitOpError("operand ") << index << " expects ranked tensor";
+    if (!ok)
+      return (*this)->emitOpError("operand ") << index << " element type mismatch for op_type";
   }
   return success();
 }
