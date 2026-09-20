@@ -2311,4 +2311,74 @@ def DwcDwcHomogenizeOperandTypesPass : Pass<"dwc-homogenize-operand-types", "fun
   }];
 }
 
+def DwcDwcPromoteFloatsPass : Pass<"dwc-promote-floats", "func::FuncOp"> {
+  let summary = "DWC pass dwc-promote-floats";
+  let description = [{
+    Blob-evidenced dwc pass. Promote floats, failing with dwc-promote-floats pass failed.
+  }];
+}
+
+def DwcDwcRelaxInt32ArithmeticsPass : Pass<"dwc-relax-int32-arithmetics", "func::FuncOp"> {
+  let summary = "DWC pass dwc-relax-int32-arithmetics";
+  let description = [{
+    Blob-evidenced dwc pass. Relax int32 arithmetics.
+  }];
+}
+
+def DwcDwcPreprocessWideTensorOpPass : Pass<"dwc-preprocess-wide-tensor-op", "func::FuncOp"> {
+  let summary = "DWC pass dwc-preprocess-wide-tensor-op";
+  let description = [{
+    Blob-evidenced dwc pass. Preprocess wide tensor op, failing with dwc-preprocess-wide-tensor-op failed.
+  }];
+}
+
+def DwcDwcSplitPredicatedScalesPass : Pass<"dwc-split-predicated-scales", "func::FuncOp"> {
+  let summary = "DWC pass dwc-split-predicated-scales";
+  let description = [{
+    Blob-evidenced dwc pass. Split predicated scales.
+  }];
+}
+
+def DwcDwcSplitReductionDimensionsPass : Pass<"dwc-split-reduction-dimensions", "func::FuncOp"> {
+  let summary = "DWC pass dwc-split-reduction-dimensions";
+  let description = [{
+    Blob-evidenced dwc pass. Split reduction dimensions, failing with dwc-split-reduction-dimensions failed.
+  }];
+}
+
+def DwcDwcTileDynamicBatchPass : Pass<"dwc-tile-dynamic-batch", "func::FuncOp"> {
+  let summary = "DWC pass dwc-tile-dynamic-batch";
+  let description = [{
+    Blob-evidenced dwc pass. Tile dynamic batch dimension.
+  }];
+}
+
+def DwcDwcUpscaleParametersPass : Pass<"dwc-upscale-parameters", "func::FuncOp"> {
+  let summary = "DWC pass dwc-upscale-parameters";
+  let description = [{
+    Blob-evidenced dwc pass. Upscale parameters.
+  }];
+}
+
+def DwcDwcSetOffloadIdsPass : Pass<"dwc-set-offload-ids", "func::FuncOp"> {
+  let summary = "DWC pass dwc-set-offload-ids";
+  let description = [{
+    Blob-evidenced dwc pass. Set offload ids.
+  }];
+}
+
+def DwcDwcProbeInstrumentationPass : Pass<"dwc-probe-instrumentation", "func::FuncOp"> {
+  let summary = "DWC pass dwc-probe-instrumentation";
+  let description = [{
+    Blob-evidenced dwc pass. Probe instrumentation.
+  }];
+}
+
+def DwcDwcReduceScatterOpDimsPass : Pass<"dwc-reduce-scatter-op-dims", "func::FuncOp"> {
+  let summary = "DWC pass dwc-reduce-scatter-op-dims";
+  let description = [{
+    Blob-evidenced dwc pass. Reduce scatter op dims, failing with dwc-reduce-scatter-op-dims failed.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
