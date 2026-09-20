@@ -1429,6 +1429,93 @@ struct PassThroughLowering : public RewritePattern {
     return success();
   }
 };
+struct ArangeLowering : public RewritePattern {
+  ArangeLowering(MLIRContext *ctx) : RewritePattern("dwc.arange", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1)
+      return failure();
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape() || dstRanked.getRank() != 1)
+      return failure();
+    if (!isa<IntegerType>(dstRanked.getElementType()))
+      return failure();
+    int64_t n = dstRanked.getDimSize(0);
+    if (n <= 0)
+      return failure();
+    Location loc = op->getLoc();
+    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value nV = rewriter.create<arith::ConstantIndexOp>(loc, n);
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    auto loop = rewriter.create<scf::ForOp>(loc, c0, nV, c1, ValueRange{empty});
+    rewriter.setInsertionPointToStart(loop.getBody());
+    Value iv = loop.getInductionVar();
+    Value cur = loop.getRegionIterArg(0);
+    Value v = rewriter.create<arith::IndexCastOp>(loc, dstRanked.getElementType(), iv);
+    Value next = rewriter.create<tensor::InsertOp>(loc, v, cur, ValueRange{iv});
+    rewriter.create<scf::YieldOp>(loc, ValueRange{next});
+    rewriter.setInsertionPointAfter(loop);
+    rewriter.replaceOp(op, loop->getResult(0));
+    return success();
+  }
+};
+
+struct PackBitsLowering : public RewritePattern {
+  PackBitsLowering(MLIRContext *ctx) : RewritePattern("dwc.pack_bits", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getRank() != 1 || dstRanked.getRank() != 1)
+      return failure();
+    auto i1 = IntegerType::get(op->getContext(), 1, IntegerType::Signless);
+    if (srcRanked.getElementType() != i1 || !isa<IntegerType>(dstRanked.getElementType()) ||
+        dstRanked.getElementTypeBitWidth() != 8)
+      return failure();
+    if (srcRanked.getDimSize(0) != 8 * dstRanked.getDimSize(0))
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value c8 = rewriter.create<arith::ConstantIndexOp>(loc, 8);
+    Value n = rewriter.create<arith::ConstantIndexOp>(loc, dstRanked.getDimSize(0));
+    auto outer = rewriter.create<scf::ForOp>(loc, c0, n, c1, ValueRange{empty});
+    rewriter.setInsertionPointToStart(outer.getBody());
+    Value oi = outer.getInductionVar();
+    Value ocur = outer.getRegionIterArg(0);
+    auto inner = rewriter.create<scf::ForOp>(loc, c0, c8, c1, ValueRange{ocur});
+    rewriter.setInsertionPointToStart(inner.getBody());
+    Value ii = inner.getInductionVar();
+    Value icur = inner.getRegionIterArg(0);
+    Value bitBase = rewriter.create<arith::MulIOp>(loc, oi, c8);
+    Value bitIdx = rewriter.create<arith::AddIOp>(loc, bitBase, ii);
+    Value bit = rewriter.create<tensor::ExtractOp>(loc, input, ValueRange{bitIdx});
+    Value bitExt = rewriter.create<arith::ExtUIOp>(loc, dstRanked.getElementType(), bit);
+    Value shift = rewriter.create<arith::IndexCastOp>(loc, dstRanked.getElementType(), ii);
+    Value shifted = rewriter.create<arith::ShLIOp>(loc, bitExt, shift);
+    Value old = rewriter.create<tensor::ExtractOp>(loc, icur, ValueRange{oi});
+    Value acc = rewriter.create<arith::OrIOp>(loc, old, shifted);
+    Value next = rewriter.create<tensor::InsertOp>(loc, acc, icur, ValueRange{oi});
+    rewriter.create<scf::YieldOp>(loc, ValueRange{next});
+    rewriter.setInsertionPointAfter(inner);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{inner->getResult(0)});
+    rewriter.setInsertionPointAfter(outer);
+    rewriter.replaceOp(op, outer->getResult(0));
+    return success();
+  }
+};
+
 
 struct ElementCountReshapeLowering : public RewritePattern {
   StringRef root;
@@ -2164,6 +2251,10 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<PassThroughLowering>("dwc.generic_pad", ctx);
   patterns.add<PassThroughLowering>("dwc.dynamic_broadcast", ctx);
   patterns.add<PassThroughLowering>("dwc.dynamic_quantize", ctx);
+  patterns.add<ArangeLowering>(ctx);
+  patterns.add<PackBitsLowering>(ctx);
+  patterns.add<ForwardLowering>("dwc.statistical_top_k", "dive_vm.top_k", ctx);
+  patterns.add<ForwardLowering>("dwc.multinomial", "dive_vm.multinomial", ctx);
   patterns.add<ElementCountReshapeLowering>("dwc.space_to_batch", ctx);
   patterns.add<ElementCountReshapeLowering>("dwc.space_to_depth", ctx);
   patterns.add<ElementCountReshapeLowering>("dwc.batch_to_space", ctx);
