@@ -881,6 +881,12 @@ static Value emitAbs(OpBuilder &b, Location loc, Value x) { return b.create<math
 static Value emitCeil(OpBuilder &b, Location loc, Value x) { return b.create<math::CeilOp>(loc, x); }
 static Value emitFloor(OpBuilder &b, Location loc, Value x) { return b.create<math::FloorOp>(loc, x); }
 static Value emitRound(OpBuilder &b, Location loc, Value x) { return b.create<math::RoundOp>(loc, x); }
+static Value emitAtan(OpBuilder &b, Location loc, Value x) { return b.create<math::AtanOp>(loc, x); }
+static Value emitErf(OpBuilder &b, Location loc, Value x) { return b.create<math::ErfOp>(loc, x); }
+static Value emitTan(OpBuilder &b, Location loc, Value x) { return b.create<math::TanOp>(loc, x); }
+static Value emitExpm1(OpBuilder &b, Location loc, Value x) { return b.create<math::ExpM1Op>(loc, x); }
+static Value emitLog1p(OpBuilder &b, Location loc, Value x) { return b.create<math::Log1pOp>(loc, x); }
+static Value emitSign(OpBuilder &b, Location loc, Value x) { return b.create<math::CopySignOp>(loc, b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(1.0)), x); }
 
 } // namespace
 
@@ -928,4 +934,10 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<UnaryLowering>("dwc.ceil", emitCeil, ctx);
   patterns.add<UnaryLowering>("dwc.floor", emitFloor, ctx);
   patterns.add<UnaryLowering>("dwc.round", emitRound, ctx);
+  patterns.add<UnaryLowering>("dwc.atan", emitAtan, ctx);
+  patterns.add<UnaryLowering>("dwc.erf", emitErf, ctx);
+  patterns.add<UnaryLowering>("dwc.tan", emitTan, ctx);
+  patterns.add<UnaryLowering>("dwc.expm1", emitExpm1, ctx);
+  patterns.add<UnaryLowering>("dwc.log1p", emitLog1p, ctx);
+  patterns.add<UnaryLowering>("dwc.sign", emitSign, ctx);
 }
