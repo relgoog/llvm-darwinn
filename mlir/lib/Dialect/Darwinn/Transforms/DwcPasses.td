@@ -2101,4 +2101,74 @@ def DwcDwcSinkConstantsPass : Pass<"dwc-sink-constants", "func::FuncOp"> {
   }];
 }
 
+def DwcDwcTruncateI64Pass : Pass<"dwc-truncate-i64", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-i64";
+  let description = [{
+    Blob-evidenced dwc pass. Truncate 64-bit integers to 32-bit.
+  }];
+}
+
+def DwcDwcTruncateFloatTypedInputOutputPass : Pass<"dwc-truncate-float-typed-input-output", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-float-typed-input-output";
+  let description = [{
+    Blob-evidenced dwc pass. Truncate float typed input output, failing with dwc-truncate-float-typed-input-output pass failed.
+  }];
+}
+
+def DwcDwcTruncateFloatsOpInliningPass : Pass<"dwc-truncate-floats-op-inlining", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-floats-op-inlining";
+  let description = [{
+    Blob-evidenced dwc pass. Inline truncate floats ops.
+  }];
+}
+
+def DwcDwcTruncateGatherParamsPass : Pass<"dwc-truncate-gather-params", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-gather-params";
+  let description = [{
+    Blob-evidenced dwc pass. Truncate gather params, failing with dwc-truncate-gather-params failed.
+  }];
+}
+
+def DwcDwcTruncateTensorOpGatherIndicesPass : Pass<"dwc-truncate-tensor-op-gather-indices", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-tensor-op-gather-indices";
+  let description = [{
+    Blob-evidenced dwc pass. Truncate tensor op gather indices.
+  }];
+}
+
+def DwcDwcTruncateAttentionPass : Pass<"dwc-truncate-attention", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-attention";
+  let description = [{
+    Blob-evidenced dwc pass. Truncate attention precision.
+  }];
+}
+
+def DwcDwcShardingPass : Pass<"dwc-sharding", "func::FuncOp"> {
+  let summary = "DWC pass dwc-sharding";
+  let description = [{
+    Blob-evidenced dwc pass. Shard computation, failing with dwc-sharding propagation failed and dwc-sharding reduce-mode conversion failed.
+  }];
+}
+
+def DwcDwcShardingCleanupPass : Pass<"dwc-sharding-cleanup", "func::FuncOp"> {
+  let summary = "DWC pass dwc-sharding-cleanup";
+  let description = [{
+    Blob-evidenced dwc pass. Clean up sharding regions.
+  }];
+}
+
+def DwcDwcLicmPass : Pass<"dwc-licm", "func::FuncOp"> {
+  let summary = "DWC pass dwc-licm";
+  let description = [{
+    Blob-evidenced dwc pass. Loop invariant code motion.
+  }];
+}
+
+def DwcDwcSplitLoopTailPass : Pass<"dwc-split-loop-tail", "func::FuncOp"> {
+  let summary = "DWC pass dwc-split-loop-tail";
+  let description = [{
+    Blob-evidenced dwc pass. Split loop tails.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
