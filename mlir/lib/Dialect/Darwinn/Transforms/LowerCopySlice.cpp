@@ -1193,6 +1193,223 @@ struct BinaryGenericLowering : public RewritePattern {
     return success();
   }
 };
+struct CompareLowering : public RewritePattern {
+  CompareLowering(MLIRContext *ctx) : RewritePattern("dwc.compare", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto cmpType = dyn_cast<ComparisonTypeAttr>(op->getAttr("compare_type"));
+    if (!cmpType)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!lhsRanked || !dstRanked || !lhsRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (lhsRanked.getShape() != dstRanked.getShape())
+      return failure();
+    arith::CmpIPredicate intPred;
+    arith::CmpFPredicate floatPred;
+    switch (cmpType.getValue()) {
+    case ComparisonType::Equal:
+      intPred = arith::CmpIPredicate::eq;
+      floatPred = arith::CmpFPredicate::OEQ;
+      break;
+    case ComparisonType::NotEqual:
+      intPred = arith::CmpIPredicate::ne;
+      floatPred = arith::CmpFPredicate::UNE;
+      break;
+    case ComparisonType::Greater:
+      intPred = arith::CmpIPredicate::sgt;
+      floatPred = arith::CmpFPredicate::OGT;
+      break;
+    case ComparisonType::GreaterEqual:
+      intPred = arith::CmpIPredicate::sge;
+      floatPred = arith::CmpFPredicate::OGE;
+      break;
+    case ComparisonType::Less:
+      intPred = arith::CmpIPredicate::slt;
+      floatPred = arith::CmpFPredicate::OLT;
+      break;
+    case ComparisonType::LessEqual:
+      intPred = arith::CmpIPredicate::sle;
+      floatPred = arith::CmpFPredicate::OLE;
+      break;
+    }
+    bool isFloat = isa<FloatType>(lhsRanked.getElementType());
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value cmp = isFloat ? static_cast<Value>(nested.create<arith::CmpFOp>(nloc, floatPred, args[0], args[1]))
+                              : static_cast<Value>(nested.create<arith::CmpIOp>(nloc, intPred, args[0], args[1]));
+          nested.create<linalg::YieldOp>(nloc, cmp);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+
+struct BitwiseLowering : public RewritePattern {
+  StringRef root;
+  using Emit2Fn = Value (*)(OpBuilder &, Location, Value, Value);
+  Emit2Fn emit;
+  BitwiseLowering(StringRef rootName, Emit2Fn fn, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName), emit(fn) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!lhsRanked || !dstRanked || !lhsRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (lhsRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (!isa<IntegerType>(lhsRanked.getElementType()) || lhsRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = emit(nested, nloc, args[0], args[1]);
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+static Value emitAnd(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::AndIOp>(loc, x, y); }
+static Value emitOr(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::OrIOp>(loc, x, y); }
+static Value emitXor(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::XOrIOp>(loc, x, y); }
+
+struct IdentityLowering : public RewritePattern {
+  IdentityLowering(StringRef rootName, MLIRContext *ctx) : RewritePattern(rootName, 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    if (input.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, input);
+    return success();
+  }
+};
+
+struct ClampLowering : public RewritePattern {
+  ClampLowering(MLIRContext *ctx) : RewritePattern("dwc.clamp", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 3)
+      return failure();
+    Value input = op->getOperand(0);
+    Value lo = op->getOperand(1);
+    Value hi = op->getOperand(2);
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape())
+      return failure();
+    if (!hasSameElementType(input.getType(), dstTy) ||
+        !hasSameElementType(lo.getType(), dstTy) || !hasSameElementType(hi.getType(), dstTy))
+      return failure();
+    Location loc = op->getLoc();
+    Value loEmpty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value geLo = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{lo, input}, ValueRange{loEmpty})->getResult(0);
+    Value hiEmpty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value clamped = rewriter.create<linalg::MinOp>(loc, dstTy, ValueRange{geLo, hi}, ValueRange{hiEmpty})->getResult(0);
+    rewriter.replaceOp(op, clamped);
+    return success();
+  }
+};
+struct ReverseLowering : public RewritePattern {
+  ReverseLowering(MLIRContext *ctx) : RewritePattern("dwc.reverse", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto dim = dyn_cast<IntegerAttr>(op->getAttr("dimension"));
+    if (!dim)
+      return failure();
+    int64_t axis = dim.getInt();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    int64_t rank = srcRanked.getRank();
+    if (axis < 0 || axis >= rank)
+      return failure();
+    if (srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    SmallVector<AffineMap> maps;
+    SmallVector<AffineExpr> flipDims;
+    for (int64_t d = 0; d < rank; ++d) {
+      if (d == axis)
+        flipDims.push_back(rewriter.getAffineConstantExpr(srcRanked.getDimSize(d) - 1) - rewriter.getAffineDimExpr(d));
+      else
+        flipDims.push_back(rewriter.getAffineDimExpr(d));
+    }
+    maps.push_back(AffineMap::get(rank, 0, flipDims, op->getContext()));
+    maps.push_back(rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{input}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          nested.create<linalg::YieldOp>(nloc, args[0]);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+struct BitcastLowering : public RewritePattern {
+  BitcastLowering(MLIRContext *ctx) : RewritePattern("dwc.bitcast", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto outTy = dyn_cast<TypeAttr>(op->getAttr("output_element_type"));
+    if (!outTy)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (dstRanked.getElementType() != outTy.getValue())
+      return failure();
+    if (srcRanked.getElementTypeBitWidth() != dstRanked.getElementTypeBitWidth())
+      return failure();
+    rewriter.replaceOpWithNewOp<tensor::BitcastOp>(op, dstTy, input);
+    return success();
+  }
+};
+
+
 static Value emitSin(OpBuilder &b, Location loc, Value x) { return b.create<math::SinOp>(loc, x); }
 static Value emitCos(OpBuilder &b, Location loc, Value x) { return b.create<math::CosOp>(loc, x); }
 static Value emitExp(OpBuilder &b, Location loc, Value x) { return b.create<math::ExpOp>(loc, x); }
@@ -1212,7 +1429,9 @@ static Value emitExpm1(OpBuilder &b, Location loc, Value x) { return b.create<ma
 static Value emitLog1p(OpBuilder &b, Location loc, Value x) { return b.create<math::Log1pOp>(loc, x); }
 static Value emitSign(OpBuilder &b, Location loc, Value x) { return b.create<math::CopySignOp>(loc, b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(1.0)), x); }
 static Value emitRoundAfz(OpBuilder &b, Location loc, Value x) { return b.create<math::RoundEvenOp>(loc, x); }
-
+static Value emitCbrt(OpBuilder &b, Location loc, Value x) { return b.create<math::CbrtOp>(loc, x); }
+static Value emitRemF(OpBuilder &b, Location loc, Value x, Value y) { return b.create<arith::RemFOp>(loc, x, y); }
+static Value emitAtan2(OpBuilder &b, Location loc, Value x, Value y) { return b.create<math::Atan2Op>(loc, x, y); }
 } // namespace
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
@@ -1265,11 +1484,20 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<UnaryLowering>("dwc.erf", emitErf, ctx);
   patterns.add<UnaryLowering>("dwc.tan", emitTan, ctx);
   patterns.add<UnaryLowering>("dwc.expm1", emitExpm1, ctx);
-  patterns.add<BinaryGenericLowering>("dwc.floor_div", emitFloorDiv, ctx);
-  patterns.add<BinaryGenericLowering>("dwc.pow", emitPowF, ctx);
-  patterns.add<IntUnaryLowering>("dwc.pop_count", emitPopCount, ctx);
-  patterns.add<OneHotLowering>(ctx);
-  patterns.add<CumulativeLowering>(ctx);
-  patterns.add<PseudoSplitLowering>(ctx);
-  patterns.add<RescalingNoneLowering>(ctx);
+  patterns.add<UnaryLowering>("dwc.log1p", emitLog1p, ctx);
+  patterns.add<UnaryLowering>("dwc.sign", emitSign, ctx);
+  patterns.add<UnaryLowering>("dwc.round_nearest_afz", emitRoundAfz, ctx);
+  patterns.add<UnaryLowering>("dwc.log", emitLog, ctx);
+  patterns.add<UnaryLowering>("dwc.cbrt", emitCbrt, ctx);
+  patterns.add<BinaryGenericLowering>("dwc.remainder", emitRemF, ctx);
+  patterns.add<BinaryGenericLowering>("dwc.atan2", emitAtan2, ctx);
+  patterns.add<CompareLowering>(ctx);
+  patterns.add<BitwiseLowering>("dwc.and", emitAnd, ctx);
+  patterns.add<BitwiseLowering>("dwc.or", emitOr, ctx);
+  patterns.add<BitwiseLowering>("dwc.xor", emitXor, ctx);
+  patterns.add<ClampLowering>(ctx);
+  patterns.add<IdentityLowering>("dwc.identity", ctx);
+  patterns.add<IdentityLowering>("dwc.const_none", ctx);
+  patterns.add<ReverseLowering>(ctx);
+  patterns.add<BitcastLowering>(ctx);
 }
