@@ -272,3 +272,35 @@ func.func @test_vica_custom_padding_attr(%arg0: tensor<4xf32>) -> tensor<4xf32> 
   %0 = darwinn.copy_op %arg0 {darwinn.vica_custom_padding = #darwinn.vica_custom_padding<*>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// -----
+// CHECK-LABEL: dwc_custom_pad_value_type
+func.func @test_dwc_custom_pad_value_type(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.custom_pad_value_type
+  %0 = "dwc.pad"(%arg0) {custom_pad_value_type = #dwc.custom_pad_value_type<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_nlu_preprocessing
+func.func @test_dwc_nlu_preprocessing(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.nlu_preprocessing
+  %0 = "dwc.pad"(%arg0) {nlu_preprocessing = #dwc.nlu_preprocessing<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_scatter_tensor_ls_operation
+func.func @test_dwc_scatter_tensor_ls_operation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.scatter_tensor_ls_operation
+  %0 = "dwc.pad"(%arg0) {scatter_tensor_ls_operation = #dwc.scatter_tensor_ls_operation<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_tensor_op_gather_operation
+func.func @test_dwc_tensor_op_gather_operation(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.tensor_op_gather_operation
+  %0 = "dwc.pad"(%arg0) {tensor_op_gather_operation = #dwc.tensor_op_gather_operation<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
