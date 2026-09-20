@@ -410,6 +410,58 @@ struct SelectLowering : public RewritePattern {
   }
 };
 
+struct ReductionLowering : public RewritePattern {
+  ReductionLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.reduction", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto opType = dyn_cast<ReductionTypeAttr>(op->getAttr("op_type"));
+    if (!opType)
+      return failure();
+    if (opType.getValue() != ReductionType::Sum && opType.getValue() != ReductionType::Max)
+      return failure();
+    if (auto activation = dyn_cast<SimpleActivationFunctionAttr>(op->getAttr("activation_function")))
+      if (activation.getValue() != SimpleActivationFunction::None)
+        return failure();
+    auto dims = dyn_cast<DenseIntElementsAttr>(op->getAttr("dimensions"));
+    if (!dims)
+      return failure();
+    SmallVector<int64_t> reduceDims;
+    for (auto v : dims.getValues<APInt>())
+      reduceDims.push_back(v.getSExtValue());
+    if (reduceDims.size() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (!isa<FloatType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value initBuf = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value initScalar;
+    if (opType.getValue() == ReductionType::Sum)
+      initScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    else
+      initScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(dstRanked.getElementType(), -std::numeric_limits<float>::infinity()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{initScalar}, ValueRange{initBuf});
+    bool isMax = opType.getValue() == ReductionType::Max;
+    auto reduce = rewriter.create<linalg::ReduceOp>(loc, ValueRange{input}, ValueRange{initBuf}, reduceDims,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = isMax ? static_cast<Value>(nested.create<arith::MaximumFOp>(nloc, args[0], args[1]))
+                            : static_cast<Value>(nested.create<arith::AddFOp>(nloc, args[0], args[1]));
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, reduce->getResult(0));
+    return success();
+  }
+};
+
 template <typename LinalgOp>
 static LogicalResult lowerDwcBinaryToLinalg(Operation *op, PatternRewriter &rewriter) {
   if (op->getNumResults() != 1 || op->getNumOperands() != 2)
@@ -492,6 +544,7 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<GatherLowering>("darwinn.hib_gather", ctx);
   patterns.add<CwiseLowering>(ctx);
   patterns.add<SelectLowering>(ctx);
+  patterns.add<ReductionLowering>(ctx);
   patterns.add<DwcAddLowering>(ctx);
   patterns.add<DwcBinaryLowering>("dwc.multiply", lowerDwcBinaryOp<linalg::MulOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.divide", lowerDwcBinaryOp<linalg::DivOp>, ctx);
