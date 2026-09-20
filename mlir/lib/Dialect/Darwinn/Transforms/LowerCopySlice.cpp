@@ -906,6 +906,46 @@ struct NotLowering : public RewritePattern {
     return success();
   }
 };
+
+struct IntUnaryLowering : public RewritePattern {
+  StringRef root;
+  using EmitFn = Value (*)(OpBuilder &, Location, Value);
+  EmitFn emit;
+  IntUnaryLowering(StringRef rootName, EmitFn fn, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName), emit(fn) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (!isa<IntegerType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(2, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{input}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = emit(nested, nloc, args[0]);
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+static Value emitPopCount(OpBuilder &b, Location loc, Value x) { return b.create<math::CtPopOp>(loc, x); }
 static Value emitFloorDiv(OpBuilder &b, Location loc, Value x, Value y) {
   Value d = b.create<arith::DivFOp>(loc, x, y);
   return b.create<math::FloorOp>(loc, d);
@@ -1027,10 +1067,7 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<UnaryLowering>("dwc.erf", emitErf, ctx);
   patterns.add<UnaryLowering>("dwc.tan", emitTan, ctx);
   patterns.add<UnaryLowering>("dwc.expm1", emitExpm1, ctx);
-  patterns.add<UnaryLowering>("dwc.log1p", emitLog1p, ctx);
-  patterns.add<UnaryLowering>("dwc.sign", emitSign, ctx);
-  patterns.add<UnaryLowering>("dwc.round_nearest_afz", emitRoundAfz, ctx);
-  patterns.add<NotLowering>(ctx);
   patterns.add<BinaryGenericLowering>("dwc.floor_div", emitFloorDiv, ctx);
   patterns.add<BinaryGenericLowering>("dwc.pow", emitPowF, ctx);
+  patterns.add<IntUnaryLowering>("dwc.pop_count", emitPopCount, ctx);
 }
