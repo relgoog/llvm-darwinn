@@ -2171,4 +2171,74 @@ def DwcDwcSplitLoopTailPass : Pass<"dwc-split-loop-tail", "func::FuncOp"> {
   }];
 }
 
+def DwcDwcScalarizeIvsPass : Pass<"dwc-scalarize-ivs", "func::FuncOp"> {
+  let summary = "DWC pass dwc-scalarize-ivs";
+  let description = [{
+    Blob-evidenced dwc pass. Scalarize induction variables.
+  }];
+}
+
+def DwcDwcCwiseMinmaxPass : Pass<"dwc-cwise-minmax", "func::FuncOp"> {
+  let summary = "DWC pass dwc-cwise-minmax";
+  let description = [{
+    Blob-evidenced dwc pass. Fold cwise min max patterns.
+  }];
+}
+
+def DwcDwcOptimizePass : Pass<"dwc-optimize", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize";
+  let description = [{
+    Blob-evidenced dwc pass. General dwc optimization driver.
+  }];
+}
+
+def DwcDwcOptimizeReshapePass : Pass<"dwc-optimize-reshape", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-reshape";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize reshapes, failing with dwc-optimize-reshape pass failed.
+  }];
+}
+
+def DwcDwcOptimizeSlicePass : Pass<"dwc-optimize-slice", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-slice";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize slices.
+  }];
+}
+
+def DwcDwcOptimizeTopKPass : Pass<"dwc-optimize-top-k", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-top-k";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize top_k, failing with dwc-optimize-top-k failed.
+  }];
+}
+
+def DwcDwcOptimizeBitwidthPass : Pass<"dwc-optimize-bitwidth", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-bitwidth";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize bitwidths.
+  }];
+}
+
+def DwcDwcOptimizeAbsolutePositionalEncodingPass : Pass<"dwc-optimize-absolute-positional-encoding", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-absolute-positional-encoding";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize absolute positional encoding, failing with dwc-optimize-absolute-positional-encoding failed.
+  }];
+}
+
+def DwcDwcOptimizeAnnotateMaterializePolicyPass : Pass<"dwc-optimize-annotate-materialize-policy", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-annotate-materialize-policy";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize annotate materialize policy.
+  }];
+}
+
+def DwcDwcOptimizeDeviceLaunchRegionPass : Pass<"dwc-optimize-device-launch-region", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-device-launch-region";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize device launch regions.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES

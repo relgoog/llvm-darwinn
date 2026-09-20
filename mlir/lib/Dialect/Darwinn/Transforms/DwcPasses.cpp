@@ -304,6 +304,16 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDWCSHARDINGCLEANUPPASS
 #define GEN_PASS_DEF_DWCDWCLICMPASS
 #define GEN_PASS_DEF_DWCDWCSPLITLOOPTAILPASS
+#define GEN_PASS_DEF_DWCDWCSCALARIZEIVSPASS
+#define GEN_PASS_DEF_DWCDWCCWISEMINMAXPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZEPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZERESHAPEPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZESLICEPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZETOPKPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZEBITWIDTHPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZEABSOLUTEPOSITIONALENCODINGPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZEANNOTATEMATERIALIZEPOLICYPASS
+#define GEN_PASS_DEF_DWCDWCOPTIMIZEDEVICELAUNCHREGIONPASS
 #include "DwcPasses.h.inc"
 } // namespace darwinn
 } // namespace mlir
@@ -9493,6 +9503,236 @@ struct DwcDwcSplitLoopTailPass
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dwc") {
         op->emitError("dwc-split-loop-tail accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcScalarizeIvsPass
+    : public darwinn::impl::DwcDwcScalarizeIvsPassBase<DwcDwcScalarizeIvsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-scalarize-ivs accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcCwiseMinmaxPass
+    : public darwinn::impl::DwcDwcCwiseMinmaxPassBase<DwcDwcCwiseMinmaxPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-cwise-minmax accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizePass
+    : public darwinn::impl::DwcDwcOptimizePassBase<DwcDwcOptimizePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizeReshapePass
+    : public darwinn::impl::DwcDwcOptimizeReshapePassBase<DwcDwcOptimizeReshapePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    SmallVector<Operation *> dead;
+    func.walk([&](Operation *op) {
+      if (op->getName().getStringRef() != "dwc.reshape")
+        return;
+      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
+        return;
+      if (op->getOperand(0).getType() != op->getResult(0).getType())
+        return;
+      dead.push_back(op);
+    });
+    for (Operation *op : dead) {
+      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
+      op->erase();
+    }
+  }
+};
+
+struct DwcDwcOptimizeSlicePass
+    : public darwinn::impl::DwcDwcOptimizeSlicePassBase<DwcDwcOptimizeSlicePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize-slice accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizeTopKPass
+    : public darwinn::impl::DwcDwcOptimizeTopKPassBase<DwcDwcOptimizeTopKPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize-top-k accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizeBitwidthPass
+    : public darwinn::impl::DwcDwcOptimizeBitwidthPassBase<DwcDwcOptimizeBitwidthPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize-bitwidth accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizeAbsolutePositionalEncodingPass
+    : public darwinn::impl::DwcDwcOptimizeAbsolutePositionalEncodingPassBase<DwcDwcOptimizeAbsolutePositionalEncodingPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize-absolute-positional-encoding accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizeAnnotateMaterializePolicyPass
+    : public darwinn::impl::DwcDwcOptimizeAnnotateMaterializePolicyPassBase<DwcDwcOptimizeAnnotateMaterializePolicyPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize-annotate-materialize-policy accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcOptimizeDeviceLaunchRegionPass
+    : public darwinn::impl::DwcDwcOptimizeDeviceLaunchRegionPassBase<DwcDwcOptimizeDeviceLaunchRegionPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-optimize-device-launch-region accepts dwc ops only");
         failedLegal = true;
         return WalkResult::interrupt();
       }
