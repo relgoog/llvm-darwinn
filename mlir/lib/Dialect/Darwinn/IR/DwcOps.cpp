@@ -1203,24 +1203,31 @@ LogicalResult dwc::TransposeOp::verify() {
   if (!llvm::isa<ElementsAttr>((*this)->getAttr("permutation")))
     return (*this)->emitOpError("attribute 'permutation' expects ElementsAttr");
   if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
-    if (ranked.getRank() != 3)
-      return (*this)->emitOpError("operand 0 expects Rank 3 tensor");
+    int64_t rank = ranked.getRank();
+    if (rank != 3 && rank != 4 && rank != 5)
+      return (*this)->emitOpError("operand 0 expects Rank 3, Rank 4, or Rank 5 tensor");
     auto perm = llvm::cast<ElementsAttr>((*this)->getAttr("permutation"));
     auto shaped = llvm::dyn_cast<ShapedType>(perm.getType());
-    if (!shaped || !shaped.hasStaticShape() || shaped.getNumElements() != 3)
-      return (*this)->emitOpError("attribute 'permutation' expects 3 elements for Rank 3 tensor");
+    if (!shaped || !shaped.hasStaticShape() || shaped.getNumElements() != rank)
+      return (*this)->emitOpError("attribute 'permutation' expects ") << rank << " elements for Rank " << rank << " tensor";
     SmallVector<int64_t> values;
     for (auto element : perm.getValues<IntegerAttr>())
       values.push_back(element.getInt());
-    if (values.size() != 3)
+    if (static_cast<int64_t>(values.size()) != rank)
       return (*this)->emitOpError("attribute 'permutation' expects integer elements");
-    llvm::SmallDenseSet<int64_t, 4> seen;
+    llvm::SmallDenseSet<int64_t, 8> seen;
     for (int64_t value : values) {
-      if (value < 0 || value >= 3)
-        return (*this)->emitOpError("attribute 'permutation' expects values in [0, 3)");
+      if (value < 0 || value >= rank)
+        return (*this)->emitOpError("attribute 'permutation' expects values in [0, ") << rank << ")";
       if (!seen.insert(value).second)
         return (*this)->emitOpError("attribute 'permutation' expects distinct values");
     }
+    auto allowed = {SmallVector<int64_t>{2, 0, 1}, SmallVector<int64_t>{0, 2, 1, 3}, SmallVector<int64_t>{0, 1, 2, 4, 3}, SmallVector<int64_t>{0, 1, 3, 2, 4}, SmallVector<int64_t>{4, 0, 3, 1, 2}};
+    for (const auto &candidate : allowed) {
+      if (values == candidate)
+        return success();
+    }
+    return (*this)->emitOpError("attribute 'permutation' expects one of the blob-evidenced transpose permutations");
   }
   return success();
 }

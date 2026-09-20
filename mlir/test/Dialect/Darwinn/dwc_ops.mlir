@@ -484,7 +484,7 @@ func.func @test_tanh(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // CHECK-LABEL: transpose
 func.func @test_transpose(%arg0: tensor<2x2x2xf32>) -> tensor<2x2x2xf32> {
   // CHECK: dwc.transpose
-  %0 = "dwc.transpose"(%arg0) {permutation = dense<[0, 1, 2]> : tensor<3xi64>} : (tensor<2x2x2xf32>) -> tensor<2x2x2xf32>
+  %0 = "dwc.transpose"(%arg0) {permutation = dense<[2, 0, 1]> : tensor<3xi64>} : (tensor<2x2x2xf32>) -> tensor<2x2x2xf32>
   return %0 : tensor<2x2x2xf32>
 }
 
