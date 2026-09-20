@@ -230,6 +230,48 @@ def Dwc_VicaCustomPaddingEnum : Dwc_I32Enum<
   ]>;
 def Dwc_VicaCustomPaddingAttr : Dwc_I32EnumAttr<"vica_custom_padding", Dwc_VicaCustomPaddingEnum>;
 
+def Dwc_AFUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_AFEnum : Dwc_I32Enum<
+  "AF", "DWC AF", [
+    Dwc_AFUnknown
+  ]>;
+def Dwc_AFAttr : Dwc_I32EnumAttr<"af", Dwc_AFEnum>;
+
+def Dwc_AlgorithmUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_AlgorithmEnum : Dwc_I32Enum<
+  "Algorithm", "DWC algorithm", [
+    Dwc_AlgorithmUnknown
+  ]>;
+def Dwc_AlgorithmAttr : Dwc_I32EnumAttr<"algorithm", Dwc_AlgorithmEnum>;
+
+def Dwc_AttentionNonLinearFunctionUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_AttentionNonLinearFunctionEnum : Dwc_I32Enum<
+  "AttentionNonLinearFunction", "DWC attention non linear function", [
+    Dwc_AttentionNonLinearFunctionUnknown
+  ]>;
+def Dwc_AttentionNonLinearFunctionAttr : Dwc_I32EnumAttr<"attention_non_linear_function", Dwc_AttentionNonLinearFunctionEnum>;
+
+def Dwc_BitSelectTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_BitSelectTypeEnum : Dwc_I32Enum<
+  "BitSelectType", "DWC bit select type", [
+    Dwc_BitSelectTypeUnknown
+  ]>;
+def Dwc_BitSelectTypeAttr : Dwc_I32EnumAttr<"bit_select_type", Dwc_BitSelectTypeEnum>;
+
+def Dwc_CompressionModeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_CompressionModeEnum : Dwc_I32Enum<
+  "CompressionMode", "DWC compression mode", [
+    Dwc_CompressionModeUnknown
+  ]>;
+def Dwc_CompressionModeAttr : Dwc_I32EnumAttr<"compression_mode", Dwc_CompressionModeEnum>;
+
+def Dwc_CustomPadValueTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_CustomPadValueTypeEnum : Dwc_I32Enum<
+  "CustomPadValueType", "DWC custom pad value type", [
+    Dwc_CustomPadValueTypeUnknown
+  ]>;
+def Dwc_CustomPadValueTypeAttr : Dwc_I32EnumAttr<"custom_pad_value_type", Dwc_CustomPadValueTypeEnum>;
+
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   "MemorySpace", "DWC memory space", [
