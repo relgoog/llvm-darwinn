@@ -1218,3 +1218,11 @@ func.func @test_transposed_convolution_sub_channel_drq(%arg0: tensor<1x4x4x4xf32
   %0 = edgetpu.transposed_convolution_sub_channel_drq %arg0, %arg1 : (tensor<1x4x4x4xf32>, tensor<8x1x1x4xf32>) -> tensor<1x4x4x8xf32>
   return %0 : tensor<1x4x4x8xf32>
 }
+
+// -----
+// CHECK-LABEL: lookup_table
+func.func @test_lookup_table(%arg0: tensor<1x4x4x4xf32>) -> tensor<1x4x4x4xf32> {
+  // CHECK: edgetpu.lookup_table
+  %0 = edgetpu.lookup_table %arg0 : (tensor<1x4x4x4xf32>) -> tensor<1x4x4x4xf32>
+  return %0 : tensor<1x4x4x4xf32>
+}

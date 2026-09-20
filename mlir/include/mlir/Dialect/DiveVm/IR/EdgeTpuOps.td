@@ -228,4 +228,18 @@ def EdgeTpu_TransposedConvolutionSubChannelDrqOp : EdgeTpu_Op<"transposed_convol
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+//===----------------------------------------------------------------------===//
+// Operator: lookup_table
+//===----------------------------------------------------------------------===//
+def EdgeTpu_LookupTableOp : EdgeTpu_Op<"lookup_table"> {
+  let summary = "EdgeTPU lookup_table operation.";
+  let description = [{
+    Verifier accepts any operand count. Blob carries requires-coefficients, requires-even-count, and supports-16-at-most diagnostics with no callee symbol evidenced. No darwinn lowering forwarding to edgetpu.lookup_table evidenced.
+  }];
+  let arguments = (ins Variadic<AnyType>:$operands);
+  let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 #endif // EDGETPU_OPS

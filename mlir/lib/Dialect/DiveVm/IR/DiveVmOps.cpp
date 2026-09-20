@@ -1540,3 +1540,9 @@ LogicalResult edgetpu::TransposedConvolutionSubChannelDrqOp::verify() {
   // carry no rank to check.
   return success();
 }
+
+LogicalResult edgetpu::LookupTableOp::verify() {
+  // No shape contract: packet layout absent, fully generic operands
+  // carry no rank to check.
+  return success();
+}
