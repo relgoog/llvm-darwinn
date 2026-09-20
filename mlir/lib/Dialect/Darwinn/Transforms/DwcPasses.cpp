@@ -8133,7 +8133,7 @@ struct DwcCustomSlicingAssignmentPass
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     func.walk([&](Operation *op) {
-      if (!op->hasAttr("dwc.custom_tiling"))
+      if (!op->hasAttr("darwinn.custom_tiling_options"))
         return;
       op->setAttr("dwc.slicing_assigned", UnitAttr::get(&getContext()));
     });

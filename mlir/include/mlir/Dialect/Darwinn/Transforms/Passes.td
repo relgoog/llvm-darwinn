@@ -1584,7 +1584,7 @@ def DwcCompositeSlicingSolverPass : Pass<"composite-slicing-solver", "func::Func
 def DwcCustomSlicingAssignmentPass : Pass<"custom-slicing-assignment", "func::FuncOp"> {
   let summary = "DWC pass custom-slicing-assignment";
   let description = [{
-    Blob-evidenced lisa pass. Custom slicing assignment. Assigns custom slicing strategies to ops annotated with tiling options.
+    Assigns custom slicing to ops carrying blob-evidenced `darwinn.custom_tiling_options`, stamping `dwc.slicing_assigned`.
   }];
 }
 
