@@ -906,6 +906,57 @@ struct NotLowering : public RewritePattern {
     return success();
   }
 };
+static Value emitFloorDiv(OpBuilder &b, Location loc, Value x, Value y) {
+  Value d = b.create<arith::DivFOp>(loc, x, y);
+  return b.create<math::FloorOp>(loc, d);
+}
+static Value emitPowF(OpBuilder &b, Location loc, Value x, Value y) {
+  return b.create<math::PowFOp>(loc, x, y);
+}
+
+struct BinaryGenericLowering : public RewritePattern {
+  StringRef root;
+  using Emit2Fn = Value (*)(OpBuilder &, Location, Value, Value);
+  Emit2Fn emit;
+  BinaryGenericLowering(StringRef rootName, Emit2Fn fn, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName), emit(fn) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+    auto rhsRanked = dyn_cast<RankedTensorType>(rhs.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!lhsRanked || !rhsRanked || !dstRanked)
+      return failure();
+    if (!lhsRanked.hasStaticShape() || !rhsRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (lhsRanked.getShape() != rhsRanked.getShape() || rhsRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (!isa<FloatType>(lhsRanked.getElementType()) || lhsRanked.getElementType() != rhsRanked.getElementType() ||
+        rhsRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = emit(nested, nloc, args[0], args[1]);
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
 static Value emitSin(OpBuilder &b, Location loc, Value x) { return b.create<math::SinOp>(loc, x); }
 static Value emitCos(OpBuilder &b, Location loc, Value x) { return b.create<math::CosOp>(loc, x); }
 static Value emitExp(OpBuilder &b, Location loc, Value x) { return b.create<math::ExpOp>(loc, x); }
@@ -980,4 +1031,6 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<UnaryLowering>("dwc.sign", emitSign, ctx);
   patterns.add<UnaryLowering>("dwc.round_nearest_afz", emitRoundAfz, ctx);
   patterns.add<NotLowering>(ctx);
+  patterns.add<BinaryGenericLowering>("dwc.floor_div", emitFloorDiv, ctx);
+  patterns.add<BinaryGenericLowering>("dwc.pow", emitPowF, ctx);
 }
