@@ -627,6 +627,106 @@ struct MatmulLowering : public RewritePattern {
   }
 };
 
+struct BroadcastLowering : public RewritePattern {
+  BroadcastLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.broadcast", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (srcRanked.getRank() + 1 != dstRanked.getRank())
+      return failure();
+    for (int64_t d = 0; d < srcRanked.getRank(); ++d)
+      if (srcRanked.getDimSize(d) != dstRanked.getDimSize(d + 1))
+        return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    SmallVector<int64_t> dims{0};
+    rewriter.replaceOpWithNewOp<linalg::BroadcastOp>(op, input, empty, dims);
+    return success();
+  }
+};
+
+struct ConcatenationLowering : public RewritePattern {
+  ConcatenationLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.concatenation", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+    auto rhsRanked = dyn_cast<RankedTensorType>(rhs.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!lhsRanked || !rhsRanked || !dstRanked)
+      return failure();
+    if (!lhsRanked.hasStaticShape() || !rhsRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (lhsRanked.getRank() != 1 || rhsRanked.getRank() != 1 || dstRanked.getRank() != 1)
+      return failure();
+    if (lhsRanked.getElementType() != rhsRanked.getElementType() ||
+        rhsRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (lhsRanked.getDimSize(0) + rhsRanked.getDimSize(0) != dstRanked.getDimSize(0))
+      return failure();
+    rewriter.replaceOpWithNewOp<tensor::ConcatOp>(op, dstTy, rewriter.getI64IntegerAttr(0), ValueRange{lhs, rhs});
+    return success();
+  }
+};
+
+struct SliceLowering : public RewritePattern {
+  SliceLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.slice", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto getI32 = [&](StringRef name, int64_t &out) -> bool {
+      auto attr = dyn_cast<IntegerAttr>(op->getAttr(name));
+      if (!attr)
+        return false;
+      out = attr.getInt();
+      return true;
+    };
+    int64_t begin, size;
+    if (!getI32("in_begin", begin) || !getI32("in_size", size))
+      return failure();
+    if (begin < 0 || size <= 0)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getRank() != 1 || dstRanked.getRank() != 1)
+      return failure();
+    if (srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (begin + size > srcRanked.getDimSize(0) || size != dstRanked.getDimSize(0))
+      return failure();
+    Location loc = op->getLoc();
+    OpFoldResult offset = rewriter.getIndexAttr(begin);
+    OpFoldResult extent = rewriter.getIndexAttr(size);
+    OpFoldResult stride = rewriter.getIndexAttr(1);
+    rewriter.replaceOpWithNewOp<tensor::ExtractSliceOp>(op, dstRanked, input, ArrayRef<OpFoldResult>{offset}, ArrayRef<OpFoldResult>{extent}, ArrayRef<OpFoldResult>{stride});
+    return success();
+  }
+};
+
 struct ConvolutionLowering : public RewritePattern {
   ConvolutionLowering(MLIRContext *ctx)
       : RewritePattern("dwc.convolution", 1, ctx) {}
@@ -710,4 +810,7 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<MatmulLowering>("dwc.matrix_multiply", ctx);
   patterns.add<MatmulLowering>("dwc.fully_connected", ctx);
   patterns.add<ConvolutionLowering>(ctx);
+  patterns.add<BroadcastLowering>(ctx);
+  patterns.add<ConcatenationLowering>(ctx);
+  patterns.add<SliceLowering>(ctx);
 }
