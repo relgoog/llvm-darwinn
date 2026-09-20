@@ -167,9 +167,34 @@ struct CwiseLowering : public RewritePattern {
     Value lhs = op->getOperand(0);
     Value rhs = op->getOperand(1);
     Type dstTy = op->getResult(0).getType();
-    if (!hasSameElementType(lhs.getType(), dstTy) ||
-        !hasSameElementType(rhs.getType(), dstTy))
-      return failure();
+    bool isCompare = false;
+    switch (opType.getValue()) {
+    case CwiseOpType::Equal:
+    case CwiseOpType::NotEqual:
+    case CwiseOpType::Greater:
+    case CwiseOpType::GreaterEqual:
+    case CwiseOpType::Less:
+    case CwiseOpType::LessEqual:
+      isCompare = true;
+      break;
+    default:
+      break;
+    }
+    if (!isCompare) {
+      if (!hasSameElementType(lhs.getType(), dstTy) ||
+          !hasSameElementType(rhs.getType(), dstTy))
+        return failure();
+    } else {
+      if (!hasSameElementType(lhs.getType(), rhs.getType()))
+        return failure();
+      auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+      if (!dstRanked || !dstRanked.hasStaticShape())
+        return failure();
+      auto dstElem = dstRanked.getElementType();
+      auto i1 = IntegerType::get(op->getContext(), 1, IntegerType::Signless);
+      if (dstElem != i1)
+        return failure();
+    }
     auto ranked = dyn_cast<RankedTensorType>(dstTy);
     if (!ranked || !ranked.hasStaticShape())
       return failure();
@@ -196,7 +221,57 @@ struct CwiseLowering : public RewritePattern {
       elem = rewriter.create<linalg::MinOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
       break;
     default:
-      return failure();
+      break;
+    }
+    if (!elem) {
+      auto lhsTy = dyn_cast<RankedTensorType>(lhs.getType());
+      auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+      if (!lhsTy || !dstRanked || !lhsTy.hasStaticShape() || !dstRanked.hasStaticShape())
+        return failure();
+      if (lhsTy.getShape() != dstRanked.getShape())
+        return failure();
+      arith::CmpIPredicate intPred;
+      arith::CmpFPredicate floatPred;
+      bool isFloat = isa<FloatType>(lhsTy.getElementType());
+      switch (opType.getValue()) {
+      case CwiseOpType::Equal:
+        intPred = arith::CmpIPredicate::eq;
+        floatPred = arith::CmpFPredicate::OEQ;
+        break;
+      case CwiseOpType::NotEqual:
+        intPred = arith::CmpIPredicate::ne;
+        floatPred = arith::CmpFPredicate::UNE;
+        break;
+      case CwiseOpType::Greater:
+        intPred = arith::CmpIPredicate::sgt;
+        floatPred = arith::CmpFPredicate::OGT;
+        break;
+      case CwiseOpType::GreaterEqual:
+        intPred = arith::CmpIPredicate::sge;
+        floatPred = arith::CmpFPredicate::OGE;
+        break;
+      case CwiseOpType::Less:
+        intPred = arith::CmpIPredicate::slt;
+        floatPred = arith::CmpFPredicate::OLT;
+        break;
+      case CwiseOpType::LessEqual:
+        intPred = arith::CmpIPredicate::sle;
+        floatPred = arith::CmpFPredicate::OLE;
+        break;
+      default:
+        return failure();
+      }
+      int64_t rank = lhsTy.getRank();
+      SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
+      SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+      auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
+          maps, iters,
+          [&](OpBuilder &nested, Location nloc, ValueRange args) {
+            Value cmp = isFloat ? static_cast<Value>(nested.create<arith::CmpFOp>(nloc, floatPred, args[0], args[1]))
+                                : static_cast<Value>(nested.create<arith::CmpIOp>(nloc, intPred, args[0], args[1]));
+            nested.create<linalg::YieldOp>(nloc, cmp);
+          });
+      elem = generic.getOperation();
     }
     Value result = elem->getResult(0);
     if (isRelu) {
