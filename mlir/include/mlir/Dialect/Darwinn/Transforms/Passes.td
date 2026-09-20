@@ -2789,4 +2789,33 @@ def DwcDwcWrapLisaFunctionPass : Pass<"dwc-wrap-lisa-function", "func::FuncOp"> 
   }];
 }
 
+def DwcDwcFuseEvalWithShapeOpsPass : Pass<"dwc-fuse-eval_with_shape-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-fuse-eval_with_shape-ops";
+  let description = [{
+    Blob substring dwc-fuse-eval names this pass fusing eval with shape ops.
+  }];
+}
+
+
+def DwcDwcSinkRescalingThroughConcatenationPass : Pass<"dwc-sink-rescaling-through-concatenation", "func::FuncOp"> {
+  let summary = "DWC pass dwc-sink-rescaling-through-concatenation";
+  let description = [{
+    Blob-evidenced test pass. Sink rescaling through concatenation.
+  }];
+}
+
+def DwcDwcTransformZinConvolutionPass : Pass<"dwc-transform-zin-convolution", "func::FuncOp"> {
+  let summary = "DWC pass dwc-transform-zin-convolution";
+  let description = [{
+    Blob-evidenced test pass. Transform zin convolution.
+  }];
+}
+
+def DwcDwcTransformZinConvolutionShapePass : Pass<"dwc-transform-zin-convolution-shape", "func::FuncOp"> {
+  let summary = "DWC pass dwc-transform-zin-convolution-shape";
+  let description = [{
+    Blob-evidenced test pass. Transform zin convolution shape.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES

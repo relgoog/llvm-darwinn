@@ -392,6 +392,10 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDWCFILTEROUTOPSWITHUNSUPPORTEDVALUERANGEPASS
 #define GEN_PASS_DEF_DWCDWCRUNSHORTOPSEQUENCESONXXXPASS
 #define GEN_PASS_DEF_DWCDWCWRAPLISAFUNCTIONPASS
+#define GEN_PASS_DEF_DWCDWCFUSEEVALWITHSHAPEOPSPASS
+#define GEN_PASS_DEF_DWCDWCSINKRESCALINGTHROUGHCONCATENATIONPASS
+#define GEN_PASS_DEF_DWCDWCTRANSFORMZINCONVOLUTIONPASS
+#define GEN_PASS_DEF_DWCDWCTRANSFORMZINCONVOLUTIONSHAPEPASS
 #include "DwcPasses.h.inc"
 } // namespace darwinn
 } // namespace mlir
@@ -11600,6 +11604,98 @@ struct DwcDwcWrapLisaFunctionPass
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dwc") {
         op->emitError("dwc-wrap-lisa-function accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+struct DwcDwcFuseEvalWithShapeOpsPass
+    : public darwinn::impl::DwcDwcFuseEvalWithShapeOpsPassBase<DwcDwcFuseEvalWithShapeOpsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-fuse-eval_with_shape-ops accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+
+struct DwcDwcSinkRescalingThroughConcatenationPass
+    : public darwinn::impl::DwcDwcSinkRescalingThroughConcatenationPassBase<DwcDwcSinkRescalingThroughConcatenationPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-sink-rescaling-through-concatenation accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcTransformZinConvolutionPass
+    : public darwinn::impl::DwcDwcTransformZinConvolutionPassBase<DwcDwcTransformZinConvolutionPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-transform-zin-convolution accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcTransformZinConvolutionShapePass
+    : public darwinn::impl::DwcDwcTransformZinConvolutionShapePassBase<DwcDwcTransformZinConvolutionShapePass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-transform-zin-convolution-shape accepts dwc ops only");
         failedLegal = true;
         return WalkResult::interrupt();
       }
