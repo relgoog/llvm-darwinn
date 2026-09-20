@@ -79,6 +79,34 @@ struct CopyOpLowering : public RewritePattern {
   }
 };
 
+struct DarwinnFillLowering : public RewritePattern {
+  DarwinnFillLowering(MLIRContext *ctx)
+      : RewritePattern("darwinn.fill", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value scalar = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape())
+      return failure();
+    Type elem = dstRanked.getElementType();
+    Type scalarTy = scalar.getType();
+    if (auto shaped = dyn_cast<ShapedType>(scalarTy)) {
+      if (shaped.getElementType() != elem)
+        return failure();
+    } else if (scalarTy != elem) {
+      return failure();
+    }
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), elem);
+    rewriter.replaceOpWithNewOp<linalg::FillOp>(op, TypeRange{dstTy}, ValueRange{scalar}, ValueRange{empty});
+    return success();
+  }
+};
+
 struct DynamicSliceLowering : public RewritePattern {
   DynamicSliceLowering(StringRef rootName, bool isUpdate, MLIRContext *ctx)
       : RewritePattern(rootName, 1, ctx), isUpdate(isUpdate) {}
@@ -1190,6 +1218,7 @@ static Value emitRoundAfz(OpBuilder &b, Location loc, Value x) { return b.create
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
   MLIRContext *ctx = patterns.getContext();
   patterns.add<CopyOpLowering>(ctx);
+  patterns.add<DarwinnFillLowering>(ctx);
   patterns.add<DynamicSliceLowering>("darwinn.dynamic_slice",
                                      /*isUpdate=*/false, ctx);
   patterns.add<DynamicSliceLowering>("darwinn.dynamic_slice_with_copy",
