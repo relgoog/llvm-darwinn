@@ -24,7 +24,7 @@ include "mlir/Dialect/DiveVm/IR/DiveVmDialect.td"
 def DiveVm_AddOp : DiveVm_Op<"add"> {
   let summary = "DiveVM add operation.";
   let description = [{
-    Verifier requires exactly 2 operands. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.add to DiveRuntime_Log. No darwinn lowering forwarding to dive_vm.add evidenced.
+    Verifier requires exactly 2 operands. Lowered to linalg.add by the dwc.cwise ADD pattern, then stock linalg to loops to LLVM. convert-dive-vm-to-llvm rejects dive_vm.add since elementwise compute has a real path.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

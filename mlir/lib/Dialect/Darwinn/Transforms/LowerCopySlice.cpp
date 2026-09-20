@@ -6,11 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
+#include "mlir/Dialect/Darwinn/IR/DwcOps.h"
+#define GET_ATTRDEF_CLASSES
+#include "mlir/Dialect/Darwinn/IR/DwcAttributes.h.inc"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 namespace mlir {
@@ -20,6 +22,7 @@ void populateLowerCopySlicePatterns(RewritePatternSet &patterns);
 } // namespace mlir
 
 using namespace mlir;
+using namespace mlir::dwc;
 
 namespace {
 
@@ -143,6 +146,35 @@ struct GatherLowering : public RewritePattern {
   }
 };
 
+struct CwiseAddLowering : public RewritePattern {
+  CwiseAddLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.cwise", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto opType = dyn_cast<CwiseOpTypeAttr>(op->getAttr("op_type"));
+    if (!opType || opType.getValue() != CwiseOpType::Add)
+      return failure();
+    if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function")))
+      if (activation.getValue() != ActivationFunction::None)
+        return failure();
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    if (!hasSameElementType(lhs.getType(), dstTy) ||
+        !hasSameElementType(rhs.getType(), dstTy))
+      return failure();
+    auto ranked = dyn_cast<RankedTensorType>(dstTy);
+    if (!ranked || !ranked.hasStaticShape())
+      return failure();
+    Value empty = rewriter.create<tensor::EmptyOp>(op->getLoc(), ranked.getShape(), ranked.getElementType());
+    rewriter.replaceOpWithNewOp<linalg::AddOp>(op, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
@@ -159,4 +191,5 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<GatherLowering>("darwinn.gather", ctx);
   patterns.add<GatherLowering>("darwinn.gather_copy", ctx);
   patterns.add<GatherLowering>("darwinn.hib_gather", ctx);
+  patterns.add<CwiseAddLowering>(ctx);
 }
