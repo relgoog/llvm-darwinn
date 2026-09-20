@@ -259,7 +259,64 @@ struct CwiseLowering : public RewritePattern {
         floatPred = arith::CmpFPredicate::OLE;
         break;
       default:
-        return failure();
+        break;
+      }
+      bool isCompare = intPred == arith::CmpIPredicate::eq || intPred == arith::CmpIPredicate::ne ||
+          intPred == arith::CmpIPredicate::sgt || intPred == arith::CmpIPredicate::sge ||
+          intPred == arith::CmpIPredicate::slt || intPred == arith::CmpIPredicate::sle;
+      if (!isCompare) {
+        auto bitKind = opType.getValue();
+        if (bitKind != CwiseOpType::BitwiseAnd && bitKind != CwiseOpType::BitwiseOr &&
+            bitKind != CwiseOpType::BitwiseXor && bitKind != CwiseOpType::LogicalAnd &&
+            bitKind != CwiseOpType::ArithmeticLeftShift && bitKind != CwiseOpType::ArithmeticRightShift &&
+            bitKind != CwiseOpType::LogicalRightShift && bitKind != CwiseOpType::Modulus)
+          return failure();
+        int64_t brank = lhsTy.getRank();
+        SmallVector<AffineMap> bmaps(3, rewriter.getMultiDimIdentityMap(brank));
+        SmallVector<utils::IteratorType> biters(brank, utils::IteratorType::parallel);
+        auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
+            bmaps, biters,
+            [&](OpBuilder &nested, Location nloc, ValueRange args) {
+              Value out;
+              switch (bitKind) {
+              case CwiseOpType::BitwiseAnd:
+                out = nested.create<arith::AndIOp>(nloc, args[0], args[1]);
+                break;
+              case CwiseOpType::BitwiseOr:
+                out = nested.create<arith::OrIOp>(nloc, args[0], args[1]);
+                break;
+              case CwiseOpType::BitwiseXor:
+                out = nested.create<arith::XOrIOp>(nloc, args[0], args[1]);
+                break;
+              case CwiseOpType::LogicalAnd:
+                out = nested.create<arith::AndIOp>(nloc, args[0], args[1]);
+                break;
+              case CwiseOpType::ArithmeticLeftShift:
+                out = nested.create<arith::ShLIOp>(nloc, args[0], args[1]);
+                break;
+              case CwiseOpType::ArithmeticRightShift:
+                out = nested.create<arith::ShRSIOp>(nloc, args[0], args[1]);
+                break;
+              case CwiseOpType::LogicalRightShift:
+                out = nested.create<arith::ShRUIOp>(nloc, args[0], args[1]);
+                break;
+              default:
+                out = nested.create<arith::RemSIOp>(nloc, args[0], args[1]);
+                break;
+              }
+              nested.create<linalg::YieldOp>(nloc, out);
+            });
+        elem = generic.getOperation();
+        Value result = elem->getResult(0);
+        if (isRelu) {
+          Value zeroBuf = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+          Value zeroScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(ranked.getElementType()));
+          rewriter.create<linalg::FillOp>(loc, ValueRange{zeroScalar}, ValueRange{zeroBuf});
+          Value reluEmpty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+          result = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{result, zeroBuf}, ValueRange{reluEmpty})->getResult(0);
+        }
+        rewriter.replaceOp(op, result);
+        return success();
       }
       int64_t rank = lhsTy.getRank();
       SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
