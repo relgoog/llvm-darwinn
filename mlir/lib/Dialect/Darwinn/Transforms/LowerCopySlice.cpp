@@ -3116,6 +3116,34 @@ struct IdentityLowering : public RewritePattern {
     return success();
   }
 };
+struct FirstOperandLowering : public RewritePattern {
+  StringRef root;
+  FirstOperandLowering(StringRef rootName, MLIRContext *ctx) : RewritePattern(rootName, 1, ctx), root(rootName) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value input = op->getOperand(0);
+    if (input.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, input);
+    return success();
+  }
+};
+
+struct FenceEraser : public RewritePattern {
+  FenceEraser(MLIRContext *ctx) : RewritePattern("darwinn.fence", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 0 || op->getNumOperands() != 0)
+      return failure();
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 
 struct ClampLowering : public RewritePattern {
   ClampLowering(MLIRContext *ctx) : RewritePattern("dwc.clamp", 1, ctx) {}
@@ -3267,6 +3295,65 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<DarwinnScalarCmpLowering>("darwinn.scalar.flte", arith::CmpFPredicate::OLE, ctx);
   patterns.add<DarwinnBinaryMapLowering>(ctx);
   patterns.add<DarwinnResidualAddLowering>(ctx);
+  patterns.add<FirstOperandLowering>("darwinn.filter_cmp", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.scalar.inplace_dilatef", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.scalar.inplace_truncatef", ctx);
+  patterns.add<FenceEraser>(ctx);
+  patterns.add<IdentityLowering>("darwinn.tensor_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.static_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.static_sparse_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.streaming_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.streaming_sparse_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.synchronized_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.synchronized_sparse_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.vica_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.streaming_sparse_copy_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.synchronized_sparse_copy_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.vica_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.static_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.static_sparse_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.streaming_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.streaming_sparse_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.synchronized_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.synchronized_sparse_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.tensor_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.swizzling", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.multimedia", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.sparse_tensor_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.rng_bit_generator", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.mma_compute_op", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.linear_func", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.local_copy_attributes", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.filter", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.filtered_indices_dispatch_mode", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.huffman_compression", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.huffman_decompress", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.host_to_ssram", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.nlu_func", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.nlu_predicate", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.nlu_preprocess", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.nlu_e8m0_rounding", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.materialize_policy", ctx);
+  patterns.add<ConstMetadataLowering>("darwinn.mem_space", ctx);
+  patterns.add<IdentityLowering>("darwinn.chunking_reshape", ctx);
+  patterns.add<IdentityLowering>("darwinn.swizzling", ctx);
+  patterns.add<IdentityLowering>("darwinn.filter", ctx);
+  patterns.add<IdentityLowering>("darwinn.huffman_compression", ctx);
+  patterns.add<IdentityLowering>("darwinn.huffman_decompress", ctx);
+  patterns.add<IdentityLowering>("darwinn.multimedia", ctx);
+  patterns.add<IdentityLowering>("darwinn.sparse_tensor_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.linear_func", ctx);
+  patterns.add<IdentityLowering>("darwinn.local_copy_attributes", ctx);
+  patterns.add<IdentityLowering>("darwinn.materialize_policy", ctx);
+  patterns.add<IdentityLowering>("darwinn.mem_space", ctx);
+  patterns.add<IdentityLowering>("darwinn.mma_compute_op", ctx);
+  patterns.add<IdentityLowering>("darwinn.host_to_ssram", ctx);
+  patterns.add<IdentityLowering>("darwinn.nlu_func", ctx);
+  patterns.add<IdentityLowering>("darwinn.nlu_predicate", ctx);
+  patterns.add<IdentityLowering>("darwinn.ring_to_tile_slice", ctx);
+  patterns.add<IdentityLowering>("darwinn.scalar_register_to_host_transfer", ctx);
+  patterns.add<IdentityLowering>("darwinn.scalar_register_to_tile_transfer", ctx);
+  patterns.add<IdentityLowering>("darwinn.tile_to_scalar_register_transfer", ctx);
   patterns.add<ConstMetadataLowering>("darwinn.fully_connected_zout_indexed", ctx);
   patterns.add<ConstMetadataLowering>("darwinn.while", ctx);
   patterns.add<ConstMetadataLowering>("darwinn.yield", ctx);
@@ -3321,8 +3408,9 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<IdentityLowering>("darwinn.packed_index_options", ctx);
   patterns.add<IdentityLowering>("darwinn.ring_to_tile_options", ctx);
   patterns.add<ReductionLowering>(ctx);
-  patterns.add<DwcAddLowering>(ctx);
-  patterns.add<DwcBinaryLowering>("dwc.multiply", lowerDwcBinaryOp<linalg::MulOp>, ctx);
+  patterns.add<CompareLowering>(ctx);
+  patterns.add<BroadcastLowering>(ctx);
+  patterns.add<NotLowering>(ctx);
   patterns.add<DwcBinaryLowering>("dwc.divide", lowerDwcBinaryOp<linalg::DivOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.maximum", lowerDwcBinaryOp<linalg::MaxOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.minimum", lowerDwcBinaryOp<linalg::MinOp>, ctx);
