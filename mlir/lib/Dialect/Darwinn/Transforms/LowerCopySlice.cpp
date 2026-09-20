@@ -184,7 +184,7 @@ struct ForwardLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getName().getStringRef() != root)
       return failure();
-    if (op->getNumResults() != 1 || op->getNumOperands() < 1)
+    if (op->getNumResults() != 1 || op->getNumOperands() < 2)
       return failure();
     SmallVector<NamedAttribute> attrs;
     for (auto attr : op->getAttrs())
@@ -203,8 +203,8 @@ struct UnsortedSegmentReduceLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto numSeg = dyn_cast<IntegerAttr>(op->getAttr("num_segments"));
-    auto opType = dyn_cast<ReductionTypeAttr>(op->getAttr("op_type"));
+    auto numSeg = op->getAttrOfType<IntegerAttr>("num_segments");
+    auto opType = op->getAttrOfType<ReductionTypeAttr>("op_type");
     if (!numSeg || !opType)
       return failure();
     int64_t n = numSeg.getInt();
@@ -271,11 +271,11 @@ struct CwiseLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto opType = dyn_cast<CwiseOpTypeAttr>(op->getAttr("op_type"));
+    auto opType = op->getAttrOfType<CwiseOpTypeAttr>("op_type");
     if (!opType)
       return failure();
     bool isRelu = false;
-    if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"))) {
+    if (auto activation = op->getAttrOfType<ActivationFunctionAttr>("activation_function")) {
       if (activation.getValue() == ActivationFunction::Relu)
         isRelu = true;
       else if (activation.getValue() != ActivationFunction::None)
@@ -534,15 +534,15 @@ struct ReductionLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto opType = dyn_cast<ReductionTypeAttr>(op->getAttr("op_type"));
+    auto opType = op->getAttrOfType<ReductionTypeAttr>("op_type");
     if (!opType)
       return failure();
     if (opType.getValue() != ReductionType::Sum && opType.getValue() != ReductionType::Max)
       return failure();
-    if (auto activation = dyn_cast<SimpleActivationFunctionAttr>(op->getAttr("activation_function")))
+    if (auto activation = op->getAttrOfType<SimpleActivationFunctionAttr>("activation_function"))
       if (activation.getValue() != SimpleActivationFunction::None)
         return failure();
-    auto dims = dyn_cast<DenseIntElementsAttr>(op->getAttr("dimensions"));
+    auto dims = op->getAttrOfType<DenseIntElementsAttr>("dimensions");
     if (!dims)
       return failure();
     SmallVector<int64_t> reduceDims;
@@ -558,6 +558,8 @@ struct ReductionLowering : public RewritePattern {
       return failure();
     if (!isa<FloatType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
       return failure();
+    if (srcRanked.getRank() != dstRanked.getRank() + static_cast<int64_t>(reduceDims.size()))
+      return failure();
     Location loc = op->getLoc();
     Value initBuf = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
     Value initScalar;
@@ -565,7 +567,6 @@ struct ReductionLowering : public RewritePattern {
       initScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
     else
       initScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(dstRanked.getElementType(), -std::numeric_limits<float>::infinity()));
-    rewriter.create<linalg::FillOp>(loc, ValueRange{initScalar}, ValueRange{initBuf});
     bool isMax = opType.getValue() == ReductionType::Max;
     auto reduce = rewriter.create<linalg::ReduceOp>(loc, ValueRange{input}, ValueRange{initBuf}, reduceDims,
         [&](OpBuilder &nested, Location nloc, ValueRange args) {
@@ -583,7 +584,7 @@ static LogicalResult lowerDwcBinaryToLinalg(Operation *op, PatternRewriter &rewr
   if (op->getNumResults() != 1 || op->getNumOperands() != 2)
     return failure();
   bool isRelu = false;
-  if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"))) {
+  if (auto activation = op->getAttrOfType<ActivationFunctionAttr>("activation_function")) {
     if (activation.getValue() == ActivationFunction::Relu)
       isRelu = true;
     else if (activation.getValue() != ActivationFunction::None)
@@ -683,7 +684,7 @@ struct TransposeLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto perm = dyn_cast<DenseIntElementsAttr>(op->getAttr("permutation"));
+    auto perm = op->getAttrOfType<DenseIntElementsAttr>("permutation");
     if (!perm)
       return failure();
     SmallVector<int64_t> permutation;
@@ -811,7 +812,7 @@ struct SliceLowering : public RewritePattern {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
     auto getI32 = [&](StringRef name, int64_t &out) -> bool {
-      auto attr = dyn_cast<IntegerAttr>(op->getAttr(name));
+      auto attr = op->getAttrOfType<IntegerAttr>(name);
       if (!attr)
         return false;
       out = attr.getInt();
@@ -852,8 +853,8 @@ struct DynamicSliceNdLowering : public RewritePattern {
       return failure();
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto mode = dyn_cast<IntegerAttr>(op->getAttr("mode"));
-    auto size = dyn_cast<IntegerAttr>(op->getAttr("slice_size"));
+    auto mode = op->getAttrOfType<IntegerAttr>("mode");
+    auto size = op->getAttrOfType<IntegerAttr>("slice_size");
     if (!mode || !size)
       return failure();
     if (size.getInt() <= 0)
@@ -886,7 +887,7 @@ struct DynamicUpdateSliceNdLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto mode = dyn_cast<IntegerAttr>(op->getAttr("mode"));
+    auto mode = op->getAttrOfType<IntegerAttr>("mode");
     if (!mode)
       return failure();
     Value update = op->getOperand(0);
@@ -927,7 +928,7 @@ struct ConvolutionLowering : public RewritePattern {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
     auto getI64 = [&](StringRef name, int64_t &out) -> bool {
-      auto attr = dyn_cast<IntegerAttr>(op->getAttr(name));
+      auto attr = op->getAttrOfType<IntegerAttr>(name);
       if (!attr)
         return false;
       out = attr.getInt();
@@ -980,10 +981,10 @@ struct ConvolutionV2Lowering : public RewritePattern {
       return failure();
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto xs = dyn_cast<IntegerAttr>(op->getAttr("x_stride"));
-    auto ys = dyn_cast<IntegerAttr>(op->getAttr("y_stride"));
-    auto xd = dyn_cast<IntegerAttr>(op->getAttr("x_dilation_rate"));
-    auto yd = dyn_cast<IntegerAttr>(op->getAttr("y_dilation_rate"));
+    auto xs = op->getAttrOfType<IntegerAttr>("x_stride");
+    auto ys = op->getAttrOfType<IntegerAttr>("y_stride");
+    auto xd = op->getAttrOfType<IntegerAttr>("x_dilation_rate");
+    auto yd = op->getAttrOfType<IntegerAttr>("y_dilation_rate");
     if (!xs || !ys || !xd || !yd)
       return failure();
     if (xs.getInt() != 1 || ys.getInt() != 1 || xd.getInt() != 1 || yd.getInt() != 1)
@@ -1010,7 +1011,7 @@ struct ConvolutionV2Lowering : public RewritePattern {
     auto strides = rewriter.getDenseI64ArrayAttr({1, 1});
     auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
     if (root == "dwc.depthwise_convolution_v2") {
-      auto mult = dyn_cast<IntegerAttr>(op->getAttr("depth_multiplier"));
+      auto mult = op->getAttrOfType<IntegerAttr>("depth_multiplier");
       if (!mult || mult.getInt() != 1)
         return failure();
       if (filtRanked.getRank() != 3 || filtRanked.getDimSize(2) != inRanked.getDimSize(3) ||
@@ -1040,9 +1041,9 @@ struct GenericDotLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto act = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
-    auto batch = dyn_cast<IntegerAttr>(op->getAttr("batch_dim_count"));
-    auto contracting = dyn_cast<IntegerAttr>(op->getAttr("contracting_dim_count"));
+    auto act = op->getAttrOfType<ActivationFunctionAttr>("activation_function");
+    auto batch = op->getAttrOfType<IntegerAttr>("batch_dim_count");
+    auto contracting = op->getAttrOfType<IntegerAttr>("contracting_dim_count");
     if (!act || !batch || !contracting)
       return failure();
     if (act.getValue() != ActivationFunction::None || batch.getInt() != 1 || contracting.getInt() != 1)
@@ -1082,9 +1083,9 @@ struct ClassifierLowering : public RewritePattern {
   ClassifierLowering(MLIRContext *ctx) : RewritePattern("dwc.classifier", 1, ctx) {}
 
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto axis = dyn_cast<IntegerAttr>(op->getAttr("axis"));
-    auto beta = dyn_cast<FloatAttr>(op->getAttr("beta"));
-    auto opType = dyn_cast<ClassificationTypeAttr>(op->getAttr("op_type"));
+    auto axis = op->getAttrOfType<IntegerAttr>("axis");
+    auto beta = op->getAttrOfType<FloatAttr>("beta");
+    auto opType = op->getAttrOfType<ClassificationTypeAttr>("op_type");
     if (!axis || !beta || !opType)
       return failure();
     if (axis.getInt() != -1 || beta.getValueAsDouble() != 1.0 ||
@@ -1114,13 +1115,13 @@ struct GenericConvLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto act = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
-    auto batchGroup = dyn_cast<IntegerAttr>(op->getAttr("batch_group_count"));
-    auto featGroup = dyn_cast<IntegerAttr>(op->getAttr("feature_group_count"));
-    auto stride = dyn_cast<DenseIntElementsAttr>(op->getAttr("stride"));
-    auto inputDil = dyn_cast<DenseIntElementsAttr>(op->getAttr("input_dilation"));
-    auto paramDil = dyn_cast<DenseIntElementsAttr>(op->getAttr("param_dilation"));
-    auto padding = dyn_cast<DenseIntElementsAttr>(op->getAttr("padding_amount"));
+    auto act = op->getAttrOfType<ActivationFunctionAttr>("activation_function");
+    auto batchGroup = op->getAttrOfType<IntegerAttr>("batch_group_count");
+    auto featGroup = op->getAttrOfType<IntegerAttr>("feature_group_count");
+    auto stride = op->getAttrOfType<DenseIntElementsAttr>("stride");
+    auto inputDil = op->getAttrOfType<DenseIntElementsAttr>("input_dilation");
+    auto paramDil = op->getAttrOfType<DenseIntElementsAttr>("param_dilation");
+    auto padding = op->getAttrOfType<DenseIntElementsAttr>("padding_amount");
     if (!act || !batchGroup || !featGroup || !stride || !inputDil || !paramDil || !padding)
       return failure();
     if (act.getValue() != ActivationFunction::None || batchGroup.getInt() != 1 || featGroup.getInt() != 1)
@@ -1177,14 +1178,14 @@ struct TransposedConvLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto act = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
-    auto cell = dyn_cast<CellOperationAttr>(op->getAttr("cell_operation"));
-    auto xs = dyn_cast<IntegerAttr>(op->getAttr("x_stride"));
-    auto ys = dyn_cast<IntegerAttr>(op->getAttr("y_stride"));
-    auto xd = dyn_cast<IntegerAttr>(op->getAttr("x_dilation_rate"));
-    auto yd = dyn_cast<IntegerAttr>(op->getAttr("y_dilation_rate"));
-    auto xOut = dyn_cast<IntegerAttr>(op->getAttr("x_out_dim"));
-    auto yOut = dyn_cast<IntegerAttr>(op->getAttr("y_out_dim"));
+    auto act = op->getAttrOfType<ActivationFunctionAttr>("activation_function");
+    auto cell = op->getAttrOfType<CellOperationAttr>("cell_operation");
+    auto xs = op->getAttrOfType<IntegerAttr>("x_stride");
+    auto ys = op->getAttrOfType<IntegerAttr>("y_stride");
+    auto xd = op->getAttrOfType<IntegerAttr>("x_dilation_rate");
+    auto yd = op->getAttrOfType<IntegerAttr>("y_dilation_rate");
+    auto xOut = op->getAttrOfType<IntegerAttr>("x_out_dim");
+    auto yOut = op->getAttrOfType<IntegerAttr>("y_out_dim");
     if (!act || !cell || !xs || !ys || !xd || !yd || !xOut || !yOut)
       return failure();
     if (act.getValue() != ActivationFunction::None || cell.getValue() != CellOperation::Mac)
@@ -1284,7 +1285,7 @@ struct ScalarLowering : public RewritePattern {
   ScalarLowering(MLIRContext *ctx) : RewritePattern("dwc.scalar", 1, ctx) {}
 
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto opType = dyn_cast<ScalarOpTypeAttr>(op->getAttr("op_type"));
+    auto opType = op->getAttrOfType<ScalarOpTypeAttr>("op_type");
     if (!opType)
       return failure();
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
@@ -1303,7 +1304,7 @@ struct ScalarLowering : public RewritePattern {
       rewriter.replaceOp(op, input);
       return success();
     }
-    auto imm = dyn_cast<IntegerAttr>(op->getAttr("immediate"));
+    auto imm = op->getAttrOfType<IntegerAttr>("immediate");
     if (!imm)
       return failure();
     Location loc = op->getLoc();
@@ -1371,9 +1372,9 @@ struct PaddingLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto dim = dyn_cast<IntegerAttr>(op->getAttr("dimension"));
-    auto pre = dyn_cast<IntegerAttr>(op->getAttr("pre_padding"));
-    auto post = dyn_cast<IntegerAttr>(op->getAttr("post_padding"));
+    auto dim = op->getAttrOfType<IntegerAttr>("dimension");
+    auto pre = op->getAttrOfType<IntegerAttr>("pre_padding");
+    auto post = op->getAttrOfType<IntegerAttr>("post_padding");
     if (!dim || !pre || !post)
       return failure();
     int64_t axis = dim.getInt();
@@ -1382,7 +1383,7 @@ struct PaddingLowering : public RewritePattern {
     if (lo < 0 || hi < 0)
       return failure();
     Value padValue;
-    if (auto floatAttr = dyn_cast<FloatAttr>(op->getAttr("padding_value")))
+    if (auto floatAttr = op->getAttrOfType<FloatAttr>("padding_value"))
       padValue = rewriter.create<arith::ConstantOp>(op->getLoc(), floatAttr);
     else
       return failure();
@@ -1429,6 +1430,118 @@ struct PassThroughLowering : public RewritePattern {
     return success();
   }
 };
+struct DepthwiseConvLowering : public RewritePattern {
+  DepthwiseConvLowering(MLIRContext *ctx) : RewritePattern("dwc.depthwise_convolution", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value input = op->getOperand(0);
+    Value filter = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto inRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto filtRanked = dyn_cast<RankedTensorType>(filter.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!inRanked || !filtRanked || !dstRanked)
+      return failure();
+    if (!inRanked.hasStaticShape() || !filtRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (inRanked.getRank() != 4 || dstRanked.getRank() != 4 || filtRanked.getRank() != 3)
+      return failure();
+    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
+        filtRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (filtRanked.getDimSize(2) != inRanked.getDimSize(3) || dstRanked.getDimSize(3) != inRanked.getDimSize(3))
+      return failure();
+    if (inRanked.getDimSize(0) != dstRanked.getDimSize(0))
+      return failure();
+    if (dstRanked.getDimSize(1) != inRanked.getDimSize(1) - filtRanked.getDimSize(0) + 1 ||
+        dstRanked.getDimSize(2) != inRanked.getDimSize(2) - filtRanked.getDimSize(1) + 1)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    auto strides = rewriter.getDenseI64ArrayAttr({1, 1});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
+    rewriter.replaceOpWithNewOp<linalg::DepthwiseConv2DNhwcHwcOp>(op, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+
+struct Conv3DLowering : public RewritePattern {
+  Conv3DLowering(MLIRContext *ctx) : RewritePattern("dwc.convolution_3d", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value input = op->getOperand(0);
+    Value filter = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto inRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto filtRanked = dyn_cast<RankedTensorType>(filter.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!inRanked || !filtRanked || !dstRanked)
+      return failure();
+    if (!inRanked.hasStaticShape() || !filtRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (inRanked.getRank() != 5 || filtRanked.getRank() != 5 || dstRanked.getRank() != 5)
+      return failure();
+    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
+        filtRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(4) != filtRanked.getDimSize(3) ||
+        filtRanked.getDimSize(4) != dstRanked.getDimSize(4))
+      return failure();
+    if (dstRanked.getDimSize(1) != inRanked.getDimSize(1) - filtRanked.getDimSize(0) + 1 ||
+        dstRanked.getDimSize(2) != inRanked.getDimSize(2) - filtRanked.getDimSize(1) + 1 ||
+        dstRanked.getDimSize(3) != inRanked.getDimSize(3) - filtRanked.getDimSize(2) + 1)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    auto strides = rewriter.getDenseI64ArrayAttr({1, 1, 1});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1, 1});
+    rewriter.replaceOpWithNewOp<linalg::Conv3DNdhwcDhwcfOp>(op, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+
+struct Pool2DLowering : public RewritePattern {
+  StringRef root;
+  Pool2DLowering(StringRef rootName, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getRank() != 4 || dstRanked.getRank() != 4)
+      return failure();
+    if (!isa<FloatType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (srcRanked.getDimSize(0) != dstRanked.getDimSize(0) || srcRanked.getDimSize(3) != dstRanked.getDimSize(3))
+      return failure();
+    if (srcRanked.getDimSize(1) != 2 * dstRanked.getDimSize(1) || srcRanked.getDimSize(2) != 2 * dstRanked.getDimSize(2))
+      return failure();
+    Location loc = op->getLoc();
+    Value window = rewriter.create<tensor::EmptyOp>(loc, ArrayRef<int64_t>{2, 2}, srcRanked.getElementType());
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    auto strides = rewriter.getDenseI64ArrayAttr({2, 2});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
+    rewriter.replaceOpWithNewOp<linalg::PoolingNhwcMaxOp>(op, TypeRange{dstTy}, ValueRange{input, window}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+
 struct ArangeLowering : public RewritePattern {
   ArangeLowering(MLIRContext *ctx) : RewritePattern("dwc.arange", 1, ctx) {}
 
@@ -1554,7 +1667,7 @@ struct PseudoSplitLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto splits = dyn_cast<IntegerAttr>(op->getAttr("num_splits"));
+    auto splits = op->getAttrOfType<IntegerAttr>("num_splits");
     if (!splits || splits.getInt() != 1)
       return failure();
     Value data = op->getOperand(1);
@@ -1573,7 +1686,7 @@ struct RescalingNoneLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
+    auto activation = op->getAttrOfType<ActivationFunctionAttr>("activation_function");
     if (!activation || activation.getValue() != ActivationFunction::None)
       return failure();
     Value input = op->getOperand(0);
@@ -1709,7 +1822,7 @@ struct OneHotLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto axis = dyn_cast<IntegerAttr>(op->getAttr("axis"));
+    auto axis = op->getAttrOfType<IntegerAttr>("axis");
     if (!axis)
       return failure();
     Value input = op->getOperand(0);
@@ -1754,8 +1867,8 @@ struct CumulativeLowering : public RewritePattern {
                                 PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto axis = dyn_cast<IntegerAttr>(op->getAttr("axis"));
-    auto exclusive = dyn_cast<BoolAttr>(op->getAttr("exclusive"));
+    auto axis = op->getAttrOfType<IntegerAttr>("axis");
+    auto exclusive = op->getAttrOfType<BoolAttr>("exclusive");
     if (!axis || !exclusive || exclusive.getValue())
       return failure();
     if (axis.getInt() != 0)
@@ -1890,7 +2003,7 @@ struct CompareLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
-    auto cmpType = dyn_cast<ComparisonTypeAttr>(op->getAttr("compare_type"));
+    auto cmpType = op->getAttrOfType<ComparisonTypeAttr>("compare_type");
     if (!cmpType)
       return failure();
     Value lhs = op->getOperand(0);
@@ -2070,7 +2183,7 @@ struct ReverseLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto dim = dyn_cast<IntegerAttr>(op->getAttr("dimension"));
+    auto dim = op->getAttrOfType<IntegerAttr>("dimension");
     if (!dim)
       return failure();
     int64_t axis = dim.getInt();
@@ -2115,7 +2228,7 @@ struct BitcastLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
       return failure();
-    auto outTy = dyn_cast<TypeAttr>(op->getAttr("output_element_type"));
+    auto outTy = op->getAttrOfType<TypeAttr>("output_element_type");
     if (!outTy)
       return failure();
     Value input = op->getOperand(0);
@@ -2190,6 +2303,15 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<MatmulLowering>("dwc.matrix_multiply", ctx);
   patterns.add<MatmulLowering>("dwc.fully_connected", ctx);
   patterns.add<ConvolutionLowering>(ctx);
+  patterns.add<DepthwiseConvLowering>(ctx);
+  patterns.add<Conv3DLowering>(ctx);
+  patterns.add<Pool2DLowering>("dwc.pool", ctx);
+  patterns.add<Pool2DLowering>("dwc.pooling", ctx);
+  patterns.add<Pool2DLowering>("dwc.reduce_window", ctx);
+  patterns.add<ForwardLowering>("dwc.mask_indices", "dive_vm.mask_indices", ctx);
+  patterns.add<ForwardLowering>("dwc.hib_gather", "dive_vm.hib_gather_edit", ctx);
+  patterns.add<ForwardLowering>("dwc.one_hot_tpu", "dive_vm.one_hot", ctx);
+  patterns.add<ForwardLowering>("dwc.generic_scatter", "dive_vm.scatter_nd", ctx);
   patterns.add<ConvolutionV2Lowering>("dwc.convolution_v2", ctx);
   patterns.add<ConvolutionV2Lowering>("dwc.depthwise_convolution_v2", ctx);
   patterns.add<ScalarLowering>(ctx);
