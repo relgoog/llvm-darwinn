@@ -1553,6 +1553,29 @@ struct PassThroughLowering : public RewritePattern {
     return success();
   }
 };
+struct ConstMetadataLowering : public RewritePattern {
+  StringRef root;
+  ConstMetadataLowering(StringRef rootName, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 0)
+      return failure();
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape())
+      return failure();
+    Location loc = op->getLoc();
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    rewriter.replaceOp(op, empty);
+    return success();
+  }
+};
+
 struct DepthwiseConvLowering : public RewritePattern {
   DepthwiseConvLowering(MLIRContext *ctx) : RewritePattern("dwc.depthwise_convolution", 1, ctx) {}
 
@@ -3042,6 +3065,80 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<PassThroughLowering>("dwc.linear_function", ctx);
   patterns.add<PassThroughLowering>("dwc.loop_sharding", ctx);
   patterns.add<PassThroughLowering>("dwc.transformation_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.bit_select_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.compilation_unit", ctx);
+  patterns.add<PassThroughLowering>("dwc.compilation_unit_wrapper", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.af", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.algorithm", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.cell", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.device_type", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.engine", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.encoding", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.mlir", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.composite", ctx);
+  patterns.add<ConstMetadataLowering>("dwc.codegen", ctx);
+  patterns.add<PassThroughLowering>("dwc.hib_gather_filter", ctx);
+  patterns.add<PassThroughLowering>("dwc.dynamic_intermediate_input_shard", ctx);
+  patterns.add<PassThroughLowering>("dwc.dynamic_intermediate_output_shard", ctx);
+  patterns.add<PassThroughLowering>("dwc.inter_die_input", ctx);
+  patterns.add<PassThroughLowering>("dwc.inter_die_output", ctx);
+  patterns.add<PassThroughLowering>("dwc.intermediate_input_shard", ctx);
+  patterns.add<PassThroughLowering>("dwc.intermediate_output_shard", ctx);
+  patterns.add<PassThroughLowering>("dwc.internal_padding", ctx);
+  patterns.add<PassThroughLowering>("dwc.padding_value_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.parameter_lookup_table", ctx);
+  patterns.add<PassThroughLowering>("dwc.bias_parameter", ctx);
+  patterns.add<PassThroughLowering>("dwc.hardware_cluster_id_per_signature", ctx);
+  patterns.add<PassThroughLowering>("dwc.visible_tiles_per_signature", ctx);
+  patterns.add<PassThroughLowering>("dwc.resampler_options", ctx);
+  patterns.add<PassThroughLowering>("dwc.image_format", ctx);
+  patterns.add<PassThroughLowering>("dwc.per_z_out_scale_padding", ctx);
+  patterns.add<PassThroughLowering>("dwc.host_space", ctx);
+  patterns.add<PassThroughLowering>("dwc.hosted_tensor", ctx);
+  patterns.add<PassThroughLowering>("dwc.memory_space", ctx);
+  patterns.add<PassThroughLowering>("dwc.mesh_dim", ctx);
+  patterns.add<PassThroughLowering>("dwc.dim_mapping", ctx);
+  patterns.add<PassThroughLowering>("dwc.dimension_layout", ctx);
+  patterns.add<PassThroughLowering>("dwc.dive_unroll_factor", ctx);
+  patterns.add<PassThroughLowering>("dwc.codegen", ctx);
+  patterns.add<PassThroughLowering>("dwc.engine", ctx);
+  patterns.add<PassThroughLowering>("dwc.encoding", ctx);
+  patterns.add<PassThroughLowering>("dwc.mlir", ctx);
+  patterns.add<PassThroughLowering>("dwc.composite", ctx);
+  patterns.add<PassThroughLowering>("dwc.compression_mode", ctx);
+  patterns.add<PassThroughLowering>("dwc.custom_padding_value_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.cumulative_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.comparison_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.classification_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.cwise_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.cell", ctx);
+  patterns.add<PassThroughLowering>("dwc.af", ctx);
+  patterns.add<PassThroughLowering>("dwc.algorithm", ctx);
+  patterns.add<PassThroughLowering>("dwc.additional_input_output", ctx);
+  patterns.add<PassThroughLowering>("dwc.activation_function", ctx);
+  patterns.add<PassThroughLowering>("dwc.annotate_materialize_policy", ctx);
+  patterns.add<PassThroughLowering>("dwc.reduction_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.reduce_window_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.normalization_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.scalar_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.scalar_core_constant", ctx);
+  patterns.add<PassThroughLowering>("dwc.yield", ctx);
+  patterns.add<PassThroughLowering>("dwc.vtid", ctx);
+  patterns.add<PassThroughLowering>("dwc.vrgkh_operation_mode", ctx);
+  patterns.add<PassThroughLowering>("dwc.tpu_group_id", ctx);
+  patterns.add<PassThroughLowering>("dwc.tile_uid", ctx);
+  patterns.add<PassThroughLowering>("dwc.tile_mesh", ctx);
+  patterns.add<PassThroughLowering>("dwc.stride_method", ctx);
+  patterns.add<PassThroughLowering>("dwc.stabletg_kernel", ctx);
+  patterns.add<PassThroughLowering>("dwc.signature_name", ctx);
+  patterns.add<PassThroughLowering>("dwc.signature_na", ctx);
+  patterns.add<PassThroughLowering>("dwc.device_type", ctx);
+  patterns.add<PassThroughLowering>("dwc.materialize_policy", ctx);
+  patterns.add<PassThroughLowering>("dwc.memory_location", ctx);
+  patterns.add<PassThroughLowering>("dwc.parameter", ctx);
+  patterns.add<PassThroughLowering>("dwc.known_trip_count", ctx);
+  patterns.add<PassThroughLowering>("dwc.is_external_parameter", ctx);
+  patterns.add<PassThroughLowering>("dwc.io_colocation_pairs", ctx);
   patterns.add<BitwiseLowering>("dwc.shift_left", emitShl, ctx);
   patterns.add<BitwiseLowering>("dwc.shift_right_arithmetic", emitShrS, ctx);
   patterns.add<BitwiseLowering>("dwc.shift_right_logical", emitShrU, ctx);
