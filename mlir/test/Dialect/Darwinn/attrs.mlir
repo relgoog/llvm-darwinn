@@ -304,3 +304,43 @@ func.func @test_dwc_tensor_op_gather_operation(%arg0: tensor<4xf32>) -> tensor<4
   %0 = "dwc.pad"(%arg0) {tensor_op_gather_operation = #dwc.tensor_op_gather_operation<UNKNOWN>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// -----
+// CHECK-LABEL: dwc_probe_subtensor
+func.func @test_dwc_probe_subtensor(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.probe_subtensor
+  %0 = "dwc.pad"(%arg0) {probe_subtensor = #dwc.probe_subtensor<"id", dense<0> : tensor<1xi32>, 0, dense<0> : tensor<1xi32>, dense<1> : tensor<1xi32>>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_parameter_lookup_table
+func.func @test_dwc_parameter_lookup_table(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.parameter_lookup_table
+  %0 = "dwc.pad"(%arg0) {parameter_lookup_table = #dwc.parameter_lookup_table<dense<0> : tensor<4xi32>, 0>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_resampler_options
+func.func @test_dwc_resampler_options(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.resampler_options
+  %0 = "dwc.pad"(%arg0) {resampler_options = #dwc.resampler_options<8, 4>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_dimension_layout
+func.func @test_dwc_dimension_layout(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.dimension_layout
+  %0 = "dwc.dimension_layout"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: dwc_materialize_policy
+func.func @test_dwc_materialize_policy(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.materialize_policy
+  %0 = "dwc.pad"(%arg0) {materialize_policy = #dwc.materialize_policy<0, [1], {}, []>} : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
