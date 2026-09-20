@@ -2037,4 +2037,68 @@ def DwcDwcToLisaPassPass : Pass<"dwc-to-lisa-pass", "func::FuncOp"> {
   }];
 }
 
+def DwcDwcUnfuseHloBatchNormPass : Pass<"dwc-unfuse-hlo-batch-norm", "func::FuncOp"> {
+  let summary = "DWC pass dwc-unfuse-hlo-batch-norm";
+  let description = [{
+    Blob-evidenced dwc pass. Unfuse HLO batch norm into primitives.
+  }];
+}
+
+
+def DwcDwcTailDuplicationPass : Pass<"dwc-tail-duplication", "func::FuncOp"> {
+  let summary = "DWC pass dwc-tail-duplication";
+  let description = [{
+    Blob-evidenced dwc pass. Duplicate tails, failing with dwc-tail-duplication failed.
+  }];
+}
+
+def DwcDwcHeadDuplicationPass : Pass<"dwc-head-duplication", "func::FuncOp"> {
+  let summary = "DWC pass dwc-head-duplication";
+  let description = [{
+    Blob-evidenced dwc pass. Duplicate heads, failing with dwc-head-duplication failed.
+  }];
+}
+
+def DwcDwcUnrollWhileLoopPass : Pass<"dwc-unroll-while-loop", "func::FuncOp"> {
+  let summary = "DWC pass dwc-unroll-while-loop";
+  let description = [{
+    Blob-evidenced dwc pass. Unroll while loops.
+  }];
+}
+
+def DwcDwcTileWhileLoopsPass : Pass<"dwc-tile-while-loops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-tile-while-loops";
+  let description = [{
+    Blob-evidenced dwc pass. Tile while loops.
+  }];
+}
+
+def DwcDwcOptimizeWhileLoopPass : Pass<"dwc-optimize-while-loop", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-while-loop";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize while loops.
+  }];
+}
+
+def DwcDwcElideReshapePass : Pass<"dwc-elide-reshape", "func::FuncOp"> {
+  let summary = "DWC pass dwc-elide-reshape";
+  let description = [{
+    Blob-evidenced dwc pass. Elide reshapes, failing with dwc-elide-reshape failed.
+  }];
+}
+
+def DwcDwcRemoveReshapeAroundGatherOpPass : Pass<"dwc-remove-reshape-around-gather-op", "func::FuncOp"> {
+  let summary = "DWC pass dwc-remove-reshape-around-gather-op";
+  let description = [{
+    Blob-evidenced dwc pass. Remove reshape around gather, failing with dwc-remove-reshape-around-gather-op pass failed.
+  }];
+}
+
+def DwcDwcSinkConstantsPass : Pass<"dwc-sink-constants", "func::FuncOp"> {
+  let summary = "DWC pass dwc-sink-constants";
+  let description = [{
+    Blob-evidenced dwc pass. Sink constants toward users.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
