@@ -1967,4 +1967,74 @@ def DwcXlaCpuUseNewXtileLoweringPass : Pass<"xla_cpu_use_new_xtile_lowering", "f
   }];
 }
 
+def DwcDwcFuseExplicitBroadcastOpsPass : Pass<"dwc-fuse-explicit-broadcast-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-fuse-explicit-broadcast-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Fuse explicit broadcast ops, failing with dwc-fuse-explicit-broadcast-ops failed.
+  }];
+}
+
+def DwcDwcUnfuseImplicitBroadcastPass : Pass<"dwc-unfuse-implicit-broadcast", "func::FuncOp"> {
+  let summary = "DWC pass dwc-unfuse-implicit-broadcast";
+  let description = [{
+    Blob-evidenced dwc pass. Unfuse implicit broadcast, failing with dwc-unfuse-implicit-broadcast failed.
+  }];
+}
+
+def DwcDwcShardAttentionPass : Pass<"dwc-shard-attention", "func::FuncOp"> {
+  let summary = "DWC pass dwc-shard-attention";
+  let description = [{
+    Blob-evidenced dwc pass. Shard attention ops across partitions.
+  }];
+}
+
+def DwcDwcShardFullyConnectedPass : Pass<"dwc-shard-fully-connected", "func::FuncOp"> {
+  let summary = "DWC pass dwc-shard-fully-connected";
+  let description = [{
+    Blob-evidenced dwc pass. Shard fully connected ops across partitions.
+  }];
+}
+
+def DwcDwcShardLargeDilationOpsPass : Pass<"dwc-shard-large-dilation-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-shard-large-dilation-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Shard large dilation ops across partitions.
+  }];
+}
+
+def DwcDwcShapeInferencePass : Pass<"dwc-shape-inference", "func::FuncOp"> {
+  let summary = "DWC pass dwc-shape-inference";
+  let description = [{
+    Blob-evidenced dwc pass. Shape inference, failing with dwc-shape-inference failed.
+  }];
+}
+
+def DwcDwcQuantizedCastCleanupPass : Pass<"dwc-quantized-cast-cleanup", "func::FuncOp"> {
+  let summary = "DWC pass dwc-quantized-cast-cleanup";
+  let description = [{
+    Blob-evidenced dwc pass. Clean up quantized casts after truncation.
+  }];
+}
+
+def DwcDwcTruncateFloatsFunctionPass : Pass<"dwc-truncate-floats-function", "func::FuncOp"> {
+  let summary = "DWC pass dwc-truncate-floats-function";
+  let description = [{
+    Blob-evidenced dwc pass. Truncate floats at function scope, failing with dwc-truncate-floats-function pass failed.
+  }];
+}
+
+def DwcDwcAddInputOutputOpsPass : Pass<"dwc-add-input-output-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-add-input-output-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Add input output ops at graph boundaries.
+  }];
+}
+
+def DwcDwcToLisaPassPass : Pass<"dwc-to-lisa-pass", "func::FuncOp"> {
+  let summary = "DWC pass dwc-to-lisa-pass";
+  let description = [{
+    Blob-evidenced dwc pass. Lower to LISA representation.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
