@@ -11,6 +11,7 @@
 #include "mlir/Dialect/Darwinn/IR/DwcAttributes.h.inc"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -223,6 +224,26 @@ struct CwiseLowering : public RewritePattern {
     default:
       break;
     }
+    if (!elem && opType.getValue() == CwiseOpType::Pow) {
+      auto lhsTy = dyn_cast<RankedTensorType>(lhs.getType());
+      auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+      if (!lhsTy || !dstRanked || !lhsTy.hasStaticShape() || !dstRanked.hasStaticShape())
+        return failure();
+      if (lhsTy.getShape() != dstRanked.getShape())
+        return failure();
+      if (!isa<FloatType>(lhsTy.getElementType()))
+        return failure();
+      int64_t rank = lhsTy.getRank();
+      SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
+      SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+      auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
+          maps, iters,
+          [&](OpBuilder &nested, Location nloc, ValueRange args) {
+            Value p = nested.create<math::PowFOp>(nloc, args[0], args[1]);
+            nested.create<linalg::YieldOp>(nloc, p);
+          });
+      elem = generic.getOperation();
+    }
     if (!elem) {
       auto lhsTy = dyn_cast<RankedTensorType>(lhs.getType());
       auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
@@ -277,33 +298,38 @@ struct CwiseLowering : public RewritePattern {
         auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{lhs, rhs}, ValueRange{empty},
             bmaps, biters,
             [&](OpBuilder &nested, Location nloc, ValueRange args) {
+              Type signless = IntegerType::get(nloc->getContext(), dstRanked.getElementType().getIntOrFloatBitWidth(), IntegerType::Signless);
+              Value a = args[0].getType() == signless ? args[0] : nested.create<UnrealizedConversionCastOp>(nloc, signless, args[0]).getResult(0);
+              Value b = args[1].getType() == signless ? args[1] : nested.create<UnrealizedConversionCastOp>(nloc, signless, args[1]).getResult(0);
               Value out;
               switch (bitKind) {
               case CwiseOpType::BitwiseAnd:
-                out = nested.create<arith::AndIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::AndIOp>(nloc, a, b);
                 break;
               case CwiseOpType::BitwiseOr:
-                out = nested.create<arith::OrIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::OrIOp>(nloc, a, b);
                 break;
               case CwiseOpType::BitwiseXor:
-                out = nested.create<arith::XOrIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::XOrIOp>(nloc, a, b);
                 break;
               case CwiseOpType::LogicalAnd:
-                out = nested.create<arith::AndIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::AndIOp>(nloc, a, b);
                 break;
               case CwiseOpType::ArithmeticLeftShift:
-                out = nested.create<arith::ShLIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::ShLIOp>(nloc, a, b);
                 break;
               case CwiseOpType::ArithmeticRightShift:
-                out = nested.create<arith::ShRSIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::ShRSIOp>(nloc, a, b);
                 break;
               case CwiseOpType::LogicalRightShift:
-                out = nested.create<arith::ShRUIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::ShRUIOp>(nloc, a, b);
                 break;
               default:
-                out = nested.create<arith::RemSIOp>(nloc, args[0], args[1]);
+                out = nested.create<arith::RemUIOp>(nloc, a, b);
                 break;
               }
+              if (out.getType() != dstRanked.getElementType())
+                out = nested.create<UnrealizedConversionCastOp>(nloc, dstRanked.getElementType(), out).getResult(0);
               nested.create<linalg::YieldOp>(nloc, out);
             });
         elem = generic.getOperation();
