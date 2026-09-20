@@ -2121,3 +2121,11 @@ func.func @test_yield(%arg0: tensor<4xf32>) -> tensor<4xf32> {
   %0 = "dwc.yield"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
+
+// -----
+// CHECK-LABEL: multinormal
+func.func @test_multinormal(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.multinormal
+  %0 = "dwc.multinormal"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}

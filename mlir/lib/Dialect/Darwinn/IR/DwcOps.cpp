@@ -1361,6 +1361,10 @@ LogicalResult dwc::MultinomialOp::verify() {
   return success();
 }
 
+LogicalResult dwc::MultinormalOp::verify() {
+  return success();
+}
+
 LogicalResult dwc::NegateOp::verify() {
   return success();
 }

@@ -1291,6 +1291,18 @@ def Dwc_MultinomialOp : Dwc_Op<"multinomial"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+// Operator: multinormal
+def Dwc_MultinormalOp : Dwc_Op<"multinormal"> {
+  let summary = "DWC multinormal operation.";
+  let description = [{
+    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 // Operator: negate
 def Dwc_NegateOp : Dwc_Op<"negate"> {
   let summary = "DWC negate operation.";
