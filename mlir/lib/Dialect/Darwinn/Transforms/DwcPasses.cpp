@@ -362,6 +362,16 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCDWCEMULATEPERAXISHYBRIDOPSPASS
 #define GEN_PASS_DEF_DWCDWCDEQUANTIZEANDDENSIFYWEIGHTSPASS
 #define GEN_PASS_DEF_DWCDWCOUTLINEOPREGIONSPASS
+#define GEN_PASS_DEF_DWCDWCSLICEGENERICSCATTEROPERANDPASS
+#define GEN_PASS_DEF_DWCDWCSLICETENSOROPGATHEROPERANDPASS
+#define GEN_PASS_DEF_DWCDWCSLICETENSOROPGATHERUPDATESPASS
+#define GEN_PASS_DEF_DWCDWCREWRITEFULLYCONNECTEDSUBCHANNELPASS
+#define GEN_PASS_DEF_DWCDWCTRANSFORMFOURBITCONVPASS
+#define GEN_PASS_DEF_DWCDWCMULTISTAGEZINREWRITERPASS
+#define GEN_PASS_DEF_DWCDWCMATFORMERSPLITOPSPASS
+#define GEN_PASS_DEF_DWCDWCRANKFITTERPASS
+#define GEN_PASS_DEF_DWCDWCMATCHATTENTIONPASS
+#define GEN_PASS_DEF_DWCDWCMATCHCUSTOMKERNELSPASS
 #include "DwcPasses.h.inc"
 } // namespace darwinn
 } // namespace mlir
@@ -10883,6 +10893,235 @@ struct DwcDwcOutlineOpRegionsPass
       Dialect *dialect = op->getDialect();
       if (!dialect || dialect->getNamespace() != "dwc") {
         op->emitError("dwc-outline-op-regions accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+struct DwcDwcSliceGenericScatterOperandPass
+    : public darwinn::impl::DwcDwcSliceGenericScatterOperandPassBase<DwcDwcSliceGenericScatterOperandPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-slice-generic-scatter-operand accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcSliceTensorOpGatherOperandPass
+    : public darwinn::impl::DwcDwcSliceTensorOpGatherOperandPassBase<DwcDwcSliceTensorOpGatherOperandPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-slice-tensor-op-gather-operand accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcSliceTensorOpGatherUpdatesPass
+    : public darwinn::impl::DwcDwcSliceTensorOpGatherUpdatesPassBase<DwcDwcSliceTensorOpGatherUpdatesPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-slice-tensor-op-gather-updates accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcRewriteFullyConnectedSubChannelPass
+    : public darwinn::impl::DwcDwcRewriteFullyConnectedSubChannelPassBase<DwcDwcRewriteFullyConnectedSubChannelPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-rewrite-fully-connected-sub-channel accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcTransformFourBitConvPass
+    : public darwinn::impl::DwcDwcTransformFourBitConvPassBase<DwcDwcTransformFourBitConvPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-transform-four-bit-conv accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcMultistageZinRewriterPass
+    : public darwinn::impl::DwcDwcMultistageZinRewriterPassBase<DwcDwcMultistageZinRewriterPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-multistage-zin-rewriter accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcMatformerSplitOpsPass
+    : public darwinn::impl::DwcDwcMatformerSplitOpsPassBase<DwcDwcMatformerSplitOpsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-matformer-split-ops accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcRankFitterPass
+    : public darwinn::impl::DwcDwcRankFitterPassBase<DwcDwcRankFitterPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-rank-fitter accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcMatchAttentionPass
+    : public darwinn::impl::DwcDwcMatchAttentionPassBase<DwcDwcMatchAttentionPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-match-attention accepts dwc ops only");
+        failedLegal = true;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (failedLegal)
+      return signalPassFailure();
+  }
+};
+
+struct DwcDwcMatchCustomKernelsPass
+    : public darwinn::impl::DwcDwcMatchCustomKernelsPassBase<DwcDwcMatchCustomKernelsPass> {
+  using Base::Base;
+
+  void runOnOperation() override {
+    func::FuncOp func = getOperation();
+    bool failedLegal = false;
+    func.walk([&](Operation *op) {
+      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
+        return WalkResult::advance();
+      Dialect *dialect = op->getDialect();
+      if (!dialect || dialect->getNamespace() != "dwc") {
+        op->emitError("dwc-match-custom-kernels accepts dwc ops only");
         failedLegal = true;
         return WalkResult::interrupt();
       }

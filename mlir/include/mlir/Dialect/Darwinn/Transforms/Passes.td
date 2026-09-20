@@ -2579,4 +2579,74 @@ def DwcDwcOutlineOpRegionsPass : Pass<"dwc-outline-op-regions", "func::FuncOp"> 
   }];
 }
 
+def DwcDwcSliceGenericScatterOperandPass : Pass<"dwc-slice-generic-scatter-operand", "func::FuncOp"> {
+  let summary = "DWC pass dwc-slice-generic-scatter-operand";
+  let description = [{
+    Blob-evidenced dwc pass. Slice generic scatter operands.
+  }];
+}
+
+def DwcDwcSliceTensorOpGatherOperandPass : Pass<"dwc-slice-tensor-op-gather-operand", "func::FuncOp"> {
+  let summary = "DWC pass dwc-slice-tensor-op-gather-operand";
+  let description = [{
+    Blob-evidenced dwc pass. Slice tensor op gather operands.
+  }];
+}
+
+def DwcDwcSliceTensorOpGatherUpdatesPass : Pass<"dwc-slice-tensor-op-gather-updates", "func::FuncOp"> {
+  let summary = "DWC pass dwc-slice-tensor-op-gather-updates";
+  let description = [{
+    Blob-evidenced dwc pass. Slice tensor op gather updates.
+  }];
+}
+
+def DwcDwcRewriteFullyConnectedSubChannelPass : Pass<"dwc-rewrite-fully-connected-sub-channel", "func::FuncOp"> {
+  let summary = "DWC pass dwc-rewrite-fully-connected-sub-channel";
+  let description = [{
+    Blob-evidenced dwc pass. Rewrite fully connected sub channel.
+  }];
+}
+
+def DwcDwcTransformFourBitConvPass : Pass<"dwc-transform-four-bit-conv", "func::FuncOp"> {
+  let summary = "DWC pass dwc-transform-four-bit-conv";
+  let description = [{
+    Blob-evidenced dwc pass. Transform four bit conv, failing with dwc-transform-four-bit-conv pass failed while applying patterns.
+  }];
+}
+
+def DwcDwcMultistageZinRewriterPass : Pass<"dwc-multistage-zin-rewriter", "func::FuncOp"> {
+  let summary = "DWC pass dwc-multistage-zin-rewriter";
+  let description = [{
+    Blob-evidenced dwc pass. Multistage zin rewriter.
+  }];
+}
+
+def DwcDwcMatformerSplitOpsPass : Pass<"dwc-matformer-split-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-matformer-split-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Split matformer ops, failing with dwc-matformer-split-ops pass failed while applying patterns.
+  }];
+}
+
+def DwcDwcRankFitterPass : Pass<"dwc-rank-fitter", "func::FuncOp"> {
+  let summary = "DWC pass dwc-rank-fitter";
+  let description = [{
+    Blob-evidenced dwc pass. Fit ranks to hardware.
+  }];
+}
+
+def DwcDwcMatchAttentionPass : Pass<"dwc-match-attention", "func::FuncOp"> {
+  let summary = "DWC pass dwc-match-attention";
+  let description = [{
+    Blob-evidenced dwc pass. Match attention patterns.
+  }];
+}
+
+def DwcDwcMatchCustomKernelsPass : Pass<"dwc-match-custom-kernels", "func::FuncOp"> {
+  let summary = "DWC pass dwc-match-custom-kernels";
+  let description = [{
+    Blob-evidenced dwc pass. Match custom kernels.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
