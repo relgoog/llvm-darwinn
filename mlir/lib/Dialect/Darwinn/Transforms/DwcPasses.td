@@ -2381,4 +2381,74 @@ def DwcDwcReduceScatterOpDimsPass : Pass<"dwc-reduce-scatter-op-dims", "func::Fu
   }];
 }
 
+def DwcDwcRematBroadcastsPass : Pass<"dwc-remat-broadcasts", "func::FuncOp"> {
+  let summary = "DWC pass dwc-remat-broadcasts";
+  let description = [{
+    Blob-evidenced dwc pass. Rematerialize broadcasts, failing with dwc-remat-broadcasts failed.
+  }];
+}
+
+def DwcDwcRematGathersPass : Pass<"dwc-remat-gathers", "func::FuncOp"> {
+  let summary = "DWC pass dwc-remat-gathers";
+  let description = [{
+    Blob-evidenced dwc pass. Rematerialize gathers, failing with dwc-remat-gathers failed.
+  }];
+}
+
+def DwcDwcRemoveDeadAllocOpsPass : Pass<"dwc-remove-dead-alloc-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-remove-dead-alloc-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Remove dead allocation ops.
+  }];
+}
+
+def DwcDwcRerollShardingRegionsPass : Pass<"dwc-reroll-sharding-regions", "func::FuncOp"> {
+  let summary = "DWC pass dwc-reroll-sharding-regions";
+  let description = [{
+    Blob-evidenced dwc pass. Reroll sharding regions.
+  }];
+}
+
+def DwcDwcTagShardingRegionsPass : Pass<"dwc-tag-sharding-regions", "func::FuncOp"> {
+  let summary = "DWC pass dwc-tag-sharding-regions";
+  let description = [{
+    Blob-evidenced dwc pass. Tag sharding regions.
+  }];
+}
+
+def DwcDwcLinearizePartitionPass : Pass<"dwc-linearize-partition", "func::FuncOp"> {
+  let summary = "DWC pass dwc-linearize-partition";
+  let description = [{
+    Blob-evidenced dwc pass. Linearize partitions.
+  }];
+}
+
+def DwcDwcDiePartitionPass : Pass<"dwc-die-partition", "func::FuncOp"> {
+  let summary = "DWC pass dwc-die-partition";
+  let description = [{
+    Blob-evidenced dwc pass. Die partitioning.
+  }];
+}
+
+def DwcDwcOutlineRegionalOpsPass : Pass<"dwc-outline-regional-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-outline-regional-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Outline regional ops.
+  }];
+}
+
+def DwcDwcInsertBroadcastOpsPass : Pass<"dwc-insert-broadcast-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-insert-broadcast-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Insert broadcast ops.
+  }];
+}
+
+def DwcDwcInsertArgumentCopyOpsPass : Pass<"dwc-insert-argument-copy-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-insert-argument-copy-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Insert argument copy ops.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
