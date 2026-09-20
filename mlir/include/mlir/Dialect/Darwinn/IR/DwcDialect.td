@@ -223,6 +223,13 @@ def Dwc_LinearFunctionTypeEnum : Dwc_I32Enum<
   ]>;
 def Dwc_LinearFunctionTypeAttr : Dwc_I32EnumAttr<"linear_function_type", Dwc_LinearFunctionTypeEnum>;
 
+def Dwc_VicaCustomPaddingUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_VicaCustomPaddingEnum : Dwc_I32Enum<
+  "VicaCustomPadding", "DWC Vica custom padding", [
+    Dwc_VicaCustomPaddingUnknown
+  ]>;
+def Dwc_VicaCustomPaddingAttr : Dwc_I32EnumAttr<"vica_custom_padding", Dwc_VicaCustomPaddingEnum>;
+
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   "MemorySpace", "DWC memory space", [
