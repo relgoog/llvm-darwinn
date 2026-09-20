@@ -181,8 +181,8 @@ def Darwinn_NluPredicateAttr : Darwinn_Attr<"NluPredicate", "nlu_predicate"> {
   let summary = "Darwinn nlu_predicate attribute.";
 }
 
-def Darwinn_RkHYCustomPaddingAttr : Darwinn_Attr<"RkHYCustomPadding", "rkhy_custom_padding"> {
-  let summary = "Darwinn rkhy_custom_padding attribute.";
+def Darwinn_VicaCustomPaddingAttr : Darwinn_Attr<"VicaCustomPadding", "vica_custom_padding"> {
+  let summary = "Darwinn vica_custom_padding attribute.";
 }
 
 

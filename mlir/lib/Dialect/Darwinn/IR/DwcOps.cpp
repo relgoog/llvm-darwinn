@@ -1401,23 +1401,23 @@ LogicalResult dwc::ReverseOp::verify() {
   return success();
 }
 
-LogicalResult dwc::RkhyAddPoolOp::verify() {
+LogicalResult dwc::VicaAddPoolOp::verify() {
   return success();
 }
 
-LogicalResult dwc::RkhyConvD2sOp::verify() {
+LogicalResult dwc::VicaConvD2sOp::verify() {
   return success();
 }
 
-LogicalResult dwc::RkhyCustomPaddingOp::verify() {
+LogicalResult dwc::VicaCustomPaddingOp::verify() {
   return success();
 }
 
-LogicalResult dwc::RkhyFusedConvOp::verify() {
+LogicalResult dwc::VicaFusedConvOp::verify() {
   return success();
 }
 
-LogicalResult dwc::RkhyFusedNormOp::verify() {
+LogicalResult dwc::VicaFusedNormOp::verify() {
   return success();
 }
 
@@ -1901,7 +1901,7 @@ LogicalResult dwc::ResamplerOptionsOp::verify() {
   return success();
 }
 
-LogicalResult dwc::RkhyAddOp::verify() {
+LogicalResult dwc::VicaAddOp::verify() {
   return success();
 }
 

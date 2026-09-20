@@ -176,18 +176,18 @@ func.func @test_cast_out(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: ceppsyt_decompress
-func.func @test_ceppsyt_decompress() -> tensor<4xf32> {
-  // CHECK: darwinn.ceppsyt_decompress
-  %0 = "darwinn.ceppsyt_decompress"() : () -> tensor<4xf32>
+// CHECK-LABEL: huffman_decompress
+func.func @test_huffman_decompress() -> tensor<4xf32> {
+  // CHECK: darwinn.huffman_decompress
+  %0 = "darwinn.huffman_decompress"() : () -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: ceppsyt_hwsvgmllkwt
-func.func @test_ceppsyt_hwsvgmllkwt() -> tensor<4xf32> {
-  // CHECK: darwinn.ceppsyt_hwsvgmllkwt
-  %0 = "darwinn.ceppsyt_hwsvgmllkwt"() : () -> tensor<4xf32>
+// CHECK-LABEL: huffman_compression
+func.func @test_huffman_compression() -> tensor<4xf32> {
+  // CHECK: darwinn.huffman_compression
+  %0 = "darwinn.huffman_compression"() : () -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -871,42 +871,42 @@ func.func @test_ring_to_tile_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: rkhy_compute_op
-func.func @test_rkhy_compute_op() -> tensor<4xf32> {
-  // CHECK: darwinn.rkhy_compute_op
-  %0 = "darwinn.rkhy_compute_op"() : () -> tensor<4xf32>
+// CHECK-LABEL: vica_compute_op
+func.func @test_vica_compute_op() -> tensor<4xf32> {
+  // CHECK: darwinn.vica_compute_op
+  %0 = "darwinn.vica_compute_op"() : () -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_custom_padding
-func.func @test_rkhy_custom_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.rkhy_custom_padding
-  %0 = "darwinn.rkhy_custom_padding"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_custom_padding
+func.func @test_vica_custom_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.vica_custom_padding
+  %0 = "darwinn.vica_custom_padding"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_depth_to_space_op
-func.func @test_rkhy_depth_to_space_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.rkhy_depth_to_space_op
-  %0 = "darwinn.rkhy_depth_to_space_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_depth_to_space_op
+func.func @test_vica_depth_to_space_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.vica_depth_to_space_op
+  %0 = "darwinn.vica_depth_to_space_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_residual_add_op
-func.func @test_rkhy_residual_add_op(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.rkhy_residual_add_op
-  %0 = "darwinn.rkhy_residual_add_op"(%arg0, %arg1) : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_residual_add_op
+func.func @test_vica_residual_add_op(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.vica_residual_add_op
+  %0 = "darwinn.vica_residual_add_op"(%arg0, %arg1) : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_unary_compute_op
-func.func @test_rkhy_unary_compute_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.rkhy_unary_compute_op
-  %0 = "darwinn.rkhy_unary_compute_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_unary_compute_op
+func.func @test_vica_unary_compute_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: darwinn.vica_unary_compute_op
+  %0 = "darwinn.vica_unary_compute_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 // -----

@@ -1014,7 +1014,7 @@ def DwcLegalizeStablehloCompositePass : Pass<"LegalizeStablehloComposite", "func
 def DwcLowerAllFunctionsPass : Pass<"lower-all-functions", "func::FuncOp"> {
   let summary = "DWC pass lower-all-functions";
   let description = [{
-    Seen at 0xd873dd in task3_passes.tsv, this pass lowers darwinn.rkhy_custom_padding and
+    Seen at 0xd873dd in task3_passes.tsv, this pass lowers darwinn.vica_custom_padding and
     darwinn.mesh_pad_slice to dive_vm.pad with applyDwcLowerPadInline through forwardDwcLowerTo.
   }];
 }
@@ -1022,7 +1022,7 @@ def DwcLowerAllFunctionsPass : Pass<"lower-all-functions", "func::FuncOp"> {
 def DwcLowerAllPadsPass : Pass<"lower-all-pads", "func::FuncOp"> {
   let summary = "DWC pass lower-all-pads";
   let description = [{
-    Seen at 0xd9c263 in task3_passes.tsv, this pass lowers darwinn.rkhy_custom_padding and
+    Seen at 0xd9c263 in task3_passes.tsv, this pass lowers darwinn.vica_custom_padding and
     darwinn.mesh_pad_slice to dive_vm.pad with applyDwcLowerPadInline. It also lowers darwinn.copy_op,
     darwinn.copy_from_host and darwinn.copy_using_wide to dive_vm.copy with applyDwcLowerCopyLike under
     matching element types and counts.
@@ -1227,17 +1227,17 @@ def DwcResamplerLoweringPass : Pass<"resampler-lowering", "func::FuncOp"> {
   }];
 }
 
-def DwcRkhyShapeLegalizationPassPass : Pass<"rkhy-shape-legalization-pass", "func::FuncOp"> {
-  let summary = "DWC pass rkhy-shape-legalization-pass";
+def DwcVicaShapeLegalizationPass : Pass<"vica-shape-legalization", "func::FuncOp"> {
+  let summary = "DWC pass vica-shape-legalization-pass";
   let description = [{
-    Seen at 0xd7f029 in task3_passes.tsv, this pass lowers darwinn.rkhy_custom_padding and
+    Seen at 0xd7f029 in task3_passes.tsv, this pass lowers darwinn.vica_custom_padding and
     darwinn.mesh_pad_slice to dive_vm.pad with applyDwcLowerPadInline. It also lowers tgc elementwise
     ops to arith ops with applyDwcLowerScalarArith.
   }];
 }
 
-def DwcRkhyTypeLegalizationPassPass : Pass<"rkhy-type-legalization-pass", "func::FuncOp"> {
-  let summary = "DWC pass rkhy-type-legalization-pass";
+def DwcVicaTypeLegalizationPass : Pass<"vica-type-legalization", "func::FuncOp"> {
+  let summary = "DWC pass vica-type-legalization-pass";
   let description = [{
     Seen at 0xd7f00d in task3_passes.tsv, this pass lowers darwinn.convert, darwinn.cast_in and
     darwinn.cast_out to dive_vm.cast with applyDwcLowerConvertTrunc. It keeps one-operand one-result ops
@@ -1784,8 +1784,8 @@ def DwcWideRegisterReusePass : Pass<"wide-register-reuse", "func::FuncOp"> {
   }];
 }
 
-def DwcCeppsytHwsvgmllkwtPass : Pass<"ceppsyt-hwsvgmllkwt", "func::FuncOp"> {
-  let summary = "DWC pass ceppsyt-hwsvgmllkwt";
+def DwcHuffmanCompressionPass : Pass<"huffman-compression", "func::FuncOp"> {
+  let summary = "DWC pass huffman-compression";
   let description = [{
     Blob-evidenced lisa pass. Huffman compression. Compresses constant weights with Huffman coding.
   }];
@@ -1812,10 +1812,10 @@ def DwcCustomKernelShapeInstantiationPass : Pass<"custom-kernel-shape-instantiat
   }];
 }
 
-def DwcRkhyMemoryRedistributeSplitPass : Pass<"rkhy-memory-redistribute-split", "func::FuncOp"> {
-  let summary = "DWC pass rkhy-memory-redistribute-split";
+def DwcVicaMemoryRedistributeSplitPass : Pass<"vica-memory-redistribute-split", "func::FuncOp"> {
+  let summary = "DWC pass vica-memory-redistribute-split";
   let description = [{
-    Blob-evidenced lisa pass. Rkhy memory redistribute split. Splits Rkhy redistributes across memories.
+    Blob-evidenced lisa pass. Vica memory redistribute split. Splits Vica redistributes across memories.
   }];
 }
 
@@ -1840,10 +1840,10 @@ def DwcMultimediaSanitizationPass : Pass<"multimedia-sanitization", "func::FuncO
   }];
 }
 
-def DwcRkhyTypeConversionOptimizationPass : Pass<"rkhy-type-conversion-optimization", "func::FuncOp"> {
-  let summary = "DWC pass rkhy-type-conversion-optimization";
+def DwcVicaTypeConversionOptimizationPass : Pass<"vica-type-conversion-optimization", "func::FuncOp"> {
+  let summary = "DWC pass vica-type-conversion-optimization";
   let description = [{
-    Blob-evidenced lisa pass. Rkhy type conversion optimization. Folds redundant Rkhy type conversions.
+    Blob-evidenced lisa pass. Vica type conversion optimization. Folds redundant Vica type conversions.
   }];
 }
 

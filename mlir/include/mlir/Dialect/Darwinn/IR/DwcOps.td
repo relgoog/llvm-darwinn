@@ -1411,9 +1411,9 @@ def Dwc_ReverseOp : Dwc_Op<"reverse"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_add_pool
-def Dwc_RkhyAddPoolOp : Dwc_Op<"rkhy_add_pool"> {
-  let summary = "DWC rkhy_add_pool operation.";
+// Operator: vica_add_pool
+def Dwc_VicaAddPoolOp : Dwc_Op<"vica_add_pool"> {
+  let summary = "DWC vica_add_pool operation.";
   let description = [{
     Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
   }];
@@ -1423,9 +1423,9 @@ def Dwc_RkhyAddPoolOp : Dwc_Op<"rkhy_add_pool"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_conv_d2s
-def Dwc_RkhyConvD2sOp : Dwc_Op<"rkhy_conv_d2s"> {
-  let summary = "DWC rkhy_conv_d2s operation.";
+// Operator: vica_conv_d2s
+def Dwc_VicaConvD2sOp : Dwc_Op<"vica_conv_d2s"> {
+  let summary = "DWC vica_conv_d2s operation.";
   let description = [{
     Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
   }];
@@ -1435,9 +1435,9 @@ def Dwc_RkhyConvD2sOp : Dwc_Op<"rkhy_conv_d2s"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_custom_padding
-def Dwc_RkhyCustomPaddingOp : Dwc_Op<"rkhy_custom_padding"> {
-  let summary = "DWC rkhy_custom_padding operation.";
+// Operator: vica_custom_padding
+def Dwc_VicaCustomPaddingOp : Dwc_Op<"vica_custom_padding"> {
+  let summary = "DWC vica_custom_padding operation.";
   let description = [{
     Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
   }];
@@ -1447,9 +1447,9 @@ def Dwc_RkhyCustomPaddingOp : Dwc_Op<"rkhy_custom_padding"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_fused_conv
-def Dwc_RkhyFusedConvOp : Dwc_Op<"rkhy_fused_conv"> {
-  let summary = "DWC rkhy_fused_conv operation.";
+// Operator: vica_fused_conv
+def Dwc_VicaFusedConvOp : Dwc_Op<"vica_fused_conv"> {
+  let summary = "DWC vica_fused_conv operation.";
   let description = [{
     Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
   }];
@@ -1459,9 +1459,9 @@ def Dwc_RkhyFusedConvOp : Dwc_Op<"rkhy_fused_conv"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_fused_norm
-def Dwc_RkhyFusedNormOp : Dwc_Op<"rkhy_fused_norm"> {
-  let summary = "DWC rkhy_fused_norm operation.";
+// Operator: vica_fused_norm
+def Dwc_VicaFusedNormOp : Dwc_Op<"vica_fused_norm"> {
+  let summary = "DWC vica_fused_norm operation.";
   let description = [{
     Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
   }];
@@ -2911,9 +2911,9 @@ def Dwc_ResamplerOptionsOp : Dwc_Op<"resampler_options"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_add
-def Dwc_RkhyAddOp : Dwc_Op<"rkhy_add"> {
-  let summary = "DWC rkhy_add operation.";
+// Operator: vica_add
+def Dwc_VicaAddOp : Dwc_Op<"vica_add"> {
+  let summary = "DWC vica_add operation.";
   let description = [{
     Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
   }];

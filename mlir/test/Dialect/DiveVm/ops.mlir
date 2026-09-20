@@ -217,10 +217,10 @@ func.func @test_chunk_sizes(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: compute_norm_stats_for_rkhy
-func.func @test_compute_norm_stats_for_rkhy(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dive_vm.compute_norm_stats_for_rkhy
-  %0 = dive_vm.compute_norm_stats_for_rkhy %arg0 : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: compute_norm_stats_for_vica
+func.func @test_compute_norm_stats_for_vica(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dive_vm.compute_norm_stats_for_vica
+  %0 = dive_vm.compute_norm_stats_for_vica %arg0 : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -703,10 +703,10 @@ func.func @test_wait_for_power_island_transition_complete(%arg0: tensor<4xf32>) 
 }
 
 // -----
-// CHECK-LABEL: wait_for_rkhy_completion
-func.func @test_wait_for_rkhy_completion(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dive_vm.wait_for_rkhy_completion
-  %0 = dive_vm.wait_for_rkhy_completion %arg0 : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: wait_for_vica_completion
+func.func @test_wait_for_vica_completion(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dive_vm.wait_for_vica_completion
+  %0 = dive_vm.wait_for_vica_completion %arg0 : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

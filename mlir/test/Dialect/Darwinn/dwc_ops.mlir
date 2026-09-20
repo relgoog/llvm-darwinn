@@ -931,42 +931,42 @@ func.func @test_reverse(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: rkhy_add_pool
-func.func @test_rkhy_add_pool(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.rkhy_add_pool
-  %0 = "dwc.rkhy_add_pool"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_add_pool
+func.func @test_vica_add_pool(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.vica_add_pool
+  %0 = "dwc.vica_add_pool"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_conv_d2s
-func.func @test_rkhy_conv_d2s(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.rkhy_conv_d2s
-  %0 = "dwc.rkhy_conv_d2s"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_conv_d2s
+func.func @test_vica_conv_d2s(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.vica_conv_d2s
+  %0 = "dwc.vica_conv_d2s"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_custom_padding
-func.func @test_rkhy_custom_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.rkhy_custom_padding
-  %0 = "dwc.rkhy_custom_padding"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_custom_padding
+func.func @test_vica_custom_padding(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.vica_custom_padding
+  %0 = "dwc.vica_custom_padding"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_fused_conv
-func.func @test_rkhy_fused_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.rkhy_fused_conv
-  %0 = "dwc.rkhy_fused_conv"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_fused_conv
+func.func @test_vica_fused_conv(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.vica_fused_conv
+  %0 = "dwc.vica_fused_conv"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
 // -----
-// CHECK-LABEL: rkhy_fused_norm
-func.func @test_rkhy_fused_norm(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.rkhy_fused_norm
-  %0 = "dwc.rkhy_fused_norm"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_fused_norm
+func.func @test_vica_fused_norm(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.vica_fused_norm
+  %0 = "dwc.vica_fused_norm"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 
@@ -1931,10 +1931,10 @@ func.func @test_resampler_options(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: rkhy_add
-func.func @test_rkhy_add(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.rkhy_add
-  %0 = "dwc.rkhy_add"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
+// CHECK-LABEL: vica_add
+func.func @test_vica_add(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+  // CHECK: dwc.vica_add
+  %0 = "dwc.vica_add"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }
 

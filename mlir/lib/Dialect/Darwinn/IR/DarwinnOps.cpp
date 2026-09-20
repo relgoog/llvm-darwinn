@@ -518,12 +518,12 @@ LogicalResult darwinn::BroadcastSliceOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::CeppsytDecompressOp::verify() {
+LogicalResult darwinn::HuffmanDecompressOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
 
-LogicalResult darwinn::CeppsytHwsvgmllkwtOp::verify() {
+LogicalResult darwinn::HuffmanCompressionOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
@@ -912,24 +912,24 @@ LogicalResult darwinn::RingToTileSliceOp::verify() {
   return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::RkhyComputeOpOp::verify() {
+LogicalResult darwinn::VicaComputeOpOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
 
-LogicalResult darwinn::RkhyCustomPaddingOp::verify() {
+LogicalResult darwinn::VicaCustomPaddingOp::verify() {
   return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::RkhyDepthToSpaceOpOp::verify() {
+LogicalResult darwinn::VicaDepthToSpaceOpOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::RkhyResidualAddOpOp::verify() {
+LogicalResult darwinn::VicaResidualAddOpOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 2);
 }
 
-LogicalResult darwinn::RkhyUnaryComputeOpOp::verify() {
+LogicalResult darwinn::VicaUnaryComputeOpOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 

@@ -120,15 +120,15 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCQUANTIZEDTOINTEGERTYPECONVERSIONPASS
 #define GEN_PASS_DEF_DWCVECTORIZATIONPASS
 #define GEN_PASS_DEF_DWCWIDEREGISTERREUSEPASS
-#define GEN_PASS_DEF_DWCCEPPSYTHWSVGMLLKWTPASS
+#define GEN_PASS_DEF_DWCHUFFMANCOMPRESSIONPASS
 #define GEN_PASS_DEF_DWCDUMPOPSTATSPASS
 #define GEN_PASS_DEF_DWCDETECTPARAMETERSPARSITYPASS
 #define GEN_PASS_DEF_DWCCUSTOMKERNELSHAPEINSTANTIATIONPASS
-#define GEN_PASS_DEF_DWCRKHYMEMORYREDISTRIBUTESPLITPASS
+#define GEN_PASS_DEF_DWCVICAMEMORYREDISTRIBUTESPLITPASS
 #define GEN_PASS_DEF_DWCEXECUTIONMODEASSIGNINGPASS
 #define GEN_PASS_DEF_DWCFEATUREEXTRACTIONPASS
 #define GEN_PASS_DEF_DWCMULTIMEDIASANITIZATIONPASS
-#define GEN_PASS_DEF_DWCRKHYTYPECONVERSIONOPTIMIZATIONPASS
+#define GEN_PASS_DEF_DWCVICATYPECONVERSIONOPTIMIZATIONPASS
 #define GEN_PASS_DEF_DWCDECORATEDOTPASS
 #define GEN_PASS_DEF_DWCHOISTNODEOPSPASS
 #define GEN_PASS_DEF_DWCHORIZONTALLYALIGNNODESPASS
@@ -240,8 +240,8 @@ namespace darwinn {
 #define GEN_PASS_DEF_DWCREINTERPRETCASTRANKLEGALIZEPASSPASS
 #define GEN_PASS_DEF_DWCRENAMEDIVEENTRYFUNCTIONPASS
 #define GEN_PASS_DEF_DWCRESAMPLERLOWERINGPASS
-#define GEN_PASS_DEF_DWCRKHYSHAPELEGALIZATIONPASSPASS
-#define GEN_PASS_DEF_DWCRKHYTYPELEGALIZATIONPASSPASS
+#define GEN_PASS_DEF_DWCVICASHAPELEGALIZATIONPASS
+#define GEN_PASS_DEF_DWCVICATYPELEGALIZATIONPASS
 #define GEN_PASS_DEF_DWCRUNR52OPSONDIVEPASS
 #define GEN_PASS_DEF_DWCSCALARCORECONTROLFLOWLOWERINGPASS
 #define GEN_PASS_DEF_DWCSCALARCORESTDOPSLOWERINGPASS
@@ -485,7 +485,7 @@ static LogicalResult applyDwcLowerTopKInline(func::FuncOp func,
 static LogicalResult applyDwcLowerPadInline(func::FuncOp func,
                                             unsigned &lowered) {
   return forwardDwcLowerTo(
-      func, {"darwinn.rkhy_custom_padding", "darwinn.mesh_pad_slice"},
+      func, {"darwinn.vica_custom_padding", "darwinn.mesh_pad_slice"},
       "dive_vm.pad", lowered);
 }
 
@@ -1421,8 +1421,8 @@ struct DwcConvertDiveVmToLlvmPass
         callee = "DiveVm_PatchInstructionForStridedIo";
       else if (op->getName().getStringRef() == "dive_vm.wait_for_fence_completion")
         callee = "DiveTpu_WaitForFenceCompletion";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_rkhy_completion")
-        callee = "DiveTpu_WaitForRkhyCompletion";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_vica_completion")
+        callee = "DiveTpu_WaitForVicaCompletion";
       else if (op->getName().getStringRef() == "dive_vm.wait_for_power_island_transition_complete")
         callee = "DiveVm_WaitForPowmgKllandTransitionComplete";
       else if (op->getName().getStringRef() == "dive_vm.perform_software_preemption_if_requested")
@@ -1711,8 +1711,8 @@ struct DwcConvertDiveVmToMemrefPass
         callee = "DiveVm_PatchInstructionForStridedIo";
       else if (op->getName().getStringRef() == "dive_vm.wait_for_fence_completion")
         callee = "DiveTpu_WaitForFenceCompletion";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_rkhy_completion")
-        callee = "DiveTpu_WaitForRkhyCompletion";
+      else if (op->getName().getStringRef() == "dive_vm.wait_for_vica_completion")
+        callee = "DiveTpu_WaitForVicaCompletion";
       else if (op->getName().getStringRef() == "dive_vm.wait_for_power_island_transition_complete")
         callee = "DiveVm_WaitForPowmgKllandTransitionComplete";
       else if (op->getName().getStringRef() == "dive_vm.perform_software_preemption_if_requested")
@@ -4034,8 +4034,8 @@ struct DwcDwcLowerHlopsPass
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.rkhy_unary_compute_op" &&
-          name != "darwinn.rkhy_depth_to_space_op" &&
+      if (name != "darwinn.vica_unary_compute_op" &&
+          name != "darwinn.vica_depth_to_space_op" &&
           name != "darwinn.static_unary_compute_op" &&
           name != "darwinn.synchronized_unary_compute_op" &&
           name != "darwinn.streaming_unary_compute_op")
@@ -6469,14 +6469,14 @@ struct DwcResamplerLoweringPass
   }
 };
 
-// TSV row: "rkhy-shape-legalization-pass" at 0xd7f029.
-struct DwcRkhyShapeLegalizationPassPass
-    : public darwinn::impl::DwcRkhyShapeLegalizationPassPassBase<
-          DwcRkhyShapeLegalizationPassPass> {
+// TSV row: "vica-shape-legalization" at 0xd7f029.
+struct DwcVicaShapeLegalizationPass
+    : public darwinn::impl::DwcVicaShapeLegalizationPassBase<
+          DwcVicaShapeLegalizationPass> {
   using Base::Base;
 
   void runOnOperation() override {
-    // Rkhy decodes to Vica. Pads and residual adds lower through the
+    // Vica decodes to Vica. Pads and residual adds lower through the
     // existing pad and scalar helpers.
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
@@ -6487,8 +6487,8 @@ struct DwcRkhyShapeLegalizationPassPass
     SmallVector<Operation *> dead;
     func.getOperation()->walk([&](Operation *op) {
       StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.rkhy_unary_compute_op" &&
-          name != "darwinn.rkhy_depth_to_space_op")
+      if (name != "darwinn.vica_unary_compute_op" &&
+          name != "darwinn.vica_depth_to_space_op")
         return;
       if (op->getNumOperands() != 1 || op->getNumResults() != 1)
         return;
@@ -6503,10 +6503,10 @@ struct DwcRkhyShapeLegalizationPassPass
   }
 };
 
-// TSV row: "rkhy-type-legalization-pass" at 0xd7f00d.
-struct DwcRkhyTypeLegalizationPassPass
-    : public darwinn::impl::DwcRkhyTypeLegalizationPassPassBase<
-          DwcRkhyTypeLegalizationPassPass> {
+// TSV row: "vica-type-legalization" at 0xd7f00d.
+struct DwcVicaTypeLegalizationPass
+    : public darwinn::impl::DwcVicaTypeLegalizationPassBase<
+          DwcVicaTypeLegalizationPass> {
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -6514,7 +6514,7 @@ struct DwcRkhyTypeLegalizationPassPass
   }
 
   void runOnOperation() override {
-    // Rkhy decodes to Vica. Convert and cast ops lower through the existing
+    // Vica decodes to Vica. Convert and cast ops lower through the existing
     // convert trunc helper.
     func::FuncOp func = getOperation();
     unsigned lowered = 0;
@@ -8427,8 +8427,8 @@ struct DwcWideRegisterReusePass
   }
 };
 
-struct DwcCeppsytHwsvgmllkwtPass
-    : public darwinn::impl::DwcCeppsytHwsvgmllkwtPassBase<DwcCeppsytHwsvgmllkwtPass> {
+struct DwcHuffmanCompressionPass
+    : public darwinn::impl::DwcHuffmanCompressionPassBase<DwcHuffmanCompressionPass> {
   using Base::Base;
 
   void runOnOperation() override {
@@ -8485,16 +8485,16 @@ struct DwcCustomKernelShapeInstantiationPass
   }
 };
 
-struct DwcRkhyMemoryRedistributeSplitPass
-    : public darwinn::impl::DwcRkhyMemoryRedistributeSplitPassBase<DwcRkhyMemoryRedistributeSplitPass> {
+struct DwcVicaMemoryRedistributeSplitPass
+    : public darwinn::impl::DwcVicaMemoryRedistributeSplitPassBase<DwcVicaMemoryRedistributeSplitPass> {
   using Base::Base;
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
     func.walk([&](Operation *op) {
-      if (!op->hasAttr("dwc.rkhy_type_legal"))
+      if (!op->hasAttr("dwc.vica_type_legal"))
         return;
-      op->setAttr("dwc.rkhy_redistribute_split", UnitAttr::get(&getContext()));
+      op->setAttr("dwc.vica_redistribute_split", UnitAttr::get(&getContext()));
     });
   }
 };
@@ -8543,8 +8543,8 @@ struct DwcMultimediaSanitizationPass
   }
 };
 
-struct DwcRkhyTypeConversionOptimizationPass
-    : public darwinn::impl::DwcRkhyTypeConversionOptimizationPassBase<DwcRkhyTypeConversionOptimizationPass> {
+struct DwcVicaTypeConversionOptimizationPass
+    : public darwinn::impl::DwcVicaTypeConversionOptimizationPassBase<DwcVicaTypeConversionOptimizationPass> {
   using Base::Base;
 
   void runOnOperation() override {

@@ -411,10 +411,10 @@ def DiveVm_ChunkSizesOp : DiveVm_Op<"chunk_sizes"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Operator: compute_norm_stats_for_rkhy
+// Operator: compute_norm_stats_for_vica
 //===----------------------------------------------------------------------===//
-def DiveVm_ComputeNormStatsForRkhyOp : DiveVm_Op<"compute_norm_stats_for_rkhy"> {
-  let summary = "DiveVM compute_norm_stats_for_rkhy operation.";
+def DiveVm_ComputeNormStatsForVicaOp : DiveVm_Op<"compute_norm_stats_for_vica"> {
+  let summary = "DiveVM compute_norm_stats_for_vica operation.";
   let description = [{
     Verifier accepts any operand count. Descriptor op backed by 3 blob xrefs with no callee symbol evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref.
   }];
@@ -1410,7 +1410,7 @@ def DiveVm_OneHotOp : DiveVm_Op<"one_hot"> {
 def DiveVm_PadOp : DiveVm_Op<"pad"> {
   let summary = "DiveVM pad operation.";
   let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.pad to _ZN7silicon4dive7kernels3PadERKNS0_11interpreter14ResolvedTensorES5_S5_RS3_. A darwinn lowering forwards darwinn.rkhy_custom_padding and darwinn.mesh_pad_slice to dive_vm.pad.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.pad to _ZN7silicon4dive7kernels3PadERKNS0_11interpreter14ResolvedTensorES5_S5_RS3_. A darwinn lowering forwards darwinn.vica_custom_padding and darwinn.mesh_pad_slice to dive_vm.pad.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);
@@ -1895,12 +1895,12 @@ def DiveVm_WaitForPowerIslandTransitionCompleteOp : DiveVm_Op<"wait_for_power_is
 }
 
 //===----------------------------------------------------------------------===//
-// Operator: wait_for_rkhy_completion
+// Operator: wait_for_vica_completion
 //===----------------------------------------------------------------------===//
-def DiveVm_WaitForRkhyCompletionOp : DiveVm_Op<"wait_for_rkhy_completion"> {
-  let summary = "DiveVM wait_for_rkhy_completion operation.";
+def DiveVm_WaitForVicaCompletionOp : DiveVm_Op<"wait_for_vica_completion"> {
+  let summary = "DiveVM wait_for_vica_completion operation.";
   let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.wait_for_rkhy_completion to DiveTpu_WaitForRkhyCompletion. No darwinn lowering forwarding to dive_vm.wait_for_rkhy_completion evidenced.
+    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.wait_for_vica_completion to DiveTpu_WaitForVicaCompletion. No darwinn lowering forwarding to dive_vm.wait_for_vica_completion evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$operands);
   let results = (outs Variadic<AnyType>:$results);

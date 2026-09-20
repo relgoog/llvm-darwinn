@@ -947,7 +947,7 @@ LogicalResult dive_vm::ChunkSizesOp::verify() {
   return success();
 }
 
-LogicalResult dive_vm::ComputeNormStatsForRkhyOp::verify() {
+LogicalResult dive_vm::ComputeNormStatsForVicaOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
@@ -1432,7 +1432,7 @@ LogicalResult dive_vm::WaitForPowerIslandTransitionCompleteOp::verify() {
   return success();
 }
 
-LogicalResult dive_vm::WaitForRkhyCompletionOp::verify() {
+LogicalResult dive_vm::WaitForVicaCompletionOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }

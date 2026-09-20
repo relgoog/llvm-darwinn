@@ -114,9 +114,9 @@ def Darwinn_CastOutOp : Darwinn_Op<"cast_out"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: ceppsyt_decompress
-def Darwinn_CeppsytDecompressOp : Darwinn_Op<"ceppsyt_decompress"> {
-  let summary = "Darwinn ceppsyt_decompress operation.";
+// Operator: huffman_decompress
+def Darwinn_HuffmanDecompressOp : Darwinn_Op<"huffman_decompress"> {
+  let summary = "Darwinn huffman_decompress operation.";
   let description = [{
     Takes any number of operands.
     No kernel shape is evidenced.
@@ -127,9 +127,9 @@ def Darwinn_CeppsytDecompressOp : Darwinn_Op<"ceppsyt_decompress"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: ceppsyt_hwsvgmllkwt
-def Darwinn_CeppsytHwsvgmllkwtOp : Darwinn_Op<"ceppsyt_hwsvgmllkwt"> {
-  let summary = "Darwinn ceppsyt_hwsvgmllkwt operation.";
+// Operator: huffman_compression
+def Darwinn_HuffmanCompressionOp : Darwinn_Op<"huffman_compression"> {
+  let summary = "Darwinn huffman_compression operation.";
   let description = [{
     Takes any number of operands.
     No kernel shape is evidenced.
@@ -1445,9 +1445,9 @@ def Darwinn_RingToTileSliceOp : Darwinn_Op<"ring_to_tile_slice"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_compute_op
-def Darwinn_RkhyComputeOpOp : Darwinn_Op<"rkhy_compute_op"> {
-  let summary = "Darwinn rkhy_compute_op operation.";
+// Operator: vica_compute_op
+def Darwinn_VicaComputeOpOp : Darwinn_Op<"vica_compute_op"> {
+  let summary = "Darwinn vica_compute_op operation.";
   let description = [{
     Takes any number of operands.
     No kernel shape is evidenced.
@@ -1458,9 +1458,9 @@ def Darwinn_RkhyComputeOpOp : Darwinn_Op<"rkhy_compute_op"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_custom_padding
-def Darwinn_RkhyCustomPaddingOp : Darwinn_Op<"rkhy_custom_padding"> {
-  let summary = "Darwinn rkhy_custom_padding operation.";
+// Operator: vica_custom_padding
+def Darwinn_VicaCustomPaddingOp : Darwinn_Op<"vica_custom_padding"> {
+  let summary = "Darwinn vica_custom_padding operation.";
   let description = [{
     Takes at least one operand.
     Lowers to dive_vm.pad.
@@ -1471,9 +1471,9 @@ def Darwinn_RkhyCustomPaddingOp : Darwinn_Op<"rkhy_custom_padding"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_depth_to_space_op
-def Darwinn_RkhyDepthToSpaceOpOp : Darwinn_Op<"rkhy_depth_to_space_op"> {
-  let summary = "Darwinn rkhy_depth_to_space_op operation.";
+// Operator: vica_depth_to_space_op
+def Darwinn_VicaDepthToSpaceOpOp : Darwinn_Op<"vica_depth_to_space_op"> {
+  let summary = "Darwinn vica_depth_to_space_op operation.";
   let description = [{
     Takes one operand.
     No kernel shape is evidenced.
@@ -1484,9 +1484,9 @@ def Darwinn_RkhyDepthToSpaceOpOp : Darwinn_Op<"rkhy_depth_to_space_op"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_residual_add_op
-def Darwinn_RkhyResidualAddOpOp : Darwinn_Op<"rkhy_residual_add_op"> {
-  let summary = "Darwinn rkhy_residual_add_op operation.";
+// Operator: vica_residual_add_op
+def Darwinn_VicaResidualAddOpOp : Darwinn_Op<"vica_residual_add_op"> {
+  let summary = "Darwinn vica_residual_add_op operation.";
   let description = [{
     Takes two operands.
     No kernel shape is evidenced.
@@ -1497,9 +1497,9 @@ def Darwinn_RkhyResidualAddOpOp : Darwinn_Op<"rkhy_residual_add_op"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: rkhy_unary_compute_op
-def Darwinn_RkhyUnaryComputeOpOp : Darwinn_Op<"rkhy_unary_compute_op"> {
-  let summary = "Darwinn rkhy_unary_compute_op operation.";
+// Operator: vica_unary_compute_op
+def Darwinn_VicaUnaryComputeOpOp : Darwinn_Op<"vica_unary_compute_op"> {
+  let summary = "Darwinn vica_unary_compute_op operation.";
   let description = [{
     Takes one operand.
     No kernel shape is evidenced.
