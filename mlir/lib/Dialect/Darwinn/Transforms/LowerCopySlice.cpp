@@ -286,6 +286,47 @@ struct CwiseLowering : public RewritePattern {
   }
 };
 
+struct SelectLowering : public RewritePattern {
+  SelectLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.select", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    Value cond = op->getOperand(0);
+    Value data = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto condRanked = dyn_cast<RankedTensorType>(cond.getType());
+    auto dataRanked = dyn_cast<RankedTensorType>(data.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!condRanked || !dataRanked || !dstRanked)
+      return failure();
+    if (!condRanked.hasStaticShape() || !dataRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (condRanked.getShape() != dataRanked.getShape() || dataRanked.getShape() != dstRanked.getShape())
+      return failure();
+    auto i1 = IntegerType::get(op->getContext(), 1, IntegerType::Signless);
+    if (condRanked.getElementType() != i1)
+      return failure();
+    if (dataRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(4, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{cond, data, data}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value picked = nested.create<arith::SelectOp>(nloc, args[0], args[1], args[2]);
+          nested.create<linalg::YieldOp>(nloc, picked);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+
 template <typename LinalgOp>
 static LogicalResult lowerDwcBinaryToLinalg(Operation *op, PatternRewriter &rewriter) {
   if (op->getNumResults() != 1 || op->getNumOperands() != 2)
@@ -367,6 +408,7 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<GatherLowering>("darwinn.gather_copy", ctx);
   patterns.add<GatherLowering>("darwinn.hib_gather", ctx);
   patterns.add<CwiseLowering>(ctx);
+  patterns.add<SelectLowering>(ctx);
   patterns.add<DwcAddLowering>(ctx);
   patterns.add<DwcBinaryLowering>("dwc.multiply", lowerDwcBinaryOp<linalg::MulOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.divide", lowerDwcBinaryOp<linalg::DivOp>, ctx);
