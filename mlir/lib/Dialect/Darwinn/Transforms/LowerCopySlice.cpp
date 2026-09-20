@@ -146,8 +146,8 @@ struct GatherLowering : public RewritePattern {
   }
 };
 
-struct CwiseAddLowering : public RewritePattern {
-  CwiseAddLowering(MLIRContext *ctx)
+struct CwiseLowering : public RewritePattern {
+  CwiseLowering(MLIRContext *ctx)
       : RewritePattern("dwc.cwise", 1, ctx) {}
 
   LogicalResult matchAndRewrite(Operation *op,
@@ -155,11 +155,15 @@ struct CwiseAddLowering : public RewritePattern {
     if (op->getNumResults() != 1 || op->getNumOperands() != 2)
       return failure();
     auto opType = dyn_cast<CwiseOpTypeAttr>(op->getAttr("op_type"));
-    if (!opType || opType.getValue() != CwiseOpType::Add)
+    if (!opType)
       return failure();
-    if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function")))
-      if (activation.getValue() != ActivationFunction::None)
+    bool isRelu = false;
+    if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"))) {
+      if (activation.getValue() == ActivationFunction::Relu)
+        isRelu = true;
+      else if (activation.getValue() != ActivationFunction::None)
         return failure();
+    }
     Value lhs = op->getOperand(0);
     Value rhs = op->getOperand(1);
     Type dstTy = op->getResult(0).getType();
@@ -169,8 +173,79 @@ struct CwiseAddLowering : public RewritePattern {
     auto ranked = dyn_cast<RankedTensorType>(dstTy);
     if (!ranked || !ranked.hasStaticShape())
       return failure();
-    Value empty = rewriter.create<tensor::EmptyOp>(op->getLoc(), ranked.getShape(), ranked.getElementType());
-    rewriter.replaceOpWithNewOp<linalg::AddOp>(op, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+    Operation *elem = nullptr;
+    switch (opType.getValue()) {
+    case CwiseOpType::Add:
+      elem = rewriter.create<linalg::AddOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+      break;
+    case CwiseOpType::Subtract:
+      elem = rewriter.create<linalg::SubOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+      break;
+    case CwiseOpType::Multiply:
+      elem = rewriter.create<linalg::MulOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+      break;
+    case CwiseOpType::Divide:
+      elem = rewriter.create<linalg::DivOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+      break;
+    case CwiseOpType::Maximum:
+      elem = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+      break;
+    case CwiseOpType::Minimum:
+      elem = rewriter.create<linalg::MinOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty});
+      break;
+    default:
+      return failure();
+    }
+    Value result = elem->getResult(0);
+    if (isRelu) {
+      Value zeroBuf = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+      Value zeroScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(ranked.getElementType()));
+      rewriter.create<linalg::FillOp>(loc, ValueRange{zeroScalar}, ValueRange{zeroBuf});
+      Value reluEmpty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+      result = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{result, zeroBuf}, ValueRange{reluEmpty})->getResult(0);
+    }
+    rewriter.replaceOp(op, result);
+    return success();
+  }
+};
+
+struct DwcAddLowering : public RewritePattern {
+  DwcAddLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.add", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    bool isRelu = false;
+    if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"))) {
+      if (activation.getValue() == ActivationFunction::Relu)
+        isRelu = true;
+      else if (activation.getValue() != ActivationFunction::None)
+        return failure();
+    }
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    if (!hasSameElementType(lhs.getType(), dstTy) ||
+        !hasSameElementType(rhs.getType(), dstTy))
+      return failure();
+    auto ranked = dyn_cast<RankedTensorType>(dstTy);
+    if (!ranked || !ranked.hasStaticShape())
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+    Value result = rewriter.create<linalg::AddOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty})->getResult(0);
+    if (isRelu) {
+      Value zeroBuf = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+      Value zeroScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(ranked.getElementType()));
+      rewriter.create<linalg::FillOp>(loc, ValueRange{zeroScalar}, ValueRange{zeroBuf});
+      Value reluEmpty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+      result = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{result, zeroBuf}, ValueRange{reluEmpty})->getResult(0);
+    }
+    rewriter.replaceOp(op, result);
     return success();
   }
 };
@@ -191,5 +266,6 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<GatherLowering>("darwinn.gather", ctx);
   patterns.add<GatherLowering>("darwinn.gather_copy", ctx);
   patterns.add<GatherLowering>("darwinn.hib_gather", ctx);
-  patterns.add<CwiseAddLowering>(ctx);
+  patterns.add<CwiseLowering>(ctx);
+  patterns.add<DwcAddLowering>(ctx);
 }
