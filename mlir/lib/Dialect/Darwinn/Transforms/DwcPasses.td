@@ -2241,4 +2241,74 @@ def DwcDwcOptimizeDeviceLaunchRegionPass : Pass<"dwc-optimize-device-launch-regi
   }];
 }
 
+def DwcDwcOptimizeGenericScatterPass : Pass<"dwc-optimize-generic-scatter", "func::FuncOp"> {
+  let summary = "DWC pass dwc-optimize-generic-scatter";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize generic scatter.
+  }];
+}
+
+def DwcDwcPostTruncationOptimizeScatterPass : Pass<"dwc-post-truncation-optimize-scatter", "func::FuncOp"> {
+  let summary = "DWC pass dwc-post-truncation-optimize-scatter";
+  let description = [{
+    Blob-evidenced dwc pass. Optimize scatter after truncation.
+  }];
+}
+
+def DwcDwcSpecializeShapesPass : Pass<"dwc-specialize-shapes", "func::FuncOp"> {
+  let summary = "DWC pass dwc-specialize-shapes";
+  let description = [{
+    Blob-evidenced dwc pass. Specialize shapes.
+  }];
+}
+
+def DwcDwcSpmdPartitionerPass : Pass<"dwc-spmd-partitioner", "func::FuncOp"> {
+  let summary = "DWC pass dwc-spmd-partitioner";
+  let description = [{
+    Blob-evidenced dwc pass. SPMD partitioner.
+  }];
+}
+
+def DwcDwcNormalizeTensorRankPass : Pass<"dwc-normalize-tensor-rank", "func::FuncOp"> {
+  let summary = "DWC pass dwc-normalize-tensor-rank";
+  let description = [{
+    Blob-evidenced dwc pass. Normalize tensor rank, failing with dwc-normalize-tensor-rank pass failed.
+  }];
+}
+
+def DwcDwcNormalizePaddedInputsPass : Pass<"dwc-normalize-padded-inputs", "func::FuncOp"> {
+  let summary = "DWC pass dwc-normalize-padded-inputs";
+  let description = [{
+    Blob-evidenced dwc pass. Normalize padded inputs.
+  }];
+}
+
+def DwcDwcPreprocessForNormalizeTensorRankPass : Pass<"dwc-preprocess-for-normalize-tensor-rank", "func::FuncOp"> {
+  let summary = "DWC pass dwc-preprocess-for-normalize-tensor-rank";
+  let description = [{
+    Blob-evidenced dwc pass. Preprocess for normalize tensor rank, failing with dwc-preprocess-for-normalize-tensor-rank failed.
+  }];
+}
+
+def DwcDwcPreprocessForWideTensorOpPass : Pass<"dwc-preprocess-for-wide-tensor-op", "func::FuncOp"> {
+  let summary = "DWC pass dwc-preprocess-for-wide-tensor-op";
+  let description = [{
+    Blob-evidenced dwc pass. Preprocess for wide tensor op.
+  }];
+}
+
+def DwcDwcRecognizeWideTensoropPass : Pass<"dwc-recognize-wide-tensorop", "func::FuncOp"> {
+  let summary = "DWC pass dwc-recognize-wide-tensorop";
+  let description = [{
+    Blob-evidenced dwc pass. Recognize wide tensor ops.
+  }];
+}
+
+def DwcDwcHomogenizeOperandTypesPass : Pass<"dwc-homogenize-operand-types", "func::FuncOp"> {
+  let summary = "DWC pass dwc-homogenize-operand-types";
+  let description = [{
+    Blob-evidenced dwc pass. Homogenize operand types.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
