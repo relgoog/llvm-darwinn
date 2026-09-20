@@ -869,6 +869,43 @@ struct UnaryLowering : public RewritePattern {
   }
 };
 
+struct NotLowering : public RewritePattern {
+  NotLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.not", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    auto i1 = IntegerType::get(op->getContext(), 1, IntegerType::Signless);
+    if (srcRanked.getElementType() != i1 || dstRanked.getElementType() != i1)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value scalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getBoolAttr(true));
+    Value filled = empty;
+    rewriter.create<linalg::FillOp>(loc, ValueRange{scalar}, ValueRange{filled});
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(3, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{input, filled}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = nested.create<arith::XOrIOp>(nloc, args[0], args[1]);
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
 static Value emitSin(OpBuilder &b, Location loc, Value x) { return b.create<math::SinOp>(loc, x); }
 static Value emitCos(OpBuilder &b, Location loc, Value x) { return b.create<math::CosOp>(loc, x); }
 static Value emitExp(OpBuilder &b, Location loc, Value x) { return b.create<math::ExpOp>(loc, x); }
@@ -887,6 +924,7 @@ static Value emitTan(OpBuilder &b, Location loc, Value x) { return b.create<math
 static Value emitExpm1(OpBuilder &b, Location loc, Value x) { return b.create<math::ExpM1Op>(loc, x); }
 static Value emitLog1p(OpBuilder &b, Location loc, Value x) { return b.create<math::Log1pOp>(loc, x); }
 static Value emitSign(OpBuilder &b, Location loc, Value x) { return b.create<math::CopySignOp>(loc, b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(1.0)), x); }
+static Value emitRoundAfz(OpBuilder &b, Location loc, Value x) { return b.create<math::RoundEvenOp>(loc, x); }
 
 } // namespace
 
@@ -940,4 +978,6 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<UnaryLowering>("dwc.expm1", emitExpm1, ctx);
   patterns.add<UnaryLowering>("dwc.log1p", emitLog1p, ctx);
   patterns.add<UnaryLowering>("dwc.sign", emitSign, ctx);
+  patterns.add<UnaryLowering>("dwc.round_nearest_afz", emitRoundAfz, ctx);
+  patterns.add<NotLowering>(ctx);
 }
