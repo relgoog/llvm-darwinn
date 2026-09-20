@@ -907,6 +907,46 @@ struct NotLowering : public RewritePattern {
   }
 };
 
+struct CastLowering : public RewritePattern {
+  CastLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.cast", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    Type srcElem = srcRanked.getElementType();
+    Type dstElem = dstRanked.getElementType();
+    if (!isa<FloatType>(srcElem) || !isa<FloatType>(dstElem))
+      return failure();
+    if (srcElem == dstElem)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstElem);
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(2, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    bool srcWider = srcElem.getIntOrFloatBitWidth() > dstElem.getIntOrFloatBitWidth();
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{input}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value out = srcWider ? static_cast<Value>(nested.create<arith::TruncFOp>(nloc, dstElem, args[0]))
+                               : static_cast<Value>(nested.create<arith::ExtFOp>(nloc, dstElem, args[0]));
+          nested.create<linalg::YieldOp>(nloc, out);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+
 struct IntUnaryLowering : public RewritePattern {
   StringRef root;
   using EmitFn = Value (*)(OpBuilder &, Location, Value);
@@ -1042,6 +1082,7 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<DwcBinaryLowering>("dwc.maximum", lowerDwcBinaryOp<linalg::MaxOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.minimum", lowerDwcBinaryOp<linalg::MinOp>, ctx);
   patterns.add<DwcBinaryLowering>("dwc.subtract", lowerDwcBinaryOp<linalg::SubOp>, ctx);
+  patterns.add<CastLowering>(ctx);
   patterns.add<ReshapeLowering>(ctx);
   patterns.add<TransposeLowering>(ctx);
   patterns.add<MatmulLowering>("dwc.matrix_multiply", ctx);
