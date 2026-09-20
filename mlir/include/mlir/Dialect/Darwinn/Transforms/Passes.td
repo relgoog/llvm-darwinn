@@ -2649,4 +2649,74 @@ def DwcDwcMatchCustomKernelsPass : Pass<"dwc-match-custom-kernels", "func::FuncO
   }];
 }
 
+def DwcDwcApplyMaterializePolicyPass : Pass<"dwc-apply-materialize-policy", "func::FuncOp"> {
+  let summary = "DWC pass dwc-apply-materialize-policy";
+  let description = [{
+    Blob-evidenced dwc pass. Apply materialize policy.
+  }];
+}
+
+def DwcDwcAdjustAnnotateMaterializePolicyInputOutputPass : Pass<"dwc-adjust-annotate-materialize-policy-input-output", "func::FuncOp"> {
+  let summary = "DWC pass dwc-adjust-annotate-materialize-policy-input-output";
+  let description = [{
+    Blob-evidenced dwc pass. Adjust annotate materialize policy input output.
+  }];
+}
+
+def DwcDwcInlineAnnotateMaterializePolicyPass : Pass<"dwc-inline-annotate-materialize-policy", "func::FuncOp"> {
+  let summary = "DWC pass dwc-inline-annotate-materialize-policy";
+  let description = [{
+    Blob-evidenced dwc pass. Inline annotate materialize policy.
+  }];
+}
+
+def DwcDwcAqtOptimizePass : Pass<"dwc-aqt-optimize", "func::FuncOp"> {
+  let summary = "DWC pass dwc-aqt-optimize";
+  let description = [{
+    Blob-evidenced dwc pass. AQT optimization.
+  }];
+}
+
+def DwcDwcBackendSpecificOptimizePass : Pass<"dwc-backend-specific-optimize", "func::FuncOp"> {
+  let summary = "DWC pass dwc-backend-specific-optimize";
+  let description = [{
+    Blob-evidenced dwc pass. Backend specific optimization.
+  }];
+}
+
+def DwcDwcHighlevelopsOptimizePass : Pass<"dwc-highlevelops-optimize", "func::FuncOp"> {
+  let summary = "DWC pass dwc-highlevelops-optimize";
+  let description = [{
+    Blob-evidenced dwc pass. High level ops optimize, failing with dwc-highlevelops-optimize pass failed while applying patterns.
+  }];
+}
+
+def DwcDwcPromoteLongReductionSoftmaxMatmulPrecisionPass : Pass<"dwc-promote-long-reduction-softmax-matmul-precision", "func::FuncOp"> {
+  let summary = "DWC pass dwc-promote-long-reduction-softmax-matmul-precision";
+  let description = [{
+    Blob-evidenced dwc pass. Promote long reduction softmax matmul precision.
+  }];
+}
+
+def DwcDwcPropagateIoColocationPairsPass : Pass<"dwc-propagate-io-colocation-pairs", "func::FuncOp"> {
+  let summary = "DWC pass dwc-propagate-io-colocation-pairs";
+  let description = [{
+    Blob-evidenced dwc pass. Propagate IO colocation pairs.
+  }];
+}
+
+def DwcDwcNaiveAutoShardingPass : Pass<"dwc-naive-auto-sharding", "func::FuncOp"> {
+  let summary = "DWC pass dwc-naive-auto-sharding";
+  let description = [{
+    Blob-evidenced dwc pass. Naive auto sharding.
+  }];
+}
+
+def DwcDwcSchedulerPass : Pass<"dwc-scheduler", "func::FuncOp"> {
+  let summary = "DWC pass dwc-scheduler";
+  let description = [{
+    Blob-evidenced dwc pass. Schedule operations.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
