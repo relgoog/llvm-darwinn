@@ -2451,4 +2451,68 @@ def DwcDwcInsertArgumentCopyOpsPass : Pass<"dwc-insert-argument-copy-ops", "func
   }];
 }
 
+def DwcDwcCheckIllegalOpsPass : Pass<"dwc-check-illegal-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-check-illegal-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Check illegal ops, failing with dwc-check-illegal-ops failed on unsupported ops.
+  }];
+}
+
+
+def DwcDwcEliminateDynamicSliceOpsPass : Pass<"dwc-eliminate-dynamic-slice-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-eliminate-dynamic-slice-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Eliminate dynamic slice ops, failing with dwc-eliminate-dynamic-slice-ops failed.
+  }];
+}
+
+def DwcDwcExpandDepthwiseMultiplierPass : Pass<"dwc-expand-depthwise-multiplier", "func::FuncOp"> {
+  let summary = "DWC pass dwc-expand-depthwise-multiplier";
+  let description = [{
+    Blob-evidenced dwc pass. Expand depthwise multiplier.
+  }];
+}
+
+def DwcDwcExpandFusedOpsPass : Pass<"dwc-expand-fused-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-expand-fused-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Expand fused ops.
+  }];
+}
+
+def DwcDwcFoldI64TflBroadcastsPass : Pass<"dwc-fold-i64-tfl-broadcasts", "func::FuncOp"> {
+  let summary = "DWC pass dwc-fold-i64-tfl-broadcasts";
+  let description = [{
+    Blob-evidenced dwc pass. Fold i64 TFL broadcasts.
+  }];
+}
+
+def DwcDwcGeneralDynamicShapesPass : Pass<"dwc-general-dynamic-shapes", "func::FuncOp"> {
+  let summary = "DWC pass dwc-general-dynamic-shapes";
+  let description = [{
+    Blob-evidenced dwc pass. Generalize dynamic shapes.
+  }];
+}
+
+def DwcDwcGenerateShapeOpsPass : Pass<"dwc-generate-shape-ops", "func::FuncOp"> {
+  let summary = "DWC pass dwc-generate-shape-ops";
+  let description = [{
+    Blob-evidenced dwc pass. Generate shape ops.
+  }];
+}
+
+def DwcDwcFlattenNestedModulesPass : Pass<"dwc-flatten-nested-modules", "func::FuncOp"> {
+  let summary = "DWC pass dwc-flatten-nested-modules";
+  let description = [{
+    Blob-evidenced dwc pass. Flatten nested modules.
+  }];
+}
+
+def DwcDwcBroadcastRepeatedConstantsPass : Pass<"dwc-broadcast-repeated-constants", "func::FuncOp"> {
+  let summary = "DWC pass dwc-broadcast-repeated-constants";
+  let description = [{
+    Blob-evidenced dwc pass. Broadcast repeated constants, failing with dwc-broadcast-repeated-constants failed.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
