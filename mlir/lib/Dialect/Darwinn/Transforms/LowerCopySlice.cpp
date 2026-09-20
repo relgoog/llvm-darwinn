@@ -595,6 +595,99 @@ struct SelectLowering : public RewritePattern {
     return success();
   }
 };
+struct DarwinnReluLowering : public RewritePattern {
+  DarwinnReluLowering(MLIRContext *ctx) : RewritePattern("darwinn.relu", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (!isa<FloatType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    Value zeroBuf = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zeroScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zeroScalar}, ValueRange{zeroBuf});
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    rewriter.replaceOpWithNewOp<linalg::MaxOp>(op, TypeRange{dstTy}, ValueRange{input, zeroBuf}, ValueRange{empty});
+    return success();
+  }
+};
+
+struct DarwinnSelectLowering : public RewritePattern {
+  DarwinnSelectLowering(MLIRContext *ctx) : RewritePattern("darwinn.select", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 3)
+      return failure();
+    Value cond = op->getOperand(0);
+    Value lhs = op->getOperand(1);
+    Value rhs = op->getOperand(2);
+    Type dstTy = op->getResult(0).getType();
+    auto condRanked = dyn_cast<RankedTensorType>(cond.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!condRanked || !dstRanked || !condRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (condRanked.getShape() != dstRanked.getShape())
+      return failure();
+    auto i1 = IntegerType::get(op->getContext(), 1, IntegerType::Signless);
+    if (condRanked.getElementType() != i1)
+      return failure();
+    if (!hasSameElementType(lhs.getType(), dstTy) || !hasSameElementType(rhs.getType(), dstTy))
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    int64_t rank = dstRanked.getRank();
+    SmallVector<AffineMap> maps(4, rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<utils::IteratorType> iters(rank, utils::IteratorType::parallel);
+    auto generic = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{cond, lhs, rhs}, ValueRange{empty},
+        maps, iters,
+        [&](OpBuilder &nested, Location nloc, ValueRange args) {
+          Value picked = nested.create<arith::SelectOp>(nloc, args[0], args[1], args[2]);
+          nested.create<linalg::YieldOp>(nloc, picked);
+        });
+    rewriter.replaceOp(op, generic->getResult(0));
+    return success();
+  }
+};
+
+struct DarwinnScatterLowering : public RewritePattern {
+  DarwinnScatterLowering(MLIRContext *ctx) : RewritePattern("darwinn.scatter", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() < 2)
+      return failure();
+    SmallVector<NamedAttribute> attrs;
+    for (auto attr : op->getAttrs())
+      attrs.push_back(attr);
+    Operation *next = makeVmOp(rewriter, op->getLoc(), "dive_vm.scatter_nd", op->getOperands(),
+                               op->getResultTypes(), attrs);
+    rewriter.replaceOp(op, next->getResults());
+    return success();
+  }
+};
+
+struct DarwinnSplitLowering : public RewritePattern {
+  DarwinnSplitLowering(MLIRContext *ctx) : RewritePattern("darwinn.split", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    if (input.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, input);
+    return success();
+  }
+};
+
 
 struct ReductionLowering : public RewritePattern {
   ReductionLowering(MLIRContext *ctx)
@@ -3068,6 +3161,10 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<GatherLowering>("darwinn.hib_gather", ctx);
   patterns.add<CwiseLowering>(ctx);
   patterns.add<SelectLowering>(ctx);
+  patterns.add<DarwinnReluLowering>(ctx);
+  patterns.add<DarwinnSelectLowering>(ctx);
+  patterns.add<DarwinnScatterLowering>(ctx);
+  patterns.add<DarwinnSplitLowering>(ctx);
   patterns.add<ReductionLowering>(ctx);
   patterns.add<DwcAddLowering>(ctx);
   patterns.add<DwcBinaryLowering>("dwc.multiply", lowerDwcBinaryOp<linalg::MulOp>, ctx);
