@@ -831,6 +831,44 @@ struct PaddingLowering : public RewritePattern {
   }
 };
 
+struct PseudoSplitLowering : public RewritePattern {
+  PseudoSplitLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.pseudo_split", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto splits = dyn_cast<IntegerAttr>(op->getAttr("num_splits"));
+    if (!splits || splits.getInt() != 1)
+      return failure();
+    Value data = op->getOperand(1);
+    if (data.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, data);
+    return success();
+  }
+};
+
+struct RescalingNoneLowering : public RewritePattern {
+  RescalingNoneLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.rescaling", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
+    if (!activation || activation.getValue() != ActivationFunction::None)
+      return failure();
+    Value input = op->getOperand(0);
+    if (input.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, input);
+    return success();
+  }
+};
+
 struct UnaryLowering : public RewritePattern {
   StringRef root;
   using EmitFn = Value (*)(OpBuilder &, Location, Value);
@@ -1203,4 +1241,6 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<IntUnaryLowering>("dwc.pop_count", emitPopCount, ctx);
   patterns.add<OneHotLowering>(ctx);
   patterns.add<CumulativeLowering>(ctx);
+  patterns.add<PseudoSplitLowering>(ctx);
+  patterns.add<RescalingNoneLowering>(ctx);
 }
