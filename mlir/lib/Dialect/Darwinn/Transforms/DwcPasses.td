@@ -416,10 +416,7 @@ def DwcDiveProgramTpuPass : Pass<"dive-program-tpu", "func::FuncOp"> {
 def DwcDiveUnrollFactorPass : Pass<"dive-unroll-factor", "func::FuncOp"> {
   let summary = "DWC pass dive-unroll-factor";
   let description = [{
-    Seen at 0xda744d in task3_passes.tsv, this pass folds same-type one-operand one-result `dive_vm.for`
-    and `dive_vm.loop` identities with replaceAllUsesWith and erase. It then runs
-    checkDwcConvertibleTypes over the `dive_vm.for` and `dive_vm.loop` and leaves every other op
-    untouched.
+    Seen at 0xda744d in task3_passes.tsv, this pass runs checkDwcConvertibleTypes over the function and leaves every other op untouched.
   }];
 }
 
@@ -1584,7 +1581,7 @@ def DwcCompositeSlicingSolverPass : Pass<"composite-slicing-solver", "func::Func
 def DwcCustomSlicingAssignmentPass : Pass<"custom-slicing-assignment", "func::FuncOp"> {
   let summary = "DWC pass custom-slicing-assignment";
   let description = [{
-    Assigns custom slicing to ops carrying blob-evidenced `darwinn.custom_tiling_options`, stamping `dwc.slicing_assigned`.
+    Assigns custom slicing to ops carrying blob-evidenced `darwinn.custom_tiling_options`.
   }];
 }
 
@@ -2146,7 +2143,7 @@ def DwcDwcTruncateAttentionPass : Pass<"dwc-truncate-attention", "func::FuncOp">
 def DwcDwcShardingPass : Pass<"dwc-sharding", "func::FuncOp"> {
   let summary = "DWC pass dwc-sharding";
   let description = [{
-    Blob-evidenced dwc pass. Shard computation, failing with dwc-sharding propagation failed and dwc-sharding reduce-mode conversion failed.
+    Blob-evidenced dwc pass. Shard computation with failures `dwc-sharding propagation failed` plus `dwc-sharding reduce-mode conversion failed`.
   }];
 }
 
@@ -2454,7 +2451,7 @@ def DwcDwcInsertArgumentCopyOpsPass : Pass<"dwc-insert-argument-copy-ops", "func
 def DwcDwcCheckIllegalOpsPass : Pass<"dwc-check-illegal-ops", "func::FuncOp"> {
   let summary = "DWC pass dwc-check-illegal-ops";
   let description = [{
-    Blob-evidenced dwc pass. Check illegal ops, failing with dwc-check-illegal-ops failed on unsupported ops.
+    Blob-evidenced dwc pass. Check illegal ops, failing with `dwc-check-illegal-ops failed: found unsupported ops in func `.
   }];
 }
 
