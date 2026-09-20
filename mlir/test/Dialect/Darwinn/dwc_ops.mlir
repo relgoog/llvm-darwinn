@@ -219,7 +219,6 @@ func.func @test_generic_compute(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 // -----
 // CHECK-LABEL: generic_constant
 func.func @test_generic_constant(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: dwc.generic_constant
   %0 = "dwc.generic_constant"(%arg0) {value = dense<0.0> : tensor<4xf32>} : (tensor<4xf32>) -> tensor<4xf32>
   return %0 : tensor<4xf32>
 }

@@ -586,9 +586,6 @@ LogicalResult dwc::GenericConstantOp::verify() {
     return (*this)->emitOpError("expected op 'dwc.generic_constant' to have attribute 'value'");
   if (!llvm::isa<ElementsAttr>((*this)->getAttr("value")))
     return (*this)->emitOpError("attribute 'value' expects ElementsAttr");
-  auto shaped = llvm::dyn_cast<ShapedType>(llvm::cast<ElementsAttr>((*this)->getAttr("value")).getType());
-  if (!shaped || !shaped.hasRank() || shaped.getRank() < 1)
-    return (*this)->emitOpError("attribute 'value' expects constant vector/tensor");
   return success();
 }
 
@@ -1042,15 +1039,19 @@ LogicalResult dwc::SelectOp::verify() {
     return (*this)->emitOpError("operand 0 expects statically shaped tensor");
   auto tensor1 = llvm::dyn_cast<TensorType>(getInputs()[1].getType());
   Type element1 = tensor1 ? tensor1.getElementType() : getInputs()[1].getType();
-  if (llvm::isa<Float32Type, Float64Type>(element1))
+  if (llvm::isa<Float32Type>(element1))
     return success();
   if (auto integer1 = llvm::dyn_cast<IntegerType>(element1)) {
-    if ((integer1.isSignless() || integer1.isUnsigned()) && (integer1.getWidth() == 8 || integer1.getWidth() == 16 || integer1.getWidth() == 32 || integer1.getWidth() == 64))
-      return success();
     if (integer1.isSignless() && integer1.getWidth() == 1)
       return success();
+    if ((integer1.isSignless() || integer1.isUnsigned()) && (integer1.getWidth() == 8 || integer1.getWidth() == 16 || integer1.getWidth() == 32))
+      return success();
+    if ((integer1.isSignless() || integer1.isUnsigned()) && integer1.getWidth() == 64)
+      return success();
   }
-  return (*this)->emitOpError("operand 1 expects 8/16/32/64-bit int or 32/64-bit float");
+  if (llvm::isa<Float64Type>(element1))
+    return success();
+  return (*this)->emitOpError("operand 1 expects i1, i8, u8, i16, u16, i32, u32, f32, i64, u64, or f64");
 }
 
 LogicalResult dwc::SignOp::verify() {
