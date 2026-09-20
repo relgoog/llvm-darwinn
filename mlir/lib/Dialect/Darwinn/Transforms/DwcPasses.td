@@ -2719,4 +2719,74 @@ def DwcDwcSchedulerPass : Pass<"dwc-scheduler", "func::FuncOp"> {
   }];
 }
 
+def DwcDwcAddTraceOutputPass : Pass<"dwc-add-trace-output", "func::FuncOp"> {
+  let summary = "DWC pass dwc-add-trace-output";
+  let description = [{
+    Blob-evidenced dwc pass. Add trace output, failing with dwc-add-trace-output pass failed.
+  }];
+}
+
+def DwcDwcBufferLivenessDumpPass : Pass<"dwc-buffer-liveness-dump", "func::FuncOp"> {
+  let summary = "DWC pass dwc-buffer-liveness-dump";
+  let description = [{
+    Blob-evidenced dwc pass. Dump buffer liveness.
+  }];
+}
+
+def DwcDwcControlFlowBoundaryCodeMotionPass : Pass<"dwc-control-flow-boundary-code-motion", "func::FuncOp"> {
+  let summary = "DWC pass dwc-control-flow-boundary-code-motion";
+  let description = [{
+    Blob-evidenced dwc pass. Code motion across control flow boundaries.
+  }];
+}
+
+def DwcDwcDisambiguateDebugLocationPass : Pass<"dwc-disambiguate-debug-location", "func::FuncOp"> {
+  let summary = "DWC pass dwc-disambiguate-debug-location";
+  let description = [{
+    Blob-evidenced dwc pass. Disambiguate debug locations.
+  }];
+}
+
+def DwcDwcDynamicForkMainFunctionPass : Pass<"dwc-dynamic-fork-main-function", "func::FuncOp"> {
+  let summary = "DWC pass dwc-dynamic-fork-main-function";
+  let description = [{
+    Blob-evidenced dwc pass. Fork main function for dynamic shapes.
+  }];
+}
+
+def DwcDwcEarlyLargePatternToPseudoOpPass : Pass<"dwc-early-large-pattern-to-pseudo-op", "func::FuncOp"> {
+  let summary = "DWC pass dwc-early-large-pattern-to-pseudo-op";
+  let description = [{
+    Blob-evidenced dwc pass. Lower early large patterns to pseudo ops.
+  }];
+}
+
+def DwcDwcFilterOpWithLocationPass : Pass<"dwc-filter-op-with-location", "func::FuncOp"> {
+  let summary = "DWC pass dwc-filter-op-with-location";
+  let description = [{
+    Blob-evidenced dwc pass. Filter ops by location.
+  }];
+}
+
+def DwcDwcFilterOutOpsWithUnsupportedValueRangePass : Pass<"dwc-filter-out-ops-with-unsupported-value-range", "func::FuncOp"> {
+  let summary = "DWC pass dwc-filter-out-ops-with-unsupported-value-range";
+  let description = [{
+    Blob-evidenced dwc pass. Filter out ops with unsupported value ranges.
+  }];
+}
+
+def DwcDwcRunShortOpSequencesOnXxxPass : Pass<"dwc-run-short-op-sequences-on-xxx", "func::FuncOp"> {
+  let summary = "DWC pass dwc-run-short-op-sequences-on-xxx";
+  let description = [{
+    Blob-evidenced dwc pass. Run short op sequences on fallback, failing with dwc-run-short-op-sequences-on-xxx pass failed.
+  }];
+}
+
+def DwcDwcWrapLisaFunctionPass : Pass<"dwc-wrap-lisa-function", "func::FuncOp"> {
+  let summary = "DWC pass dwc-wrap-lisa-function";
+  let description = [{
+    Blob-evidenced dwc pass. Wrap LISA functions.
+  }];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES
