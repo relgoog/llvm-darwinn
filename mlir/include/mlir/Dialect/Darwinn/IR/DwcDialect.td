@@ -314,6 +314,48 @@ def Dwc_KernelLevelEnum : Dwc_I32Enum<
   ]>;
 def Dwc_KernelLevelAttr : Dwc_I32EnumAttr<"kernel_level", Dwc_KernelLevelEnum>;
 
+def Dwc_MeshDimUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_MeshDimEnum : Dwc_I32Enum<
+  "MeshDim", "DWC mesh dim", [
+    Dwc_MeshDimUnknown
+  ]>;
+def Dwc_MeshDimAttr : Dwc_I32EnumAttr<"mesh_dim", Dwc_MeshDimEnum>;
+
+def Dwc_NluE8M0RoundingUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_NluE8M0RoundingEnum : Dwc_I32Enum<
+  "NluE8M0Rounding", "DWC NLU E8M0 rounding", [
+    Dwc_NluE8M0RoundingUnknown
+  ]>;
+def Dwc_NluE8M0RoundingAttr : Dwc_I32EnumAttr<"nlu_e8m0_rounding", Dwc_NluE8M0RoundingEnum>;
+
+def Dwc_NluPreprocessingUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_NluPreprocessingEnum : Dwc_I32Enum<
+  "NluPreprocessing", "DWC NLU preprocessing", [
+    Dwc_NluPreprocessingUnknown
+  ]>;
+def Dwc_NluPreprocessingAttr : Dwc_I32EnumAttr<"nlu_preprocessing", Dwc_NluPreprocessingEnum>;
+
+def Dwc_NormalizationTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_NormalizationTypeEnum : Dwc_I32Enum<
+  "NormalizationType", "DWC normalization type", [
+    Dwc_NormalizationTypeUnknown
+  ]>;
+def Dwc_NormalizationTypeAttr : Dwc_I32EnumAttr<"normalization_type", Dwc_NormalizationTypeEnum>;
+
+def Dwc_PaddingValueTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_PaddingValueTypeEnum : Dwc_I32Enum<
+  "PaddingValueType", "DWC padding value type", [
+    Dwc_PaddingValueTypeUnknown
+  ]>;
+def Dwc_PaddingValueTypeAttr : Dwc_I32EnumAttr<"padding_value_type", Dwc_PaddingValueTypeEnum>;
+
+def Dwc_PoolUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_PoolEnum : Dwc_I32Enum<
+  "Pool", "DWC pool", [
+    Dwc_PoolUnknown
+  ]>;
+def Dwc_PoolAttr : Dwc_I32EnumAttr<"pool", Dwc_PoolEnum>;
+
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   "MemorySpace", "DWC memory space", [
