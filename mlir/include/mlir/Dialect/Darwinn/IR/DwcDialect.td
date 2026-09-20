@@ -398,6 +398,27 @@ def Dwc_TensorOpGatherOperationEnum : Dwc_I32Enum<
   ]>;
 def Dwc_TensorOpGatherOperationAttr : Dwc_I32EnumAttr<"tensor_op_gather_operation", Dwc_TensorOpGatherOperationEnum>;
 
+def Dwc_TransformationTypeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_TransformationTypeEnum : Dwc_I32Enum<
+  "TransformationType", "DWC transformation type", [
+    Dwc_TransformationTypeUnknown
+  ]>;
+def Dwc_TransformationTypeAttr : Dwc_I32EnumAttr<"transformation_type", Dwc_TransformationTypeEnum>;
+
+def Dwc_TruncateFloatsUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_TruncateFloatsEnum : Dwc_I32Enum<
+  "TruncateFloats", "DWC truncate floats", [
+    Dwc_TruncateFloatsUnknown
+  ]>;
+def Dwc_TruncateFloatsAttr : Dwc_I32EnumAttr<"truncate_floats", Dwc_TruncateFloatsEnum>;
+
+def Dwc_VRGKHOperationModeUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_VRGKHOperationModeEnum : Dwc_I32Enum<
+  "VRGKHOperationMode", "DWC VRGKH operation mode", [
+    Dwc_VRGKHOperationModeUnknown
+  ]>;
+def Dwc_VRGKHOperationModeAttr : Dwc_I32EnumAttr<"vrgkh_operation_mode", Dwc_VRGKHOperationModeEnum>;
+
 def Dwc_MemorySpaceHostMemory : I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">;
 def Dwc_MemorySpaceEnum : Dwc_I32Enum<
   "MemorySpace", "DWC memory space", [
