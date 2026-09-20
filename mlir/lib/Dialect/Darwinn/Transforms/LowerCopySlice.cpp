@@ -211,44 +211,69 @@ struct CwiseLowering : public RewritePattern {
   }
 };
 
+template <typename LinalgOp>
+static LogicalResult lowerDwcBinaryToLinalg(Operation *op, PatternRewriter &rewriter) {
+  if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+    return failure();
+  bool isRelu = false;
+  if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"))) {
+    if (activation.getValue() == ActivationFunction::Relu)
+      isRelu = true;
+    else if (activation.getValue() != ActivationFunction::None)
+      return failure();
+  }
+  Value lhs = op->getOperand(0);
+  Value rhs = op->getOperand(1);
+  Type dstTy = op->getResult(0).getType();
+  if (!hasSameElementType(lhs.getType(), dstTy) ||
+      !hasSameElementType(rhs.getType(), dstTy))
+    return failure();
+  auto ranked = dyn_cast<RankedTensorType>(dstTy);
+  if (!ranked || !ranked.hasStaticShape())
+    return failure();
+  Location loc = op->getLoc();
+  Value empty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+  Value result = rewriter.create<LinalgOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty})->getResult(0);
+  if (isRelu) {
+    Value zeroBuf = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+    Value zeroScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(ranked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zeroScalar}, ValueRange{zeroBuf});
+    Value reluEmpty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
+    result = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{result, zeroBuf}, ValueRange{reluEmpty})->getResult(0);
+  }
+  rewriter.replaceOp(op, result);
+  return success();
+}
+
 struct DwcAddLowering : public RewritePattern {
   DwcAddLowering(MLIRContext *ctx)
       : RewritePattern("dwc.add", 1, ctx) {}
 
   LogicalResult matchAndRewrite(Operation *op,
                                 PatternRewriter &rewriter) const override {
-    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
-      return failure();
-    bool isRelu = false;
-    if (auto activation = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"))) {
-      if (activation.getValue() == ActivationFunction::Relu)
-        isRelu = true;
-      else if (activation.getValue() != ActivationFunction::None)
-        return failure();
-    }
-    Value lhs = op->getOperand(0);
-    Value rhs = op->getOperand(1);
-    Type dstTy = op->getResult(0).getType();
-    if (!hasSameElementType(lhs.getType(), dstTy) ||
-        !hasSameElementType(rhs.getType(), dstTy))
-      return failure();
-    auto ranked = dyn_cast<RankedTensorType>(dstTy);
-    if (!ranked || !ranked.hasStaticShape())
-      return failure();
-    Location loc = op->getLoc();
-    Value empty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
-    Value result = rewriter.create<linalg::AddOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{empty})->getResult(0);
-    if (isRelu) {
-      Value zeroBuf = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
-      Value zeroScalar = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(ranked.getElementType()));
-      rewriter.create<linalg::FillOp>(loc, ValueRange{zeroScalar}, ValueRange{zeroBuf});
-      Value reluEmpty = rewriter.create<tensor::EmptyOp>(loc, ranked.getShape(), ranked.getElementType());
-      result = rewriter.create<linalg::MaxOp>(loc, dstTy, ValueRange{result, zeroBuf}, ValueRange{reluEmpty})->getResult(0);
-    }
-    rewriter.replaceOp(op, result);
-    return success();
+    return lowerDwcBinaryToLinalg<linalg::AddOp>(op, rewriter);
   }
 };
+
+struct DwcBinaryLowering : public RewritePattern {
+  StringRef root;
+  using LowerFn = LogicalResult (*)(Operation *, PatternRewriter &);
+  LowerFn lower;
+  DwcBinaryLowering(StringRef rootName, LowerFn fn, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName), lower(fn) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    return lower(op, rewriter);
+  }
+};
+
+template <typename LinalgOp>
+static LogicalResult lowerDwcBinaryOp(Operation *op, PatternRewriter &rewriter) {
+  return lowerDwcBinaryToLinalg<LinalgOp>(op, rewriter);
+}
 
 } // namespace
 
@@ -268,4 +293,9 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<GatherLowering>("darwinn.hib_gather", ctx);
   patterns.add<CwiseLowering>(ctx);
   patterns.add<DwcAddLowering>(ctx);
+  patterns.add<DwcBinaryLowering>("dwc.multiply", lowerDwcBinaryOp<linalg::MulOp>, ctx);
+  patterns.add<DwcBinaryLowering>("dwc.divide", lowerDwcBinaryOp<linalg::DivOp>, ctx);
+  patterns.add<DwcBinaryLowering>("dwc.maximum", lowerDwcBinaryOp<linalg::MaxOp>, ctx);
+  patterns.add<DwcBinaryLowering>("dwc.minimum", lowerDwcBinaryOp<linalg::MinOp>, ctx);
+  patterns.add<DwcBinaryLowering>("dwc.subtract", lowerDwcBinaryOp<linalg::SubOp>, ctx);
 }
