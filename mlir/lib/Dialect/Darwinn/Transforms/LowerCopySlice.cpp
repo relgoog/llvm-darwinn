@@ -1054,10 +1054,12 @@ struct ConvolutionV2Lowering : public RewritePattern {
     auto ys = op->getAttrOfType<IntegerAttr>("y_stride");
     auto xd = op->getAttrOfType<IntegerAttr>("x_dilation_rate");
     auto yd = op->getAttrOfType<IntegerAttr>("y_dilation_rate");
-    if (!xs || !ys || !xd || !yd)
-      return failure();
-    if (xs.getInt() != 1 || ys.getInt() != 1 || xd.getInt() != 1 || yd.getInt() != 1)
-      return failure();
+    if (xs || ys || xd || yd) {
+      if (!xs || !ys || !xd || !yd)
+        return failure();
+      if (xs.getInt() != 1 || ys.getInt() != 1 || xd.getInt() != 1 || yd.getInt() != 1)
+        return failure();
+    }
     Value input = op->getOperand(0);
     Value filter = op->getOperand(1);
     Type dstTy = op->getResult(0).getType();
@@ -1607,6 +1609,92 @@ struct Pool2DLowering : public RewritePattern {
     auto strides = rewriter.getDenseI64ArrayAttr({2, 2});
     auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
     rewriter.replaceOpWithNewOp<linalg::PoolingNhwcMaxOp>(op, TypeRange{dstTy}, ValueRange{input, window}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+struct Pool3DLowering : public RewritePattern {
+  Pool3DLowering(MLIRContext *ctx) : RewritePattern("dwc.pooling_3d", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getRank() != 5 || dstRanked.getRank() != 5)
+      return failure();
+    if (!isa<FloatType>(srcRanked.getElementType()) || srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (srcRanked.getDimSize(0) != dstRanked.getDimSize(0) || srcRanked.getDimSize(4) != dstRanked.getDimSize(4))
+      return failure();
+    if (srcRanked.getDimSize(1) != 2 * dstRanked.getDimSize(1) ||
+        srcRanked.getDimSize(2) != 2 * dstRanked.getDimSize(2) ||
+        srcRanked.getDimSize(3) != 2 * dstRanked.getDimSize(3))
+      return failure();
+    Location loc = op->getLoc();
+    Value window = rewriter.create<tensor::EmptyOp>(loc, ArrayRef<int64_t>{2, 2, 2}, srcRanked.getElementType());
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    auto strides = rewriter.getDenseI64ArrayAttr({2, 2, 2});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1, 1});
+    rewriter.replaceOpWithNewOp<linalg::PoolingNdhwcMaxOp>(op, TypeRange{dstTy}, ValueRange{input, window}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+
+struct VicaAddPoolLowering : public RewritePattern {
+  VicaAddPoolLowering(MLIRContext *ctx) : RewritePattern("dwc.vica_add_pool", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || (op->getNumOperands() != 1 && op->getNumOperands() != 2))
+      return failure();
+    Value input = op->getNumOperands() == 2 ? op->getOperand(0) : op->getOperand(0);
+    Value sum = input;
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    auto inRanked = dyn_cast<RankedTensorType>(input.getType());
+    if (!inRanked || !dstRanked || !inRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (inRanked.getRank() != 4 || dstRanked.getRank() != 4)
+      return failure();
+    Location loc = op->getLoc();
+    if (op->getNumOperands() == 2) {
+      Value lhs = op->getOperand(0);
+      Value rhs = op->getOperand(1);
+      auto lhsRanked = dyn_cast<RankedTensorType>(lhs.getType());
+      auto rhsRanked = dyn_cast<RankedTensorType>(rhs.getType());
+      if (!lhsRanked || !rhsRanked || !lhsRanked.hasStaticShape() || !rhsRanked.hasStaticShape())
+        return failure();
+      if (lhsRanked.getShape() != dstRanked.getShape())
+        return failure();
+      if (!isa<FloatType>(lhsRanked.getElementType()) || lhsRanked.getElementType() != dstRanked.getElementType())
+        return failure();
+      Value addEmpty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+      sum = rewriter.create<linalg::AddOp>(loc, dstTy, ValueRange{lhs, rhs}, ValueRange{addEmpty})->getResult(0);
+    } else if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != dstRanked.getDimSize(3) ||
+               inRanked.getDimSize(1) != 2 * dstRanked.getDimSize(1) || inRanked.getDimSize(2) != 2 * dstRanked.getDimSize(2)) {
+      return failure();
+    }
+    Value window = rewriter.create<tensor::EmptyOp>(loc, ArrayRef<int64_t>{2, 2}, dstRanked.getElementType());
+    Value poolEmpty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    if (op->getNumOperands() == 1) {
+      auto strides = rewriter.getDenseI64ArrayAttr({2, 2});
+      auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
+      rewriter.replaceOpWithNewOp<linalg::PoolingNhwcMaxOp>(op, TypeRange{dstTy}, ValueRange{sum, window}, ValueRange{poolEmpty}, strides, dilations);
+      return success();
+    }
+    if (inRanked.getShape() == dstRanked.getShape()) {
+      rewriter.replaceOp(op, sum);
+      return success();
+    }
+    if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != dstRanked.getDimSize(3) ||
+        inRanked.getDimSize(1) != 2 * dstRanked.getDimSize(1) || inRanked.getDimSize(2) != 2 * dstRanked.getDimSize(2))
+      return failure();
+    auto strides = rewriter.getDenseI64ArrayAttr({1, 1});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
+    rewriter.replaceOpWithNewOp<linalg::PoolingNhwcMaxOp>(op, TypeRange{dstTy}, ValueRange{sum, window}, ValueRange{poolEmpty}, strides, dilations);
     return success();
   }
 };
@@ -2391,6 +2479,12 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<Pool2DLowering>("dwc.pool", ctx);
   patterns.add<Pool2DLowering>("dwc.pooling", ctx);
   patterns.add<Pool2DLowering>("dwc.reduce_window", ctx);
+  patterns.add<Pool3DLowering>(ctx);
+  patterns.add<VicaAddPoolLowering>(ctx);
+  patterns.add<MatmulLowering>("dwc.fully_connected_zin_indexed", ctx);
+  patterns.add<MatmulLowering>("dwc.fully_connected_zout_indexed", ctx);
+  patterns.add<ConvolutionV2Lowering>("dwc.convolution_sub_channel", ctx);
+  patterns.add<ForwardLowering>("dwc.transposed_convolution_sub_channel", "dive_vm.scatter_nd", ctx);
   patterns.add<ForwardLowering>("dwc.mask_indices", "dive_vm.mask_indices", ctx);
   patterns.add<ForwardLowering>("dwc.hib_gather", "dive_vm.hib_gather_edit", ctx);
   patterns.add<ForwardLowering>("dwc.one_hot_tpu", "dive_vm.one_hot", ctx);
