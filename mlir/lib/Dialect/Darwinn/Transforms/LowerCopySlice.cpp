@@ -842,6 +842,81 @@ struct SliceLowering : public RewritePattern {
     return success();
   }
 };
+struct DynamicSliceNdLowering : public RewritePattern {
+  DynamicSliceNdLowering(StringRef rootName, MLIRContext *ctx)
+      : RewritePattern(rootName, 1, ctx), root(rootName) {}
+  StringRef root;
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getName().getStringRef() != root)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    auto mode = dyn_cast<IntegerAttr>(op->getAttr("mode"));
+    auto size = dyn_cast<IntegerAttr>(op->getAttr("slice_size"));
+    if (!mode || !size)
+      return failure();
+    if (size.getInt() <= 0)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getRank() != 1 || dstRanked.getRank() != 1)
+      return failure();
+    if (srcRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (size.getInt() != dstRanked.getDimSize(0) || size.getInt() > srcRanked.getDimSize(0))
+      return failure();
+    Location loc = op->getLoc();
+    OpFoldResult offset = rewriter.getIndexAttr(0);
+    OpFoldResult extent = rewriter.getIndexAttr(size.getInt());
+    OpFoldResult stride = rewriter.getIndexAttr(1);
+    rewriter.replaceOpWithNewOp<tensor::ExtractSliceOp>(op, dstRanked, input, ArrayRef<OpFoldResult>{offset}, ArrayRef<OpFoldResult>{extent}, ArrayRef<OpFoldResult>{stride});
+    return success();
+  }
+};
+
+struct DynamicUpdateSliceNdLowering : public RewritePattern {
+  DynamicUpdateSliceNdLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.dynamic_update_slice", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto mode = dyn_cast<IntegerAttr>(op->getAttr("mode"));
+    if (!mode)
+      return failure();
+    Value update = op->getOperand(0);
+    Value base = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto updRanked = dyn_cast<RankedTensorType>(update.getType());
+    auto baseRanked = dyn_cast<RankedTensorType>(base.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!updRanked || !baseRanked || !dstRanked)
+      return failure();
+    if (!updRanked.hasStaticShape() || !baseRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (updRanked.getRank() != 1 || baseRanked.getRank() != 1 || dstRanked.getRank() != 1)
+      return failure();
+    if (baseRanked.getShape() != dstRanked.getShape())
+      return failure();
+    if (updRanked.getDimSize(0) > baseRanked.getDimSize(0))
+      return failure();
+    if (updRanked.getElementType() != dstRanked.getElementType() ||
+        baseRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    Location loc = op->getLoc();
+    OpFoldResult offset = rewriter.getIndexAttr(0);
+    OpFoldResult extent = rewriter.getIndexAttr(updRanked.getDimSize(0));
+    OpFoldResult stride = rewriter.getIndexAttr(1);
+    rewriter.replaceOpWithNewOp<tensor::InsertSliceOp>(op, update, base, ArrayRef<OpFoldResult>{offset}, ArrayRef<OpFoldResult>{extent}, ArrayRef<OpFoldResult>{stride});
+    return success();
+  }
+};
+
 
 struct ConvolutionLowering : public RewritePattern {
   ConvolutionLowering(MLIRContext *ctx)
@@ -1002,6 +1077,208 @@ struct GenericDotLowering : public RewritePattern {
   }
 };
 
+
+struct ClassifierLowering : public RewritePattern {
+  ClassifierLowering(MLIRContext *ctx) : RewritePattern("dwc.classifier", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    auto axis = dyn_cast<IntegerAttr>(op->getAttr("axis"));
+    auto beta = dyn_cast<FloatAttr>(op->getAttr("beta"));
+    auto opType = dyn_cast<ClassificationTypeAttr>(op->getAttr("op_type"));
+    if (!axis || !beta || !opType)
+      return failure();
+    if (axis.getInt() != -1 || beta.getValueAsDouble() != 1.0 ||
+        opType.getValue() != ClassificationType::Softmax)
+      return failure();
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Type dstTy = op->getResult(0).getType();
+    auto srcRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!srcRanked || !dstRanked || !srcRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (srcRanked.getShape() != dstRanked.getShape() || srcRanked.getRank() != 1)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    auto dimAttr = rewriter.getI64IntegerAttr(0);
+    rewriter.replaceOpWithNewOp<linalg::SoftmaxOp>(op, TypeRange{dstTy}, input, empty, dimAttr);
+    return success();
+  }
+};
+
+struct GenericConvLowering : public RewritePattern {
+  GenericConvLowering(MLIRContext *ctx) : RewritePattern("dwc.generic_conv", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto act = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
+    auto batchGroup = dyn_cast<IntegerAttr>(op->getAttr("batch_group_count"));
+    auto featGroup = dyn_cast<IntegerAttr>(op->getAttr("feature_group_count"));
+    auto stride = dyn_cast<DenseIntElementsAttr>(op->getAttr("stride"));
+    auto inputDil = dyn_cast<DenseIntElementsAttr>(op->getAttr("input_dilation"));
+    auto paramDil = dyn_cast<DenseIntElementsAttr>(op->getAttr("param_dilation"));
+    auto padding = dyn_cast<DenseIntElementsAttr>(op->getAttr("padding_amount"));
+    if (!act || !batchGroup || !featGroup || !stride || !inputDil || !paramDil || !padding)
+      return failure();
+    if (act.getValue() != ActivationFunction::None || batchGroup.getInt() != 1 || featGroup.getInt() != 1)
+      return failure();
+    auto isOnes = [](DenseIntElementsAttr a) {
+      for (APInt v : a.getValues<APInt>())
+        if (v.getSExtValue() != 1)
+          return false;
+      return true;
+    };
+    auto isZeros = [](DenseIntElementsAttr a) {
+      for (APInt v : a.getValues<APInt>())
+        if (!v.isZero())
+          return false;
+      return true;
+    };
+    if (!isOnes(stride) || !isOnes(inputDil) || !isOnes(paramDil) || !isZeros(padding))
+      return failure();
+    Value input = op->getOperand(0);
+    Value filter = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto inRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto filtRanked = dyn_cast<RankedTensorType>(filter.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!inRanked || !filtRanked || !dstRanked)
+      return failure();
+    if (!inRanked.hasStaticShape() || !filtRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (inRanked.getRank() != 4 || filtRanked.getRank() != 4 || dstRanked.getRank() != 4)
+      return failure();
+    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
+        filtRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != filtRanked.getDimSize(2) ||
+        filtRanked.getDimSize(3) != dstRanked.getDimSize(3))
+      return failure();
+    if (dstRanked.getDimSize(1) != inRanked.getDimSize(1) - filtRanked.getDimSize(0) + 1 ||
+        dstRanked.getDimSize(2) != inRanked.getDimSize(2) - filtRanked.getDimSize(1) + 1)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    auto strides = rewriter.getDenseI64ArrayAttr({1, 1});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
+    rewriter.replaceOpWithNewOp<linalg::Conv2DNhwcHwcfOp>(op, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+
+struct TransposedConvLowering : public RewritePattern {
+  TransposedConvLowering(MLIRContext *ctx) : RewritePattern("dwc.transposed_convolution", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto act = dyn_cast<ActivationFunctionAttr>(op->getAttr("activation_function"));
+    auto cell = dyn_cast<CellOperationAttr>(op->getAttr("cell_operation"));
+    auto xs = dyn_cast<IntegerAttr>(op->getAttr("x_stride"));
+    auto ys = dyn_cast<IntegerAttr>(op->getAttr("y_stride"));
+    auto xd = dyn_cast<IntegerAttr>(op->getAttr("x_dilation_rate"));
+    auto yd = dyn_cast<IntegerAttr>(op->getAttr("y_dilation_rate"));
+    auto xOut = dyn_cast<IntegerAttr>(op->getAttr("x_out_dim"));
+    auto yOut = dyn_cast<IntegerAttr>(op->getAttr("y_out_dim"));
+    if (!act || !cell || !xs || !ys || !xd || !yd || !xOut || !yOut)
+      return failure();
+    if (act.getValue() != ActivationFunction::None || cell.getValue() != CellOperation::Mac)
+      return failure();
+    if (xs.getInt() != 1 || ys.getInt() != 1 || xd.getInt() != 1 || yd.getInt() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Value filter = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto inRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto filtRanked = dyn_cast<RankedTensorType>(filter.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!inRanked || !filtRanked || !dstRanked)
+      return failure();
+    if (!inRanked.hasStaticShape() || !filtRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (inRanked.getRank() != 4 || filtRanked.getRank() != 4 || dstRanked.getRank() != 4)
+      return failure();
+    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
+        filtRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != filtRanked.getDimSize(2) ||
+        filtRanked.getDimSize(3) != dstRanked.getDimSize(3))
+      return failure();
+    if (dstRanked.getDimSize(1) != (inRanked.getDimSize(1) - 1) + filtRanked.getDimSize(0) ||
+        dstRanked.getDimSize(2) != (inRanked.getDimSize(2) - 1) + filtRanked.getDimSize(1))
+      return failure();
+    if (xOut.getInt() != dstRanked.getDimSize(1) || yOut.getInt() != dstRanked.getDimSize(2))
+      return failure();
+    Location loc = op->getLoc();
+    int64_t hIn = inRanked.getDimSize(1);
+    int64_t wIn = inRanked.getDimSize(2);
+    int64_t kh = filtRanked.getDimSize(0);
+    int64_t kw = filtRanked.getDimSize(1);
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value nV = rewriter.create<arith::ConstantIndexOp>(loc, inRanked.getDimSize(0));
+    Value hV = rewriter.create<arith::ConstantIndexOp>(loc, hIn);
+    Value wV = rewriter.create<arith::ConstantIndexOp>(loc, wIn);
+    Value khV = rewriter.create<arith::ConstantIndexOp>(loc, kh);
+    Value kwV = rewriter.create<arith::ConstantIndexOp>(loc, kw);
+    Value ciV = rewriter.create<arith::ConstantIndexOp>(loc, inRanked.getDimSize(3));
+    Value coV = rewriter.create<arith::ConstantIndexOp>(loc, dstRanked.getDimSize(3));
+    auto ln = rewriter.create<scf::ForOp>(loc, c0, nV, c1, ValueRange{empty});
+    rewriter.setInsertionPointToStart(ln.getBody());
+    Value bn = ln.getInductionVar();
+    auto lh = rewriter.create<scf::ForOp>(loc, c0, hV, c1, ValueRange{ln.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lh.getBody());
+    Value hi = lh.getInductionVar();
+    auto lw = rewriter.create<scf::ForOp>(loc, c0, wV, c1, ValueRange{lh.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lw.getBody());
+    Value wi = lw.getInductionVar();
+    auto lkh = rewriter.create<scf::ForOp>(loc, c0, khV, c1, ValueRange{lw.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lkh.getBody());
+    Value khi = lkh.getInductionVar();
+    auto lkw = rewriter.create<scf::ForOp>(loc, c0, kwV, c1, ValueRange{lkh.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lkw.getBody());
+    Value kwi = lkw.getInductionVar();
+    auto lci = rewriter.create<scf::ForOp>(loc, c0, ciV, c1, ValueRange{lkw.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lci.getBody());
+    Value cii = lci.getInductionVar();
+    auto lco = rewriter.create<scf::ForOp>(loc, c0, coV, c1, ValueRange{lci.getRegionIterArg(0)});
+    rewriter.setInsertionPointToStart(lco.getBody());
+    Value coi = lco.getInductionVar();
+    Value cur = lco.getRegionIterArg(0);
+    Value ho = rewriter.create<arith::AddIOp>(loc, hi, khi);
+    Value wo = rewriter.create<arith::AddIOp>(loc, wi, kwi);
+    Value a = rewriter.create<tensor::ExtractOp>(loc, input, ValueRange{bn, hi, wi, cii});
+    Value f = rewriter.create<tensor::ExtractOp>(loc, filter, ValueRange{khi, kwi, cii, coi});
+    Value old = rewriter.create<tensor::ExtractOp>(loc, cur, ValueRange{bn, ho, wo, coi});
+    Value prod = rewriter.create<arith::MulFOp>(loc, a, f);
+    Value sum = rewriter.create<arith::AddFOp>(loc, old, prod);
+    Value upd = rewriter.create<tensor::InsertOp>(loc, sum, cur, ValueRange{bn, ho, wo, coi});
+    rewriter.create<scf::YieldOp>(loc, ValueRange{upd});
+    rewriter.setInsertionPointAfter(lco);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lco->getResult(0)});
+    rewriter.setInsertionPointAfter(lci);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lci->getResult(0)});
+    rewriter.setInsertionPointAfter(lkw);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lkw->getResult(0)});
+    rewriter.setInsertionPointAfter(lkh);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lkh->getResult(0)});
+    rewriter.setInsertionPointAfter(lw);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lw->getResult(0)});
+    rewriter.setInsertionPointAfter(lh);
+    rewriter.create<scf::YieldOp>(loc, ValueRange{lh->getResult(0)});
+    rewriter.setInsertionPointAfter(ln);
+    rewriter.replaceOp(op, ln->getResult(0));
+    return success();
+  }
+};
 
 struct ScalarLowering : public RewritePattern {
   ScalarLowering(MLIRContext *ctx) : RewritePattern("dwc.scalar", 1, ctx) {}
@@ -1783,11 +2060,17 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<ConvolutionV2Lowering>("dwc.convolution_v2", ctx);
   patterns.add<ConvolutionV2Lowering>("dwc.depthwise_convolution_v2", ctx);
   patterns.add<ScalarLowering>(ctx);
+  patterns.add<ClassifierLowering>(ctx);
+  patterns.add<GenericConvLowering>(ctx);
+  patterns.add<TransposedConvLowering>(ctx);
   patterns.add<GenericDotLowering>(ctx);
   patterns.add<IdentityLowering>("dwc.reduce_precision", ctx);
   patterns.add<TruncateFloatsLowering>(ctx);
   patterns.add<ConcatenationLowering>(ctx);
   patterns.add<SliceLowering>(ctx);
+  patterns.add<DynamicSliceNdLowering>("dwc.dynamic_slice", ctx);
+  patterns.add<DynamicUpdateSliceNdLowering>(ctx);
+  patterns.add<ForwardLowering>("dwc.sort", "dive_vm.top_k", ctx);
   patterns.add<PaddingLowering>(ctx);
   patterns.add<UnaryLowering>("dwc.sin", emitSin, ctx);
   patterns.add<UnaryLowering>("dwc.cos", emitCos, ctx);
