@@ -627,6 +627,59 @@ struct MatmulLowering : public RewritePattern {
   }
 };
 
+struct ConvolutionLowering : public RewritePattern {
+  ConvolutionLowering(MLIRContext *ctx)
+      : RewritePattern("dwc.convolution", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op,
+                                PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+      return failure();
+    auto getI64 = [&](StringRef name, int64_t &out) -> bool {
+      auto attr = dyn_cast<IntegerAttr>(op->getAttr(name));
+      if (!attr)
+        return false;
+      out = attr.getInt();
+      return true;
+    };
+    int64_t xStride, yStride, xDilation, yDilation;
+    if (!getI64("x_stride", xStride) || !getI64("y_stride", yStride) ||
+        !getI64("x_dilation_rate", xDilation) || !getI64("y_dilation_rate", yDilation))
+      return failure();
+    if (xStride != 1 || yStride != 1 || xDilation != 1 || yDilation != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    Value filter = op->getOperand(1);
+    Type dstTy = op->getResult(0).getType();
+    auto inRanked = dyn_cast<RankedTensorType>(input.getType());
+    auto filtRanked = dyn_cast<RankedTensorType>(filter.getType());
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!inRanked || !filtRanked || !dstRanked)
+      return failure();
+    if (!inRanked.hasStaticShape() || !filtRanked.hasStaticShape() || !dstRanked.hasStaticShape())
+      return failure();
+    if (inRanked.getRank() != 4 || filtRanked.getRank() != 4 || dstRanked.getRank() != 4)
+      return failure();
+    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
+        filtRanked.getElementType() != dstRanked.getElementType())
+      return failure();
+    if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != filtRanked.getDimSize(2) ||
+        filtRanked.getDimSize(3) != dstRanked.getDimSize(3))
+      return failure();
+    if (dstRanked.getDimSize(1) != inRanked.getDimSize(1) - filtRanked.getDimSize(0) + 1 ||
+        dstRanked.getDimSize(2) != inRanked.getDimSize(2) - filtRanked.getDimSize(1) + 1)
+      return failure();
+    Location loc = op->getLoc();
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty});
+    auto strides = rewriter.getDenseI64ArrayAttr({1, 1});
+    auto dilations = rewriter.getDenseI64ArrayAttr({1, 1});
+    rewriter.replaceOpWithNewOp<linalg::Conv2DNhwcHwcfOp>(op, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{empty}, strides, dilations);
+    return success();
+  }
+};
+
 } // namespace
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
@@ -656,4 +709,5 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<TransposeLowering>(ctx);
   patterns.add<MatmulLowering>("dwc.matrix_multiply", ctx);
   patterns.add<MatmulLowering>("dwc.fully_connected", ctx);
+  patterns.add<ConvolutionLowering>(ctx);
 }
