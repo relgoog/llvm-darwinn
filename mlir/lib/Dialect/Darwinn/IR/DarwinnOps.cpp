@@ -946,6 +946,60 @@ LogicalResult darwinn::ScalarRegisterToTileTransferOp::verify() {
   return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
 }
 
+static LogicalResult verifyScalarFloatPair(Operation *op, ValueRange inputs) {
+  if (inputs.size() != 2)
+    return op->emitOpError("expects 2 operands, got ") << inputs.size();
+  for (unsigned index = 0; index < 2; ++index) {
+    Type element = inputs[index].getType();
+    if (auto tensor = llvm::dyn_cast<TensorType>(inputs[index].getType()))
+      element = tensor.getElementType();
+    if (!llvm::isa<BFloat16Type, Float16Type>(element))
+      return op->emitOpError("operand ") << index << " expects bf16 or f16";
+  }
+  return success();
+}
+
+LogicalResult darwinn::ScalarFaddOp::verify() {
+  return verifyScalarFloatPair(*this, getInputs());
+}
+
+LogicalResult darwinn::ScalarFeqOp::verify() {
+  return verifyScalarFloatPair(*this, getInputs());
+}
+
+LogicalResult darwinn::ScalarFgtOp::verify() {
+  return verifyScalarFloatPair(*this, getInputs());
+}
+
+LogicalResult darwinn::ScalarFgteOp::verify() {
+  return verifyScalarFloatPair(*this, getInputs());
+}
+
+LogicalResult darwinn::ScalarFltOp::verify() {
+  return verifyScalarFloatPair(*this, getInputs());
+}
+
+LogicalResult darwinn::ScalarFlteOp::verify() {
+  return verifyScalarFloatPair(*this, getInputs());
+}
+
+static LogicalResult verifyScalarAssignedRegister(Operation *op) {
+  if (!op->hasAttr("assigned_register"))
+    return op->emitOpError("expected op to have attribute 'assigned_register'");
+  auto attr = llvm::dyn_cast<IntegerAttr>(op->getAttr("assigned_register"));
+  if (!attr || !attr.getType().isSignlessInteger(5))
+    return op->emitOpError("attribute 'assigned_register' expects 5-bit signless integer");
+  return success();
+}
+
+LogicalResult darwinn::ScalarInplaceDilatefOp::verify() {
+  return verifyScalarAssignedRegister(*this);
+}
+
+LogicalResult darwinn::ScalarInplaceTruncatefOp::verify() {
+  return verifyScalarAssignedRegister(*this);
+}
+
 LogicalResult darwinn::ScaleOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();

@@ -1549,6 +1549,102 @@ def Darwinn_ScalarRegisterToTileTransferOp : Darwinn_Op<"scalar_register_to_tile
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
+// Operator: scalar.fadd
+def Darwinn_ScalarFaddOp : Darwinn_Op<"scalar.fadd"> {
+  let summary = "Darwinn scalar.fadd operation.";
+  let description = [{
+    Exactly 2 bf16 or f16 operands per the blob constraints.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.feq
+def Darwinn_ScalarFeqOp : Darwinn_Op<"scalar.feq"> {
+  let summary = "Darwinn scalar.feq operation.";
+  let description = [{
+    Exactly 2 bf16 or f16 operands per the blob constraints.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.fgt
+def Darwinn_ScalarFgtOp : Darwinn_Op<"scalar.fgt"> {
+  let summary = "Darwinn scalar.fgt operation.";
+  let description = [{
+    Exactly 2 bf16 or f16 operands per the blob constraints.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.fgte
+def Darwinn_ScalarFgteOp : Darwinn_Op<"scalar.fgte"> {
+  let summary = "Darwinn scalar.fgte operation.";
+  let description = [{
+    Exactly 2 bf16 or f16 operands per the blob constraints.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.flt
+def Darwinn_ScalarFltOp : Darwinn_Op<"scalar.flt"> {
+  let summary = "Darwinn scalar.flt operation.";
+  let description = [{
+    Exactly 2 bf16 or f16 operands per the blob constraints.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.flte
+def Darwinn_ScalarFlteOp : Darwinn_Op<"scalar.flte"> {
+  let summary = "Darwinn scalar.flte operation.";
+  let description = [{
+    Exactly 2 bf16 or f16 operands per the blob constraints.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.inplace_dilatef
+def Darwinn_ScalarInplaceDilatefOp : Darwinn_Op<"scalar.inplace_dilatef"> {
+  let summary = "Darwinn scalar.inplace_dilatef operation.";
+  let description = [{
+    Requires 5-bit signless integer `assigned_register` per the blob constraint.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+// Operator: scalar.inplace_truncatef
+def Darwinn_ScalarInplaceTruncatefOp : Darwinn_Op<"scalar.inplace_truncatef"> {
+  let summary = "Darwinn scalar.inplace_truncatef operation.";
+  let description = [{
+    Requires 5-bit signless integer `assigned_register` per the blob constraint.
+  }];
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
 // Operator: scale
 def Darwinn_ScaleOp : Darwinn_Op<"scale"> {
   let summary = "Darwinn scale operation.";

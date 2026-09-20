@@ -942,6 +942,70 @@ func.func @test_scale() -> tensor<4xf32> {
 }
 
 // -----
+// CHECK-LABEL: scalar_fadd
+func.func @test_scalar_fadd(%arg0: bf16, %arg1: bf16) -> bf16 {
+  // CHECK: darwinn.scalar.fadd
+  %0 = "darwinn.scalar.fadd"(%arg0, %arg1) : (bf16, bf16) -> bf16
+  return %0 : bf16
+}
+
+// -----
+// CHECK-LABEL: scalar_feq
+func.func @test_scalar_feq(%arg0: f16, %arg1: f16) -> f16 {
+  // CHECK: darwinn.scalar.feq
+  %0 = "darwinn.scalar.feq"(%arg0, %arg1) : (f16, f16) -> f16
+  return %0 : f16
+}
+
+// -----
+// CHECK-LABEL: scalar_fgt
+func.func @test_scalar_fgt(%arg0: bf16, %arg1: bf16) -> bf16 {
+  // CHECK: darwinn.scalar.fgt
+  %0 = "darwinn.scalar.fgt"(%arg0, %arg1) : (bf16, bf16) -> bf16
+  return %0 : bf16
+}
+
+// -----
+// CHECK-LABEL: scalar_fgte
+func.func @test_scalar_fgte(%arg0: bf16, %arg1: bf16) -> bf16 {
+  // CHECK: darwinn.scalar.fgte
+  %0 = "darwinn.scalar.fgte"(%arg0, %arg1) : (bf16, bf16) -> bf16
+  return %0 : bf16
+}
+
+// -----
+// CHECK-LABEL: scalar_flt
+func.func @test_scalar_flt(%arg0: bf16, %arg1: bf16) -> bf16 {
+  // CHECK: darwinn.scalar.flt
+  %0 = "darwinn.scalar.flt"(%arg0, %arg1) : (bf16, bf16) -> bf16
+  return %0 : bf16
+}
+
+// -----
+// CHECK-LABEL: scalar_flte
+func.func @test_scalar_flte(%arg0: bf16, %arg1: bf16) -> bf16 {
+  // CHECK: darwinn.scalar.flte
+  %0 = "darwinn.scalar.flte"(%arg0, %arg1) : (bf16, bf16) -> bf16
+  return %0 : bf16
+}
+
+// -----
+// CHECK-LABEL: scalar_inplace_dilatef
+func.func @test_scalar_inplace_dilatef() -> tensor<4xf32> {
+  // CHECK: darwinn.scalar.inplace_dilatef
+  %0 = "darwinn.scalar.inplace_dilatef"() {assigned_register = 3 : i5} : () -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
+// CHECK-LABEL: scalar_inplace_truncatef
+func.func @test_scalar_inplace_truncatef() -> tensor<4xf32> {
+  // CHECK: darwinn.scalar.inplace_truncatef
+  %0 = "darwinn.scalar.inplace_truncatef"() {assigned_register = 3 : i5} : () -> tensor<4xf32>
+  return %0 : tensor<4xf32>
+}
+
+// -----
 // CHECK-LABEL: select
 func.func @test_select(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>, %arg2: tensor<4xf32>) -> tensor<4xf32> {
   // CHECK: darwinn.select
