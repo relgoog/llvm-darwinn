@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRDarwinnDialect
   DarwinnOps.cpp
   DarwinnScheduledAttrs.cpp
   DarwinnStorageOps.cpp
+  DarwinnTraversalPlan.cpp
   DwcOps.cpp
 
   ADDITIONAL_HEADER_DIRS

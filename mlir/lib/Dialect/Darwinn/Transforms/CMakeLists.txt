@@ -7,6 +7,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   LowerConvert.cpp
   LowerCopySlice.cpp
   LowerPutBits.cpp
+  PlanTensorTraversals.cpp
 
   DEPENDS
   MLIRDwcPassIncGen

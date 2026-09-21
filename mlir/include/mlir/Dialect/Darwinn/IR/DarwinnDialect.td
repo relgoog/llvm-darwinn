@@ -201,5 +201,6 @@ def Darwinn_Packed : Darwinn_Type<"Packed", "packed", []> {
 include "mlir/Dialect/Darwinn/IR/DarwinnDistributed.td"
 include "mlir/Dialect/Darwinn/IR/DarwinnScheduledAttrs.td"
 include "mlir/Dialect/Darwinn/IR/DarwinnComputeAttrs.td"
+include "mlir/Dialect/Darwinn/IR/DarwinnTraversalPlan.td"
 
 #endif // DARWINN_DIALECT
