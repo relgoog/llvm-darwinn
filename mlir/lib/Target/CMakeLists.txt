@@ -1,4 +1,5 @@
 add_subdirectory(Cpp)
+add_subdirectory(Darwinn)
 add_subdirectory(IRDLToCpp)
 add_subdirectory(SPIRV)
 add_subdirectory(LLVMIR)
