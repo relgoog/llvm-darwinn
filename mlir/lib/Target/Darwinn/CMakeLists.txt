@@ -29,3 +29,15 @@ add_mlir_translation_library(MLIRDarwinnToBinary
   MLIRIR
   MLIRTranslateLib
 )
+
+add_mlir_translation_library(MLIRDarwinnToParameters
+  PARTIAL_SOURCES_INTENDED
+  ParameterTranslation.cpp
+
+  LINK_LIBS PUBLIC
+  MLIRDarwinnEncoding
+  MLIRDarwinnDialect
+  MLIRFuncDialect
+  MLIRIR
+  MLIRTranslateLib
+)

@@ -23,6 +23,7 @@ void registerFromSPIRVTranslation();
 void registerFromWasmTranslation();
 void registerToCppTranslation();
 void registerToDarwinnTranslation();
+void registerToDarwinnParametersTranslation();
 void registerToLLVMIRTranslation();
 void registerToSPIRVTranslation();
 
@@ -41,6 +42,7 @@ inline void registerAllTranslations() {
     registerFromWasmTranslation();
     registerToCppTranslation();
     registerToDarwinnTranslation();
+    registerToDarwinnParametersTranslation();
     registerToLLVMIRTranslation();
     registerToSPIRVTranslation();
     smt::registerExportSMTLIBTranslation();
