@@ -1,5 +1,6 @@
 add_mlir_dialect_library(MLIRDarwinnDialect
   PARTIAL_SOURCES_INTENDED
+  DarwinnDistributed.cpp
   DarwinnOps.cpp
   DwcOps.cpp
 

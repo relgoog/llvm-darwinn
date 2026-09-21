@@ -26,8 +26,7 @@
 #define GET_ATTRDEF_CLASSES
 #include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.h.inc"
 
-#define GET_TYPEDEF_CLASSES
-#include "mlir/Dialect/Darwinn/IR/DarwinnTypes.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DarwinnDistributed.h"
 
 #define GET_OP_CLASSES
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h.inc"

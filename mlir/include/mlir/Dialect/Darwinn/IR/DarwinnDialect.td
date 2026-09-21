@@ -218,4 +218,6 @@ def Darwinn_Packed : Darwinn_Type<"Packed", "packed", []> {
   let assemblyFormat = "`<` $width `>`";
 }
 
+include "mlir/Dialect/Darwinn/IR/DarwinnDistributed.td"
+
 #endif // DARWINN_DIALECT
