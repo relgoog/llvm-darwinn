@@ -432,7 +432,7 @@ struct ForwardAnyLowering : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     if (op->getName().getStringRef() != root)
       return failure();
-    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+    if (op->getNumResults() != 1 || op->getNumOperands() < 1)
       return failure();
     SmallVector<NamedAttribute> attrs;
     for (auto attr : op->getAttrs())
