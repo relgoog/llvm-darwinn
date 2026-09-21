@@ -1534,14 +1534,18 @@ def DiveVm_PrologueOp : DiveVm_Op<"prologue"> {
 // Operator: put_bits
 //===----------------------------------------------------------------------===//
 def DiveVm_PutBitsOp : DiveVm_Op<"put_bits"> {
-  let summary = "DiveVM put_bits operation.";
+  let summary = "Write an integer bit field into a resolved instruction buffer";
   let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.put_bits to DiveVm_PutBits, evidenced as a defined function in the embedded vm_utility bitcode modules. No darwinn lowering forwarding to it evidenced.
+    Writes the low nbits of value into a rank-one byte memref, starting at
+    bit_offset in least-significant-bit order. The width is between 1 and 64.
+    Bits outside the field are preserved. The target must contain the entire
+    field. Instruction chunk symbols must be resolved before creating this op.
   }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
+  let arguments = (ins AnyMemRef:$target, I64:$value,
+                       I32Attr:$nbits, I64Attr:$bit_offset);
+  let results = (outs);
   let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+  let assemblyFormat = "$target `,` $value attr-dict `:` type($target)";
 }
 
 //===----------------------------------------------------------------------===//

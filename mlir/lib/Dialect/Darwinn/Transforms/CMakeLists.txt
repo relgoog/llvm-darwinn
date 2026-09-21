@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   DwcPasses.cpp
   LowerConvert.cpp
   LowerCopySlice.cpp
+  LowerPutBits.cpp
 
   DEPENDS
   MLIRDwcPassIncGen

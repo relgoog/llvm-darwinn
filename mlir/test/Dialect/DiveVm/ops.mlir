@@ -567,11 +567,11 @@ func.func @test_prologue(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: put_bits
-func.func @test_put_bits(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+// CHECK-LABEL: func.func @test_put_bits(
+func.func @test_put_bits(%target: memref<16xi8>, %value: i64) {
   // CHECK: dive_vm.put_bits
-  %0 = dive_vm.put_bits %arg0 : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  dive_vm.put_bits %target, %value {nbits = 64 : i32, bit_offset = 37 : i64} : memref<16xi8>
+  return
 }
 
 // -----

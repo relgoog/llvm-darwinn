@@ -1312,7 +1312,26 @@ LogicalResult dive_vm::PrologueOp::verify() {
 }
 
 LogicalResult dive_vm::PutBitsOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
+  auto targetType = cast<MemRefType>(getTarget().getType());
+  if (targetType.getRank() != 1 || !targetType.getElementType().isSignlessInteger(8))
+    return emitOpError("requires a rank-one signless byte memref target");
+
+  int64_t width = getNbitsAttr().getInt();
+  if (width < 1 || width > 64)
+    return emitOpError("requires nbits between 1 and 64");
+
+  int64_t offset = getBitOffsetAttr().getInt();
+  if (offset < 0)
+    return emitOpError("requires a nonnegative bit_offset");
+  if (offset > INT64_MAX - width)
+    return emitOpError("bit field end exceeds the signed 64-bit offset range");
+
+  int64_t requiredBytes = (offset + width - 1) / 8 + 1;
+  if (!targetType.isDynamicDim(0) && requiredBytes > targetType.getDimSize(0))
+    return emitOpError("bit field exceeds the target buffer");
+  if ((*this)->hasAttr("inst_buffer_name"))
+    return emitOpError("requires instruction chunk storage to be resolved first");
+
   return success();
 }
 

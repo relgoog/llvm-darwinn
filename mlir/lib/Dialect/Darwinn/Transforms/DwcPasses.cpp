@@ -413,6 +413,7 @@ using namespace mlir::darwinn;
 namespace mlir {
 namespace darwinn {
 void populateLowerCopySlicePatterns(RewritePatternSet &patterns);
+LogicalResult lowerDiveVmPutBits(Operation *operation);
 void populateLowerConvertPatterns(RewritePatternSet &patterns);
 } // namespace darwinn
 } // namespace mlir
@@ -533,6 +534,9 @@ static LogicalResult requireEliminatedOperations(
 
 static LogicalResult checkDiveVmRuntimeLowering(func::FuncOp func,
                                                StringRef passName) {
+  if (failed(darwinn::lowerDiveVmPutBits(func)))
+    return failure();
+
   SmallVector<Operation *> constants;
   func.walk([&](Operation *op) {
     StringRef name = op->getName().getStringRef();
