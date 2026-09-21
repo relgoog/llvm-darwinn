@@ -40,8 +40,33 @@ struct ComputePacket {
 using Instruction = std::variant<ScalarPacket, TaggedPacket, TilePacket,
                                  ComputePacket, DmaInstruction>;
 
-struct ProgramChunk {
+struct ProgramFragment {
   llvm::SmallVector<Instruction, 0> instructions;
+};
+
+struct ProgramChunk {
+  llvm::SmallVector<ProgramFragment, 0> fragments;
+};
+
+class FragmentEncoder {
+public:
+  explicit FragmentEncoder(
+      ScalarEncoder scalarEncoder,
+      std::optional<CompressionLayout> dmaCompression = std::nullopt)
+      : scalarEncoder(scalarEncoder), dmaEncoder(dmaCompression) {}
+
+  llvm::Expected<InstructionBytes> encode(const Instruction &instruction);
+
+private:
+  llvm::Expected<InstructionBytes> encode(const ScalarPacket &packet);
+  llvm::Expected<InstructionBytes> encode(const TaggedPacket &packet);
+  llvm::Expected<InstructionBytes> encode(const TilePacket &packet);
+  llvm::Expected<InstructionBytes> encode(const ComputePacket &packet);
+  llvm::Expected<InstructionBytes> encode(const DmaInstruction &instruction);
+
+  ScalarEncoder scalarEncoder;
+  TensorEncoder tensorEncoder;
+  DmaEncoder dmaEncoder;
 };
 
 llvm::Expected<llvm::SmallVector<InstructionBytes, 0>>

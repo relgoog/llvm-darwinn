@@ -90,6 +90,7 @@
 #include "mlir/Dialect/Tensor/Transforms/SubsetInsertionOpInterfaceImpl.h"
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/Dialect/Darwinn/IR/DwcOps.h"
+#include "mlir/Dialect/Darwinn/IR/InstructionDialect.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Tosa/IR/ShardingInterfaceImpl.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
@@ -153,6 +154,7 @@ void mlir::registerAllDialects(DialectRegistry &registry) {
                   spirv::SPIRVDialect,
                   tensor::TensorDialect,
                   darwinn::DarwinnDialect,
+                  darwinn::isa::DarwinnIsaDialect,
                   dwc::DwcDialect,
                   dive_vm::DiveVmDialect,
                   dive_vm_tensor::DiveVmTensorDialect,

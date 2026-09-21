@@ -1,4 +1,5 @@
 add_mlir_dialect_library(MLIRDarwinnDialect
+  PARTIAL_SOURCES_INTENDED
   DarwinnOps.cpp
   DwcOps.cpp
 
@@ -16,3 +17,20 @@ add_mlir_dialect_library(MLIRDarwinnDialect
   MLIRDialect
   MLIRQuantDialect
   )
+
+add_mlir_dialect_library(MLIRDarwinnISADialect
+  PARTIAL_SOURCES_INTENDED
+  InstructionDma.cpp
+  InstructionOps.cpp
+  InstructionTensor.cpp
+  InstructionTransport.cpp
+  InstructionTraversal.cpp
+
+  DEPENDS
+  MLIRInstructionOpsIncGen
+  MLIRDarwinnISAAttrsIncGen
+
+  LINK_LIBS PUBLIC
+  MLIRIR
+  MLIRSupport
+)

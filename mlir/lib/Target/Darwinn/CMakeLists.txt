@@ -13,3 +13,19 @@ add_mlir_library(MLIRDarwinnEncoding
   LINK_COMPONENTS
   Support
 )
+
+add_mlir_translation_library(MLIRDarwinnToBinary
+  PARTIAL_SOURCES_INTENDED
+  DmaAttributes.cpp
+  EncodingAttributes.cpp
+  TensorAttributes.cpp
+  Translation.cpp
+  TransportAttributes.cpp
+  TraversalAttributes.cpp
+
+  LINK_LIBS PUBLIC
+  MLIRDarwinnEncoding
+  MLIRDarwinnISADialect
+  MLIRIR
+  MLIRTranslateLib
+)
