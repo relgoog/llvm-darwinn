@@ -187,41 +187,92 @@ LogicalResult dwc::ConstOp::verify() {
   return success();
 }
 
-LogicalResult dwc::ConvolutionOp::verify() {
-  if (!(*this)->hasAttr("activation_function"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'activation_function'");
-  if (!(*this)->hasAttr("cell_operation"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'cell_operation'");
-  if (!(*this)->hasAttr("pad"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'pad'");
-  if (!(*this)->hasAttr("x_dilation_rate"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'x_dilation_rate'");
-  if (!(*this)->hasAttr("x_stride"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'x_stride'");
-  if (!(*this)->hasAttr("y_dilation_rate"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'y_dilation_rate'");
-  if (!(*this)->hasAttr("y_stride"))
-    return (*this)->emitOpError("expected op 'dwc.convolution' to have attribute 'y_stride'");
-  if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
-    return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
-  if (!llvm::isa<CellOperationAttr>((*this)->getAttr("cell_operation")))
-    return (*this)->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
-  if (!llvm::isa<PaddingAttr>((*this)->getAttr("pad")))
-    return (*this)->emitOpError("attribute 'pad' expects PaddingAttr");
-  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_dilation_rate")))
-    return (*this)->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
-  if (!llvm::isa<IntegerAttr>((*this)->getAttr("x_stride")))
-    return (*this)->emitOpError("attribute 'x_stride' expects IntegerAttr");
-  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_dilation_rate")))
-    return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
-  if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
-    return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
+static LogicalResult verifyConvolution(Operation *op, bool depthwise) {
+  if (!op->hasAttr("activation_function"))
+    return op->emitOpError("expected attribute 'activation_function'");
+  if (!op->hasAttr("cell_operation"))
+    return op->emitOpError("expected attribute 'cell_operation'");
+  if (!op->hasAttr("pad"))
+    return op->emitOpError("expected attribute 'pad'");
+  if (!op->hasAttr("x_dilation_rate"))
+    return op->emitOpError("expected attribute 'x_dilation_rate'");
+  if (!op->hasAttr("x_stride"))
+    return op->emitOpError("expected attribute 'x_stride'");
+  if (!op->hasAttr("y_dilation_rate"))
+    return op->emitOpError("expected attribute 'y_dilation_rate'");
+  if (!op->hasAttr("y_stride"))
+    return op->emitOpError("expected attribute 'y_stride'");
+  if (!llvm::isa<ActivationFunctionAttr>(op->getAttr("activation_function")))
+    return op->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
+  if (!llvm::isa<CellOperationAttr>(op->getAttr("cell_operation")))
+    return op->emitOpError("attribute 'cell_operation' expects CellOperationAttr");
+  if (!llvm::isa<PaddingAttr>(op->getAttr("pad")))
+    return op->emitOpError("attribute 'pad' expects PaddingAttr");
+  if (!llvm::isa<IntegerAttr>(op->getAttr("x_dilation_rate")))
+    return op->emitOpError("attribute 'x_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>(op->getAttr("x_stride")))
+    return op->emitOpError("attribute 'x_stride' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>(op->getAttr("y_dilation_rate")))
+    return op->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
+  if (!llvm::isa<IntegerAttr>(op->getAttr("y_stride")))
+    return op->emitOpError("attribute 'y_stride' expects IntegerAttr");
   for (const char *name : {"x_dilation_rate", "x_stride", "y_dilation_rate", "y_stride"}) {
-    int64_t value = llvm::cast<IntegerAttr>((*this)->getAttr(name)).getInt();
+    int64_t value = llvm::cast<IntegerAttr>(op->getAttr(name)).getInt();
     if (value < 1 || value > 8)
-      return (*this)->emitOpError("attribute '") << name << "' expects stride or dilation in [1, 8]";
+      return op->emitOpError("attribute '") << name << "' expects stride or dilation in [1, 8]";
   }
+  if (op->getNumResults() != 1 ||
+      (op->getNumOperands() != 2 && op->getNumOperands() != 3))
+    return op->emitOpError("expects input, filter, optional bias, and one output");
+
+  auto input = dyn_cast<RankedTensorType>(op->getOperand(0).getType());
+  auto filter = dyn_cast<RankedTensorType>(op->getOperand(1).getType());
+  auto output = dyn_cast<RankedTensorType>(op->getResult(0).getType());
+
+  if (!input || !filter || !output || input.getRank() != 4 ||
+      filter.getRank() != (depthwise ? 3 : 4) || output.getRank() != 4 ||
+      !input.hasStaticShape() || !filter.hasStaticShape() || !output.hasStaticShape())
+    return op->emitOpError("expects static NHWC input/output and HWCF or depthwise HWC filter");
+
+  if (!isa<FloatType>(input.getElementType()) ||
+      input.getElementType() != filter.getElementType() ||
+      input.getElementType() != output.getElementType())
+    return op->emitOpError("expects matching floating-point input, filter, and output types");
+
+  int64_t outputChannels = depthwise ? input.getDimSize(3) : filter.getDimSize(3);
+
+  if (input.getDimSize(0) != output.getDimSize(0) ||
+      input.getDimSize(3) != filter.getDimSize(2) ||
+      outputChannels != output.getDimSize(3))
+    return op->emitOpError("expects matching batch and channel dimensions");
+
+  if (op->getNumOperands() == 3) {
+    auto bias = dyn_cast<RankedTensorType>(op->getOperand(2).getType());
+
+    if (!bias || bias.getRank() != 1 || bias.getDimSize(0) != outputChannels ||
+        bias.getElementType() != output.getElementType())
+      return op->emitOpError("expects rank-one bias matching output channels and element type");
+  }
+
+  auto clipMin = op->getAttrOfType<FloatAttr>("activation_clip_min");
+  auto clipMax = op->getAttrOfType<FloatAttr>("activation_clip_max");
+
+  if (op->hasAttr("activation_clip_min") != static_cast<bool>(clipMin) ||
+      op->hasAttr("activation_clip_max") != static_cast<bool>(clipMax) ||
+      static_cast<bool>(clipMin) != static_cast<bool>(clipMax))
+    return op->emitOpError("expects paired floating-point activation clip bounds");
+
+  if (clipMin && (clipMin.getType() != output.getElementType() ||
+                  clipMax.getType() != output.getElementType() ||
+                  clipMin.getValue().isNaN() || clipMax.getValue().isNaN() ||
+                  clipMin.getValue().compare(clipMax.getValue()) == APFloat::cmpGreaterThan))
+    return op->emitOpError("expects ordered, non-NaN activation bounds matching output type");
+
   return success();
+}
+
+LogicalResult dwc::ConvolutionOp::verify() {
+  return verifyConvolution(*this, false);
 }
 
 LogicalResult dwc::ConvolutionV2Op::verify() {
@@ -1374,7 +1425,7 @@ LogicalResult dwc::DepthToSpaceOp::verify() {
 }
 
 LogicalResult dwc::DepthwiseConvolutionOp::verify() {
-  return success();
+  return verifyConvolution(*this, true);
 }
 
 LogicalResult dwc::DeviceLaunchOp::verify() {

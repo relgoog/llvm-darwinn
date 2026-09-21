@@ -1349,17 +1349,34 @@ struct DynamicUpdateSliceNdLowering : public RewritePattern {
 static Value emitLogistic(OpBuilder &builder, Location loc, Value input);
 
 static Value applyConvolutionActivation(PatternRewriter &rewriter, Location loc,
-                                       Value input, ActivationFunction activation) {
-  if (activation == ActivationFunction::None)
+                                       Value input, ActivationFunction activation,
+                                       Value bias = {}, FloatAttr clipMin = {},
+                                       FloatAttr clipMax = {}) {
+  if (activation == ActivationFunction::None && !bias && !clipMin)
     return input;
 
   auto type = cast<RankedTensorType>(input.getType());
   Value empty = rewriter.create<tensor::EmptyOp>(loc, type.getShape(), type.getElementType());
-  SmallVector<AffineMap> maps(2, rewriter.getMultiDimIdentityMap(type.getRank()));
+  SmallVector<Value> inputs{input};
+  SmallVector<AffineMap> maps{rewriter.getMultiDimIdentityMap(type.getRank())};
+
+  if (bias) {
+    inputs.push_back(bias);
+    maps.push_back(AffineMap::get(type.getRank(), 0,
+                                rewriter.getAffineDimExpr(type.getRank() - 1),
+                                rewriter.getContext()));
+  }
+
+  maps.push_back(rewriter.getMultiDimIdentityMap(type.getRank()));
   SmallVector<utils::IteratorType> iterators(type.getRank(), utils::IteratorType::parallel);
   return rewriter.create<linalg::GenericOp>(
-      loc, TypeRange{type}, ValueRange{input}, ValueRange{empty}, maps, iterators,
+      loc, TypeRange{type}, inputs, ValueRange{empty}, maps, iterators,
       [&](OpBuilder &nested, Location nestedLoc, ValueRange args) {
+        Value element = args[0];
+
+        if (bias)
+          element = nested.create<arith::AddFOp>(nestedLoc, element, args[1]);
+
         Value result;
         auto constant = [&](double value) {
           return nested.create<arith::ConstantOp>(
@@ -1368,35 +1385,42 @@ static Value applyConvolutionActivation(PatternRewriter &rewriter, Location loc,
 
         switch (activation) {
         case ActivationFunction::None:
-          result = args[0];
+          result = element;
           break;
         case ActivationFunction::Exp:
-          result = nested.create<math::ExpOp>(nestedLoc, args[0]);
+          result = nested.create<math::ExpOp>(nestedLoc, element);
           break;
         case ActivationFunction::Logistic:
-          result = emitLogistic(nested, nestedLoc, args[0]);
+          result = emitLogistic(nested, nestedLoc, element);
           break;
         case ActivationFunction::ReciprocalSqrt:
-          result = nested.create<math::RsqrtOp>(nestedLoc, args[0]);
+          result = nested.create<math::RsqrtOp>(nestedLoc, element);
           break;
         case ActivationFunction::Relu:
-          result = nested.create<arith::MaximumFOp>(nestedLoc, args[0], constant(0.0));
+          result = nested.create<arith::MaximumFOp>(nestedLoc, element, constant(0.0));
           break;
         case ActivationFunction::Tanh:
-          result = nested.create<math::TanhOp>(nestedLoc, args[0]);
+          result = nested.create<math::TanhOp>(nestedLoc, element);
           break;
         case ActivationFunction::GeluApproximated: {
-          Value square = nested.create<arith::MulFOp>(nestedLoc, args[0], args[0]);
-          Value cube = nested.create<arith::MulFOp>(nestedLoc, square, args[0]);
+          Value square = nested.create<arith::MulFOp>(nestedLoc, element, element);
+          Value cube = nested.create<arith::MulFOp>(nestedLoc, square, element);
           Value cubicTerm = nested.create<arith::MulFOp>(nestedLoc, constant(0.044715), cube);
-          Value sum = nested.create<arith::AddFOp>(nestedLoc, args[0], cubicTerm);
+          Value sum = nested.create<arith::AddFOp>(nestedLoc, element, cubicTerm);
           Value scaled = nested.create<arith::MulFOp>(nestedLoc, constant(0.7978845608028654), sum);
           Value hyperbolic = nested.create<math::TanhOp>(nestedLoc, scaled);
           Value factor = nested.create<arith::AddFOp>(nestedLoc, constant(1.0), hyperbolic);
-          Value halfInput = nested.create<arith::MulFOp>(nestedLoc, constant(0.5), args[0]);
+          Value halfInput = nested.create<arith::MulFOp>(nestedLoc, constant(0.5), element);
           result = nested.create<arith::MulFOp>(nestedLoc, halfInput, factor);
           break;
         }
+        }
+
+        if (clipMin) {
+          Value lower = nested.create<arith::ConstantOp>(nestedLoc, clipMin);
+          Value upper = nested.create<arith::ConstantOp>(nestedLoc, clipMax);
+          result = nested.create<arith::MaximumFOp>(nestedLoc, result, lower);
+          result = nested.create<arith::MinimumFOp>(nestedLoc, result, upper);
         }
 
         nested.create<linalg::YieldOp>(nestedLoc, result);
@@ -1410,7 +1434,7 @@ struct ConvolutionLowering : public RewritePattern {
 
   LogicalResult matchAndRewrite(Operation *op,
                                 PatternRewriter &rewriter) const override {
-    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+    if (op->getNumResults() != 1 || (op->getNumOperands() != 2 && op->getNumOperands() != 3))
       return failure();
     auto activation = op->getAttrOfType<ActivationFunctionAttr>("activation_function");
     auto cell = op->getAttrOfType<CellOperationAttr>("cell_operation");
@@ -1465,6 +1489,28 @@ struct ConvolutionLowering : public RewritePattern {
         dstRanked.getDimSize(1) != (inRanked.getDimSize(1) - effKh) / yStride + 1 ||
         dstRanked.getDimSize(2) != (inRanked.getDimSize(2) - effKw) / xStride + 1)
       return failure();
+    Value bias;
+
+    if (op->getNumOperands() == 3) {
+      bias = op->getOperand(2);
+      auto biasType = dyn_cast<RankedTensorType>(bias.getType());
+
+      if (!biasType || biasType.getRank() != 1 ||
+          biasType.getDimSize(0) != outputChannels ||
+          biasType.getElementType() != dstRanked.getElementType())
+        return failure();
+    }
+
+    auto clipMin = op->getAttrOfType<FloatAttr>("activation_clip_min");
+    auto clipMax = op->getAttrOfType<FloatAttr>("activation_clip_max");
+
+    if (static_cast<bool>(clipMin) != static_cast<bool>(clipMax) ||
+        (clipMin && (clipMin.getType() != dstRanked.getElementType() ||
+                     clipMax.getType() != dstRanked.getElementType() ||
+                     clipMin.getValue().isNaN() || clipMax.getValue().isNaN() ||
+                     clipMin.getValue().compare(clipMax.getValue()) == APFloat::cmpGreaterThan)))
+      return failure();
+
     Location loc = op->getLoc();
     Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
     Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
@@ -1478,7 +1524,8 @@ struct ConvolutionLowering : public RewritePattern {
         : rewriter.create<linalg::Conv2DNhwcHwcfOp>(
               loc, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{initial},
               strides, dilations).getResult(0);
-    rewriter.replaceOp(op, applyConvolutionActivation(rewriter, loc, result, activation.getValue()));
+    rewriter.replaceOp(op, applyConvolutionActivation(rewriter, loc, result, activation.getValue(),
+                                                        bias, clipMin, clipMax));
     return success();
   }
 };

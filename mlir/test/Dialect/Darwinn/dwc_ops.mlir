@@ -82,10 +82,10 @@ func.func @test_const(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: func.func @test_convolution(
-func.func @test_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_convolution(%arg0: tensor<1x4x4x2xf32>, %filter: tensor<1x1x2x3xf32>) -> tensor<1x4x4x3xf32> {
   // CHECK: dwc.convolution
-  %0 = "dwc.convolution"(%arg0) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.convolution"(%arg0, %filter) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<1x4x4x2xf32>, tensor<1x1x2x3xf32>) -> tensor<1x4x4x3xf32>
+  return %0 : tensor<1x4x4x3xf32>
 }
 
 // -----
@@ -651,10 +651,10 @@ func.func @test_depth_to_space(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: func.func @test_depthwise_convolution(
-func.func @test_depthwise_convolution(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_depthwise_convolution(%arg0: tensor<1x4x4x2xf32>, %filter: tensor<1x1x2xf32>) -> tensor<1x4x4x2xf32> {
   // CHECK: dwc.depthwise_convolution
-  %0 = "dwc.depthwise_convolution"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "dwc.depthwise_convolution"(%arg0, %filter) {activation_function = #dwc.activation_function<NONE>, cell_operation = #dwc.cell_operation<MAC>, pad = #dwc.padding<NONE>, x_dilation_rate = 1 : i64, x_stride = 1 : i64, y_dilation_rate = 1 : i64, y_stride = 1 : i64} : (tensor<1x4x4x2xf32>, tensor<1x1x2xf32>) -> tensor<1x4x4x2xf32>
+  return %0 : tensor<1x4x4x2xf32>
 }
 
 // -----
