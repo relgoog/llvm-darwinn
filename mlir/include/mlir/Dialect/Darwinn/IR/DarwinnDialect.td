@@ -28,7 +28,12 @@ def Darwinn_Dialect : Dialect {
     Skeleton of the Darwinn dialect. Every op is boilerplate with generic
     operands and results until real semantics land.
   }];
-  let useDefaultAttributePrinterParser = 1;
+  let extraClassDeclaration = [{
+    ::mlir::Attribute parseAttribute(::mlir::DialectAsmParser &parser,
+                                     ::mlir::Type type) const override;
+    void printAttribute(::mlir::Attribute attr,
+                        ::mlir::DialectAsmPrinter &printer) const override;
+  }];
   let useDefaultTypePrinterParser = 1;
 }
 
@@ -41,7 +46,8 @@ class Darwinn_Op<string mnemonic, list<Trait> traits = []>
 
 class Darwinn_Attr<string attrName, string attrMnemonic, list<Trait> traits = []>
     : AttrDef<Darwinn_Dialect, attrName, traits> {
-  let mnemonic = attrMnemonic;
+  let attrName = "darwinn." # attrMnemonic;
+  let parameters = (ins StringRefParameter<"attribute payload", "\"\"">:$payload);
 }
 
 class Darwinn_Type<string name, string typeMnemonic, list<Trait> traits = []>

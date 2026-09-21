@@ -47,6 +47,46 @@ void DarwinnDialect::initialize() {
       >();
 }
 
+template <typename... AttrTypes>
+static Attribute parseDarwinnAttribute(DialectAsmParser &parser) {
+  StringRef mnemonic;
+  if (failed(parser.parseKeyword(&mnemonic)))
+    return {};
+
+  StringRef payload = parser.getFullSymbolSpec().ltrim().drop_front(mnemonic.size()).trim();
+  if (!payload.empty() &&
+      (!payload.starts_with("<") || !payload.ends_with(">"))) {
+    parser.emitError(parser.getNameLoc(), "expected attribute payload in '<...>'");
+    return {};
+  }
+
+  Attribute attribute;
+  bool matched = ((mnemonic == AttrTypes::name.split('.').second
+                       ? (attribute = AttrTypes::get(parser.getContext(), payload), true)
+                       : false) || ...);
+  if (!matched)
+    parser.emitError(parser.getNameLoc(), "unknown Darwinn attribute ") << mnemonic;
+  return attribute;
+}
+
+Attribute DarwinnDialect::parseAttribute(DialectAsmParser &parser, Type) const {
+  return parseDarwinnAttribute<
+#define GET_ATTRDEF_LIST
+#include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.cpp.inc"
+      >(parser);
+}
+
+void DarwinnDialect::printAttribute(Attribute attribute,
+                                   DialectAsmPrinter &printer) const {
+  llvm::TypeSwitch<Attribute>(attribute)
+      .Case<
+#define GET_ATTRDEF_LIST
+#include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.cpp.inc"
+          >([&](auto value) {
+            printer << value.name.split('.').second << value.getPayload();
+          });
+}
+
 static LogicalResult verifyGatherLike(Operation *op, Value params, Value indices,
                                       int64_t axis, Value output) {
   auto paramsType = llvm::dyn_cast<RankedTensorType>(params.getType());
