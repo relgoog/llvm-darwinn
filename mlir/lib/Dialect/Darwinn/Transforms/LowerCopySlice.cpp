@@ -3727,8 +3727,11 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<BitcastLowering>(ctx);
   patterns.add<ForwardLowering>("dwc.gather", "dive_vm.gather", ctx);
   patterns.add<ForwardLowering>("dwc.gather_nd", "dive_vm.gather_nd", ctx);
+  patterns.add<ForwardLowering>("dwc.scatter_nd", "dive_vm.scatter_nd", ctx);
   patterns.add<IdentityLowering>("dwc.sparse_parameter", ctx);
   patterns.add<IdentityLowering>("dwc.while", ctx);
+  patterns.add<IdentityLowering>("dwc.dim_mapping", ctx);
+  patterns.add<IdentityLowering>("dwc.dimension_layout", ctx);
   patterns.add<ForwardLowering>("dwc.pad", "dive_vm.pad", ctx);
   patterns.add<ForwardLowering>("dwc.roll", "dive_vm.roll", ctx);
   patterns.add<ForwardLowering>("dwc.top_k", "dive_vm.top_k", ctx);
