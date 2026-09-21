@@ -1762,6 +1762,60 @@ struct ConstMetadataLowering : public RewritePattern {
     return success();
   }
 };
+struct ConstValueLowering : public RewritePattern {
+  ConstValueLowering(MLIRContext *ctx) : RewritePattern("dwc.const", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1)
+      return failure();
+    auto value = op->getAttrOfType<DenseElementsAttr>("value");
+    if (!value)
+      return failure();
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape())
+      return failure();
+    if (value.getType() != dstTy)
+      return failure();
+    rewriter.replaceOpWithNewOp<arith::ConstantOp>(op, dstTy, value);
+    return success();
+  }
+};
+
+struct GenericConstantLowering : public RewritePattern {
+  GenericConstantLowering(MLIRContext *ctx) : RewritePattern("dwc.generic_constant", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1)
+      return failure();
+    auto value = op->getAttrOfType<DenseElementsAttr>("value");
+    if (!value)
+      return failure();
+    Type dstTy = op->getResult(0).getType();
+    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
+    if (!dstRanked || !dstRanked.hasStaticShape())
+      return failure();
+    if (value.getType() != dstTy)
+      return failure();
+    rewriter.replaceOpWithNewOp<arith::ConstantOp>(op, dstTy, value);
+    return success();
+  }
+};
+
+struct GenericComputeLowering : public RewritePattern {
+  GenericComputeLowering(MLIRContext *ctx) : RewritePattern("dwc.generic_compute", 1, ctx) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
+      return failure();
+    Value input = op->getOperand(0);
+    if (input.getType() != op->getResult(0).getType())
+      return failure();
+    rewriter.replaceOp(op, input);
+    return success();
+  }
+};
+
 
 struct DepthwiseConvLowering : public RewritePattern {
   DepthwiseConvLowering(MLIRContext *ctx) : RewritePattern("dwc.depthwise_convolution", 1, ctx) {}
@@ -3616,8 +3670,11 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<PassThroughLowering>("dwc.hosted_tensor", ctx);
   patterns.add<PassThroughLowering>("dwc.memory_space", ctx);
   patterns.add<PassThroughLowering>("dwc.mesh_dim", ctx);
-  patterns.add<PassThroughLowering>("dwc.dim_mapping", ctx);
-  patterns.add<PassThroughLowering>("dwc.dimension_layout", ctx);
+  patterns.add<IdentityLowering>("dwc.sparse_parameter", ctx);
+  patterns.add<IdentityLowering>("dwc.while", ctx);
+  patterns.add<ConstValueLowering>(ctx);
+  patterns.add<GenericConstantLowering>(ctx);
+  patterns.add<GenericComputeLowering>(ctx);
   patterns.add<PassThroughLowering>("dwc.dive_unroll_factor", ctx);
   patterns.add<PassThroughLowering>("dwc.codegen", ctx);
   patterns.add<PassThroughLowering>("dwc.engine", ctx);
@@ -3668,8 +3725,10 @@ void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) 
   patterns.add<IdentityLowering>("dwc.const_none", ctx);
   patterns.add<ReverseLowering>(ctx);
   patterns.add<BitcastLowering>(ctx);
+  patterns.add<ForwardLowering>("dwc.gather", "dive_vm.gather", ctx);
   patterns.add<ForwardLowering>("dwc.gather_nd", "dive_vm.gather_nd", ctx);
-  patterns.add<ForwardLowering>("dwc.scatter_nd", "dive_vm.scatter_nd", ctx);
+  patterns.add<IdentityLowering>("dwc.sparse_parameter", ctx);
+  patterns.add<IdentityLowering>("dwc.while", ctx);
   patterns.add<ForwardLowering>("dwc.pad", "dive_vm.pad", ctx);
   patterns.add<ForwardLowering>("dwc.roll", "dive_vm.roll", ctx);
   patterns.add<ForwardLowering>("dwc.top_k", "dive_vm.top_k", ctx);
