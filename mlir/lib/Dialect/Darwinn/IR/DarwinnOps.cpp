@@ -7,16 +7,19 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/TypeUtilities.h"
+#include "llvm/ADT/STLForwardCompat.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/TypeSwitch.h"
-#include "mlir/Bytecode/BytecodeOpInterface.h"
 
 using namespace mlir;
 using namespace mlir::darwinn;
 
+#include "mlir/Dialect/Darwinn/IR/DarwinnEnums.cpp.inc"
 #include "mlir/Dialect/Darwinn/IR/DarwinnOpsDialect.cpp.inc"
 
 #define GET_ATTRDEF_CLASSES
@@ -47,48 +50,73 @@ void DarwinnDialect::initialize() {
       >();
 }
 
-template <typename... AttrTypes>
-static Attribute parseDarwinnAttribute(DialectAsmParser &parser) {
-  StringRef mnemonic;
-  if (failed(parser.parseKeyword(&mnemonic)))
-    return {};
+template <typename AttrType>
+using OpaquePayload = decltype(std::declval<AttrType>().getPayload());
 
-  StringRef payload = parser.getFullSymbolSpec().ltrim().drop_front(mnemonic.size()).trim();
+template <typename AttrType>
+static bool parseOpaqueDarwinnAttribute(DialectAsmParser &parser,
+                                        StringRef mnemonic, StringRef payload,
+                                        Attribute &attribute) {
+  if constexpr (llvm::is_detected<OpaquePayload, AttrType>::value)
+    if (mnemonic == AttrType::name.split('.').second) {
+      attribute = AttrType::get(parser.getContext(), payload);
+      return true;
+    }
+  return false;
+}
+
+template <typename... AttrTypes>
+static Attribute parseDarwinnAttribute(DialectAsmParser &parser, Type type) {
+  StringRef mnemonic;
+  Attribute attribute;
+  OptionalParseResult typedResult =
+      generatedAttributeParser(parser, &mnemonic, type, attribute);
+  if (typedResult.has_value())
+    return succeeded(*typedResult) ? attribute : Attribute();
+
+  StringRef payload =
+      parser.getFullSymbolSpec().ltrim().drop_front(mnemonic.size()).trim();
   if (!payload.empty() &&
       (!payload.starts_with("<") || !payload.ends_with(">"))) {
-    parser.emitError(parser.getNameLoc(), "expected attribute payload in '<...>'");
+    parser.emitError(parser.getNameLoc(),
+                     "expected attribute payload in '<...>'");
     return {};
   }
 
-  Attribute attribute;
-  bool matched = ((mnemonic == AttrTypes::name.split('.').second
-                       ? (attribute = AttrTypes::get(parser.getContext(), payload), true)
-                       : false) || ...);
+  bool matched = (parseOpaqueDarwinnAttribute<AttrTypes>(parser, mnemonic,
+                                                         payload, attribute) ||
+                  ...);
   if (!matched)
-    parser.emitError(parser.getNameLoc(), "unknown Darwinn attribute ") << mnemonic;
+    parser.emitError(parser.getNameLoc(), "unknown Darwinn attribute ")
+        << mnemonic;
   return attribute;
 }
 
-Attribute DarwinnDialect::parseAttribute(DialectAsmParser &parser, Type) const {
+Attribute DarwinnDialect::parseAttribute(DialectAsmParser &parser,
+                                         Type type) const {
   return parseDarwinnAttribute<
 #define GET_ATTRDEF_LIST
 #include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.cpp.inc"
-      >(parser);
+      >(parser, type);
 }
 
 void DarwinnDialect::printAttribute(Attribute attribute,
-                                   DialectAsmPrinter &printer) const {
+                                    DialectAsmPrinter &printer) const {
+  if (succeeded(generatedAttributePrinter(attribute, printer)))
+    return;
   llvm::TypeSwitch<Attribute>(attribute)
       .Case<
 #define GET_ATTRDEF_LIST
 #include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.cpp.inc"
           >([&](auto value) {
-            printer << value.name.split('.').second << value.getPayload();
-          });
+        if constexpr (llvm::is_detected<OpaquePayload, decltype(value)>::value)
+          printer << value.name.split('.').second << value.getPayload();
+      });
 }
 
-static LogicalResult verifyGatherLike(Operation *op, Value params, Value indices,
-                                      int64_t axis, Value output) {
+static LogicalResult verifyGatherLike(Operation *op, Value params,
+                                      Value indices, int64_t axis,
+                                      Value output) {
   auto paramsType = llvm::dyn_cast<RankedTensorType>(params.getType());
   auto indicesType = llvm::dyn_cast<RankedTensorType>(indices.getType());
   auto outputType = llvm::dyn_cast<RankedTensorType>(output.getType());
@@ -98,7 +126,7 @@ static LogicalResult verifyGatherLike(Operation *op, Value params, Value indices
     return op->emitOpError("expects indices element type to be integer");
   if (paramsType.getElementType() != outputType.getElementType())
     return op->emitOpError(
-               "expects params and output to have the same element type");
+        "expects params and output to have the same element type");
   int64_t rank = paramsType.getRank();
   int64_t normAxis = axis < 0 ? axis + rank : axis;
   if (normAxis < 0 || normAxis >= rank)
@@ -173,7 +201,8 @@ static LogicalResult verifyDynamicSliceLike(Operation *op, Value input,
       continue;
     int64_t expected = size == -1 ? inputShape[i] : size;
     if (expected != ShapedType::kDynamic && outputDim != expected)
-      return op->emitOpError("expects output dim ") << i << " to match slice size";
+      return op->emitOpError("expects output dim ")
+             << i << " to match slice size";
   }
   return success();
 }
@@ -199,7 +228,7 @@ LogicalResult darwinn::DynamicUpdateSliceOp::verify() {
   int64_t rank = inputType.getRank();
   if (updateType.getRank() != rank || outputType.getRank() != rank)
     return emitOpError(
-               "expects input, update and output to have the same rank");
+        "expects input, update and output to have the same rank");
   if (startType.getRank() != 1)
     return emitOpError("expects start_indices to be 1-d");
   if (!startType.isDynamicDim(0) && startType.getDimSize(0) != rank)
@@ -263,15 +292,13 @@ static LogicalResult verifyCopyLike(Operation *op, Value input, Value output) {
   if (!inputType || !outputType)
     return success();
   if (inputType.getElementType() != outputType.getElementType())
-    return op->emitOpError("expects input and output to have the same element type, got ")
-           << inputType.getElementType() << " and " << outputType.getElementType();
+    return op->emitOpError(
+               "expects input and output to have the same element type, got ")
+           << inputType.getElementType() << " and "
+           << outputType.getElementType();
   if (inputType.getShape() != outputType.getShape())
     return op->emitOpError("expects input and output to have the same shape");
   return success();
-}
-
-LogicalResult darwinn::CopyOpOp::verify() {
-  return verifyCopyLike(*this, getInput(), getOutput());
 }
 
 LogicalResult darwinn::CopyFromHostOp::verify() {
@@ -288,7 +315,8 @@ static bool isSupportedReduceElement(Type elem) {
   return elem.isF32() || elem.isF64();
 }
 
-static LogicalResult verifyAccType(Type inputElem, Type accType, Operation *op) {
+static LogicalResult verifyAccType(Type inputElem, Type accType,
+                                   Operation *op) {
   if (llvm::isa<IntegerType>(inputElem)) {
     if (!accType.isInteger(64))
       return op->emitOpError("expects i64 accumulator for integer input, got ")
@@ -353,8 +381,10 @@ LogicalResult darwinn::DiveRefReductionOp::verify() {
     if (reduced) {
       if (outputDim != 1)
         return emitOpError("expects reduced dim ") << i << " to have extent 1";
-    } else if (inputShape[i] != ShapedType::kDynamic && outputDim != inputShape[i]) {
-      return emitOpError("expects output dim ") << i << " to match input dim " << i;
+    } else if (inputShape[i] != ShapedType::kDynamic &&
+               outputDim != inputShape[i]) {
+      return emitOpError("expects output dim ")
+             << i << " to match input dim " << i;
     }
   }
   return success();
@@ -377,9 +407,11 @@ LogicalResult darwinn::IndexFilterOp::verify() {
     return emitOpError("expects k to be no larger than the depth, got k ")
            << k << " with depth " << depth;
   if (valuesType.getRank() != rank || indicesType.getRank() != rank)
-    return emitOpError("expects input, values and indices to have the same rank");
+    return emitOpError(
+        "expects input, values and indices to have the same rank");
   if (valuesType.getElementType() != inputType.getElementType())
-    return emitOpError("expects values and input to have the same element type");
+    return emitOpError(
+        "expects values and input to have the same element type");
   if (!llvm::isa<IntegerType, IndexType>(indicesType.getElementType()))
     return emitOpError("expects indices element type to be integer");
   ArrayRef<int64_t> inputShape = inputType.getShape();
@@ -387,11 +419,15 @@ LogicalResult darwinn::IndexFilterOp::verify() {
   ArrayRef<int64_t> indicesShape = indicesType.getShape();
   for (int64_t i = 0; i < rank - 1; ++i) {
     if (inputShape[i] != ShapedType::kDynamic &&
-        valuesShape[i] != ShapedType::kDynamic && valuesShape[i] != inputShape[i])
-      return emitOpError("expects values dim ") << i << " to match input dim " << i;
+        valuesShape[i] != ShapedType::kDynamic &&
+        valuesShape[i] != inputShape[i])
+      return emitOpError("expects values dim ")
+             << i << " to match input dim " << i;
     if (inputShape[i] != ShapedType::kDynamic &&
-        indicesShape[i] != ShapedType::kDynamic && indicesShape[i] != inputShape[i])
-      return emitOpError("expects indices dim ") << i << " to match input dim " << i;
+        indicesShape[i] != ShapedType::kDynamic &&
+        indicesShape[i] != inputShape[i])
+      return emitOpError("expects indices dim ")
+             << i << " to match input dim " << i;
   }
   int64_t valuesLast = valuesShape[rank - 1];
   if (valuesLast != ShapedType::kDynamic && valuesLast != k)
@@ -427,8 +463,10 @@ LogicalResult darwinn::MaskIndicesOp::verify() {
     if (i == normAxis)
       continue;
     if (inputShape[i] != ShapedType::kDynamic &&
-        outputShape[j] != ShapedType::kDynamic && outputShape[j] != inputShape[i])
-      return emitOpError("expects output dim ") << j << " to match input dim " << i;
+        outputShape[j] != ShapedType::kDynamic &&
+        outputShape[j] != inputShape[i])
+      return emitOpError("expects output dim ")
+             << j << " to match input dim " << i;
     ++j;
   }
   return success();
@@ -440,13 +478,16 @@ static LogicalResult verifyPoolingLike(Operation *op, Value input,
                                        ArrayRef<int64_t> pad, Value output) {
   for (int64_t s : kernel)
     if (s < 1)
-      return op->emitOpError("expects all kernel values to be >= 1, got ") << kernel;
+      return op->emitOpError("expects all kernel values to be >= 1, got ")
+             << kernel;
   for (int64_t s : stride)
     if (s < 1)
-      return op->emitOpError("expects all stride values to be >= 1, got ") << stride;
+      return op->emitOpError("expects all stride values to be >= 1, got ")
+             << stride;
   for (int64_t p : pad)
     if (p < 0)
-      return op->emitOpError("expects all padding values to be >= 0, got ") << pad;
+      return op->emitOpError("expects all padding values to be >= 0, got ")
+             << pad;
   int64_t spatial = static_cast<int64_t>(kernel.size());
   if (static_cast<int64_t>(stride.size()) != spatial)
     return op->emitOpError("expects kernel and stride to have the same length");
@@ -454,7 +495,8 @@ static LogicalResult verifyPoolingLike(Operation *op, Value input,
     return op->emitOpError("expects pad length to be twice the kernel length");
   for (int64_t i = 0; i < spatial; ++i) {
     if (pad[2 * i] >= kernel[i] || pad[2 * i + 1] >= kernel[i])
-      return op->emitOpError("expects padding below the kernel extent on spatial dim ")
+      return op->emitOpError(
+                 "expects padding below the kernel extent on spatial dim ")
              << i;
   }
   auto inputType = llvm::dyn_cast<RankedTensorType>(input.getType());
@@ -470,8 +512,10 @@ static LogicalResult verifyPoolingLike(Operation *op, Value input,
   ArrayRef<int64_t> outputShape = outputType.getShape();
   for (int64_t i = 0; i < rank - spatial; ++i) {
     if (inputShape[i] != ShapedType::kDynamic &&
-        outputShape[i] != ShapedType::kDynamic && outputShape[i] != inputShape[i])
-      return op->emitOpError("expects output dim ") << i << " to match input dim " << i;
+        outputShape[i] != ShapedType::kDynamic &&
+        outputShape[i] != inputShape[i])
+      return op->emitOpError("expects output dim ")
+             << i << " to match input dim " << i;
   }
   for (int64_t i = 0; i < spatial; ++i) {
     int64_t dim = rank - spatial + i;
@@ -485,31 +529,24 @@ static LogicalResult verifyPoolingLike(Operation *op, Value input,
                              "divisible by stride on spatial dim ")
              << i;
     if (out != span / stride[i] + 1)
-      return op->emitOpError("expects output dim ") << dim << " to match the pooled size";
+      return op->emitOpError("expects output dim ")
+             << dim << " to match the pooled size";
   }
   return success();
 }
 
 LogicalResult darwinn::InterpolateOp::verify() {
-  return verifyPoolingLike(*this, getInput(), getKernel(),
-                           getStride(), getPad(),
-                           getOutput());
-}
-
-LogicalResult darwinn::InterpolateHardwareOp::verify() {
-  return verifyPoolingLike(*this, getInput(), getKernel(),
-                           getStride(), getPad(),
-                           getOutput());
+  return verifyPoolingLike(*this, getInput(), getKernel(), getStride(),
+                           getPad(), getOutput());
 }
 
 LogicalResult darwinn::ResamplerOp::verify() {
-  return verifyPoolingLike(*this, getInput(), getKernel(),
-                           getStride(), getPad(),
-                           getOutput());
+  return verifyPoolingLike(*this, getInput(), getKernel(), getStride(),
+                           getPad(), getOutput());
 }
 
 static LogicalResult verifyDwcArityN(Operation *op, size_t numInputs,
-                                    size_t expected) {
+                                     size_t expected) {
   if (numInputs != expected)
     return op->emitOpError("expects ")
            << expected << " operands, got " << numInputs;
@@ -517,23 +554,10 @@ static LogicalResult verifyDwcArityN(Operation *op, size_t numInputs,
 }
 
 static LogicalResult verifyDwcArityAtLeast(Operation *op, size_t numInputs,
-                                          size_t min) {
+                                           size_t min) {
   if (numInputs < min)
     return op->emitOpError("expects at least ")
            << min << " operands, got " << numInputs;
-  return success();
-}
-
-static LogicalResult verifyDwcArityAtMost(Operation *op, size_t numInputs,
-                                          size_t max) {
-  if (numInputs > max)
-    return op->emitOpError("expects at most ")
-           << max << " operands, got " << numInputs;
-  return success();
-}
-
-LogicalResult darwinn::AuxTensorTypeOp::verify() {
-  // No shape contract: type descriptor carries no operand shape to check.
   return success();
 }
 
@@ -602,11 +626,6 @@ LogicalResult darwinn::ConstBiasScaleOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::ConstTypeOp::verify() {
-  // No shape contract: type descriptor carries no operand shape to check.
-  return success();
-}
-
 LogicalResult darwinn::ConstantGeneratorOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -619,11 +638,6 @@ LogicalResult darwinn::ConvolutionOp::verify() {
 
 LogicalResult darwinn::CostHintOp::verify() {
   // No shape contract: hint payload carries no operand shape to check.
-  return success();
-}
-
-LogicalResult darwinn::CreateEmptyTensorOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
 
@@ -667,10 +681,6 @@ LogicalResult darwinn::FenceOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::FillOp::verify() {
-  return verifyDwcArityAtMost(*this, getInputs().size(), 1);
-}
-
 LogicalResult darwinn::FilterOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -706,11 +716,6 @@ LogicalResult darwinn::GetFullTensorOfDynamicViewOp::verify() {
 }
 
 LogicalResult darwinn::GetIndexedSliceOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult darwinn::GetTensorOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }
@@ -790,12 +795,14 @@ LogicalResult darwinn::KernelLevelOp::verify() {
 }
 
 LogicalResult darwinn::LaunchCustomKernelOp::verify() {
-  // No shape contract: region contract absent, kernel body carries no operand shape to check.
+  // No shape contract: region contract absent, kernel body carries no operand
+  // shape to check.
   return success();
 }
 
 LogicalResult darwinn::LaunchFunctionOp::verify() {
-  // No shape contract: region contract absent, callee body carries no operand shape to check.
+  // No shape contract: region contract absent, callee body carries no operand
+  // shape to check.
   return success();
 }
 
@@ -814,25 +821,23 @@ LogicalResult darwinn::LocalCopyAttributesOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::MappingOp::verify() {
-  // No shape contract: mapping descriptor carries no operand shape to check.
-  return success();
-}
-
-
 LogicalResult darwinn::MaterializeCastOp::verify() {
   if (failed(verifyDwcArityN(*this, getInputs().size(), 1)))
     return failure();
   auto element = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
-  Type elementType = element ? element.getElementType() : getInputs()[0].getType();
+  Type elementType =
+      element ? element.getElementType() : getInputs()[0].getType();
   if (auto integer = llvm::dyn_cast<IntegerType>(elementType)) {
-    if ((integer.isSignless() && (integer.getWidth() == 1 || integer.getWidth() == 32)))
+    if ((integer.isSignless() &&
+         (integer.getWidth() == 1 || integer.getWidth() == 32)))
       return success();
-    return (*this)->emitOpError("operand 0 expects 1-bit or 32-bit signless integer");
+    return (*this)->emitOpError(
+        "operand 0 expects 1-bit or 32-bit signless integer");
   }
   if (llvm::isa<FloatType>(elementType))
     return success();
-  return (*this)->emitOpError("operand 0 expects floating-point or 1/32-bit signless integer");
+  return (*this)->emitOpError(
+      "operand 0 expects floating-point or 1/32-bit signless integer");
 }
 
 LogicalResult darwinn::MaterializePolicyOp::verify() {
@@ -870,18 +875,6 @@ LogicalResult darwinn::NarrowToNarrowSliceOp::verify() {
   return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::NarrowToWideOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
-}
-
-LogicalResult darwinn::NarrowToWideShardOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
-}
-
-LogicalResult darwinn::NarrowToWideSliceOp::verify() {
-  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
-}
-
 LogicalResult darwinn::NluE8m0RoundingOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -916,11 +909,6 @@ LogicalResult darwinn::ParallelMeshCopyOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 2);
 }
 
-LogicalResult darwinn::PreemptionPointOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
 LogicalResult darwinn::ProbeOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -937,10 +925,6 @@ LogicalResult darwinn::ReluOp::verify() {
 LogicalResult darwinn::ResamplerOptionsOp::verify() {
   // No shape contract: option payload carries no operand shape to check.
   return success();
-}
-
-LogicalResult darwinn::ReshapeOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
 LogicalResult darwinn::RingToTileOptionsOp::verify() {
@@ -1028,7 +1012,8 @@ static LogicalResult verifyScalarAssignedRegister(Operation *op) {
     return op->emitOpError("expected op to have attribute 'assigned_register'");
   auto attr = llvm::dyn_cast<IntegerAttr>(op->getAttr("assigned_register"));
   if (!attr || !attr.getType().isSignlessInteger(5))
-    return op->emitOpError("attribute 'assigned_register' expects 5-bit signless integer");
+    return op->emitOpError(
+        "attribute 'assigned_register' expects 5-bit signless integer");
   return success();
 }
 
@@ -1093,23 +1078,9 @@ LogicalResult darwinn::SplitOp::verify() {
   return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::StartOffsetAndStrideOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult darwinn::StaticComputeOpOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
 LogicalResult darwinn::StaticSparseComputeOpOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
-}
-
-LogicalResult darwinn::StaticUnaryComputeOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
 LogicalResult darwinn::StreamingComputeOpOp::verify() {
@@ -1161,20 +1132,6 @@ LogicalResult darwinn::SynchronizedUnaryComputeOpOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::TensorOpOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult darwinn::TensorOpShardOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult darwinn::TensorOpSliceOp::verify() {
-  return verifyDwcArityAtLeast(*this, getInputs().size(), 1);
-}
-
 LogicalResult darwinn::TerminateOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -1220,10 +1177,6 @@ LogicalResult darwinn::UnaryMapOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
-LogicalResult darwinn::UnaryTensorOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
-}
-
 LogicalResult darwinn::VexInfoOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -1235,7 +1188,8 @@ LogicalResult darwinn::VrgkhOperationModeOp::verify() {
 }
 
 LogicalResult darwinn::WhileOp::verify() {
-  // No shape contract: region contract absent, loop body carries no operand shape to check.
+  // No shape contract: region contract absent, loop body carries no operand
+  // shape to check.
   return success();
 }
 
@@ -1248,7 +1202,8 @@ LogicalResult darwinn::WideToNarrowSliceOp::verify() {
 }
 
 LogicalResult darwinn::YieldOp::verify() {
-  // No shape contract: region contract absent, terminator carries no operand shape to check.
+  // No shape contract: region contract absent, terminator carries no operand
+  // shape to check.
   return success();
 }
 

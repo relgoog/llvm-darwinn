@@ -75,10 +75,6 @@ def Darwinn_CostHintAttr : Darwinn_Attr<"CostHint", "cost_hint"> {
   let summary = "Darwinn cost_hint attribute.";
 }
 
-def Darwinn_ComputeOpOptionsAttr : Darwinn_Attr<"ComputeOpOptions", "compute_op_options"> {
-  let summary = "Darwinn compute_op_options attribute.";
-}
-
 def Darwinn_CustomTilingOptionsAttr : Darwinn_Attr<"CustomTilingOptions", "custom_tiling_options"> {
   let summary = "Darwinn custom_tiling_options attribute.";
 }
@@ -109,10 +105,6 @@ def Darwinn_FilteredIndicesDispatchModeAttr : Darwinn_Attr<"FilteredIndicesDispa
 
 def Darwinn_VrgkhOperationModeAttr : Darwinn_Attr<"VrgkhOperationMode", "vrgkh_operation_mode"> {
   let summary = "Darwinn vrgkh_operation_mode attribute.";
-}
-
-def Darwinn_FunctionSymmetryAttr : Darwinn_Attr<"FunctionSymmetry", "function_symmetry"> {
-  let summary = "Darwinn function_symmetry attribute.";
 }
 
 def Darwinn_ImageFormatAttr : Darwinn_Attr<"ImageFormat", "image_format"> {
@@ -159,10 +151,6 @@ def Darwinn_InnerOperationAttr : Darwinn_Attr<"InnerOperation", "inner_op"> {
   let summary = "Darwinn inner_op attribute.";
 }
 
-def Darwinn_InterpolateMethodAttr : Darwinn_Attr<"InterpolateMethod", "interpolate_method"> {
-  let summary = "Darwinn interpolate_method attribute.";
-}
-
 def Darwinn_LinearFunctionAttr : Darwinn_Attr<"LinearFunction", "linear_func"> {
   let summary = "Darwinn linear_func attribute.";
 }
@@ -196,14 +184,6 @@ def Darwinn_VicaCustomPaddingAttr : Darwinn_Attr<"VicaCustomPadding", "vica_cust
 // Darwinn Types.
 //===----------------------------------------------------------------------===//
 
-def Darwinn_AuxTensor : Darwinn_Type<"AuxTensor", "aux_tensor_type"> {
-  let summary = "Darwinn aux tensor type.";
-}
-
-def Darwinn_Const : Darwinn_Type<"Const", "const_type"> {
-  let summary = "Darwinn const type.";
-}
-
 def Darwinn_Device : Darwinn_Type<"Device", "device_type"> {
   let summary = "Darwinn device type.";
 }
@@ -219,5 +199,7 @@ def Darwinn_Packed : Darwinn_Type<"Packed", "packed", []> {
 }
 
 include "mlir/Dialect/Darwinn/IR/DarwinnDistributed.td"
+include "mlir/Dialect/Darwinn/IR/DarwinnScheduledAttrs.td"
+include "mlir/Dialect/Darwinn/IR/DarwinnComputeAttrs.td"
 
 #endif // DARWINN_DIALECT

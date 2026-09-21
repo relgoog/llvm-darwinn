@@ -1,7 +1,11 @@
 add_mlir_dialect_library(MLIRDarwinnDialect
   PARTIAL_SOURCES_INTENDED
+  DarwinnComputeAttrs.cpp
+  DarwinnComputeOps.cpp
   DarwinnDistributed.cpp
   DarwinnOps.cpp
+  DarwinnScheduledAttrs.cpp
+  DarwinnStorageOps.cpp
   DwcOps.cpp
 
   ADDITIONAL_HEADER_DIRS

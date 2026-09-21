@@ -16,18 +16,3 @@ func.func @test_pipeline_convolution(%arg0: tensor<1x8x8x4xf32>, %arg1: tensor<3
   return %0 : tensor<1x6x6x8xf32>
 }
 
-// -----
-// CHECK-LABEL: func.func @test_pipeline_copy(
-func.func @test_pipeline_copy(%arg0: tensor<8x8xf32>) -> tensor<8x8xf32> {
-  // CHECK: return %arg0 : tensor<8x8xf32>
-  %0 = darwinn.copy_op %arg0 : (tensor<8x8xf32>) -> tensor<8x8xf32>
-  return %0 : tensor<8x8xf32>
-}
-
-// -----
-// CHECK-LABEL: func.func @test_pipeline_fill(
-func.func @test_pipeline_fill(%arg0: f32) -> tensor<4x4xf32> {
-  // CHECK: linalg.fill ins(%arg0 : f32)
-  %0 = darwinn.fill %arg0 : (f32) -> tensor<4x4xf32>
-  return %0 : tensor<4x4xf32>
-}

@@ -19,10 +19,10 @@ func.func @test_convolution(%arg0: tensor<1x8x8x4xf32>, %arg1: tensor<3x3x4x8xf3
 
 // -----
 // CHECK-LABEL: copy_op
-func.func @test_copy_op(%arg0: tensor<8x8xf32>) -> tensor<8x8xf32> {
-  // CHECK: darwinn.copy_op
-  %0 = darwinn.copy_op %arg0 : (tensor<8x8xf32>) -> tensor<8x8xf32>
-  return %0 : tensor<8x8xf32>
+func.func @test_copy_op(%arg0: !darwinn<distributed_tensor<4x8xf32>@TILE_MEMORY>) -> !darwinn<distributed_tensor<8x4xf32>@TILE_MEMORY> {
+  // CHECK: darwinn.copy_op {{.*}} -> !darwinn<distributed_tensor<8x4xf32>@TILE_MEMORY>
+  %0 = darwinn.copy_op %arg0 <{forward_index_transformation = affine_map<(d0, d1) -> (d1, d0)>, reverse_index_transformation = affine_map<(d0, d1) -> (d1, d0)>, slicing_begins = affine_map<(d0) -> (0, 0)>, slicing_domain = [1 : i32], slicing_ends = affine_map<(d0) -> (7, 3)>, traversal = affine_map<(d0, d1) -> (d0, d1)>}> : (!darwinn<distributed_tensor<4x8xf32>@TILE_MEMORY>) -> !darwinn<distributed_tensor<8x4xf32>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<8x4xf32>@TILE_MEMORY>
 }
 
 // -----
@@ -35,10 +35,10 @@ func.func @test_fence() {
 
 // -----
 // CHECK-LABEL: fill
-func.func @test_fill(%arg0: f32) -> tensor<4x4xf32> {
-  // CHECK: darwinn.fill
-  %0 = darwinn.fill %arg0 : (f32) -> tensor<4x4xf32>
-  return %0 : tensor<4x4xf32>
+func.func @test_fill() -> !darwinn<distributed_tensor<4x4xf32>@TILE_MEMORY> {
+  // CHECK: darwinn.fill {{.*}}const_type = #darwinn.const_type<BIAS_OR_SCALE>{{.*}} -> !darwinn<distributed_tensor<4x4xf32>@TILE_MEMORY>
+  %0 = darwinn.fill <{const_type = #darwinn.const_type<BIAS_OR_SCALE>, slicing_begins = affine_map<(d0) -> (0, 0)>, slicing_domain = [1 : i32], slicing_ends = affine_map<(d0) -> (3, 3)>, value = dense<0.0> : tensor<4x4xf32>}> : () -> !darwinn<distributed_tensor<4x4xf32>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4x4xf32>@TILE_MEMORY>
 }
 
 // -----
@@ -122,19 +122,11 @@ func.func @test_dive_ref_reduction(%arg0: tensor<4x8xf32>) -> tensor<4x1xf32> {
 
 // -----
 // CHECK-LABEL: fill_lower
-func.func @test_fill_lower(%arg0: f32) -> tensor<4x4xf32> {
-  // CHECK: darwinn.fill
-  %0 = darwinn.fill %arg0 : (f32) -> tensor<4x4xf32>
-  return %0 : tensor<4x4xf32>
+func.func @test_fill_lower() -> !darwinn<distributed_tensor<4x4xbf16>@TILE_MEMORY> {
+  // CHECK: darwinn.fill {{.*}}const_type = #darwinn.const_type<PARAMETER>{{.*}} -> !darwinn<distributed_tensor<4x4xbf16>@TILE_MEMORY>
+  %0 = darwinn.fill <{const_type = #darwinn.const_type<PARAMETER>, slicing_begins = affine_map<(d0) -> (0, 0)>, slicing_domain = [1 : i32], slicing_ends = affine_map<(d0) -> (3, 3)>, value = dense<1.0> : tensor<4x4xbf16>}> : () -> !darwinn<distributed_tensor<4x4xbf16>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4x4xbf16>@TILE_MEMORY>
 }
-// -----
-// CHECK-LABEL: aux_tensor_type
-func.func @test_aux_tensor_type() -> tensor<4xf32> {
-  // CHECK: darwinn.aux_tensor_type
-  %0 = "darwinn.aux_tensor_type"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
 // -----
 // CHECK-LABEL: binary_map
 func.func @test_binary_map(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
@@ -248,14 +240,6 @@ func.func @test_const_bias_scale() -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: const_type
-func.func @test_const_type() -> tensor<4xf32> {
-  // CHECK: darwinn.const_type
-  %0 = "darwinn.const_type"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
 // CHECK-LABEL: constant_generator
 func.func @test_constant_generator() -> tensor<4xf32> {
   // CHECK: darwinn.constant_generator
@@ -289,10 +273,10 @@ func.func @test_cost_hint() -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: create_empty_tensor
-func.func @test_create_empty_tensor() -> tensor<4xf32> {
-  // CHECK: darwinn.create_empty_tensor
-  %0 = "darwinn.create_empty_tensor"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+func.func @test_create_empty_tensor() -> !darwinn<distributed_tensor<4xf32>@TILE_MEMORY> {
+  // CHECK: darwinn.create_empty_tensor {{.*}}slicing_domain = [1 : i32]{{.*}} -> !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>
+  %0 = "darwinn.create_empty_tensor"() <{slicing_begins = affine_map<(d0) -> (0)>, slicing_domain = [1 : i32], slicing_ends = affine_map<(d0) -> (3)>}> : () -> !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>
 }
 
 // -----
@@ -441,10 +425,10 @@ func.func @test_get_indexed_slice() -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: get_tensor
-func.func @test_get_tensor() -> tensor<4xf32> {
-  // CHECK: darwinn.get_tensor
-  %0 = "darwinn.get_tensor"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+func.func @test_get_tensor(%arg0: !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xf32>@TILE_MEMORY> {
+  // CHECK: darwinn.get_tensor {{.*}} {slicing_begins = {{.*}}slicing_domain = [1 : i32]{{.*}} -> !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>
+  %0 = "darwinn.get_tensor"(%arg0) {slicing_begins = affine_map<(d0) -> (0)>, slicing_domain = [1 : i32], slicing_ends = affine_map<(d0) -> (3)>} : (!darwinn<distributed_tensor<4xf32>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xf32>@TILE_MEMORY>
 }
 // -----
 // CHECK-LABEL: hl_bitcast
@@ -528,10 +512,10 @@ func.func @test_interpolate(%arg0: tensor<1x2x4x4xf32>) -> tensor<1x2x2x2xf32> {
 
 // -----
 // CHECK-LABEL: interpolate_hardware
-func.func @test_interpolate_hardware(%arg0: tensor<1x2x4x4xf32>) -> tensor<1x2x2x2xf32> {
+func.func @test_interpolate_hardware(%arg0: !darwinn<distributed_tensor<1x2x2x4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<1x4x4x4xbf16>@TILE_MEMORY> {
   // CHECK: darwinn.interpolate_hardware
-  %0 = darwinn.interpolate_hardware %arg0 {kernel = array<i64: 2, 2>, stride = array<i64: 2, 2>, pad = array<i64: 0, 0, 0, 0>} : (tensor<1x2x4x4xf32>) -> tensor<1x2x2x2xf32>
-  return %0 : tensor<1x2x2x2xf32>
+  %0 = "darwinn.interpolate_hardware"(%arg0) <{interpolate_method = #darwinn.interpolate_method<NEAREST_NEIGHBOR>, slicing_begins = affine_map<(d0) -> (0, 0, 0, 0)>, slicing_domain = [1 : i32], slicing_ends = affine_map<(d0) -> (0, 3, 3, 3)>, x = #darwinn.start_offset_and_stride<start_offset = 4294950914, stride = 32768, num_fractional_bits = 16>, y = #darwinn.start_offset_and_stride<start_offset = 4294950914, stride = 32768, num_fractional_bits = 16>}> : (!darwinn<distributed_tensor<1x2x2x4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<1x4x4x4xbf16>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<1x4x4x4xbf16>@TILE_MEMORY>
 }
 
 // -----
@@ -631,14 +615,6 @@ func.func @test_local_copy_attributes() -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: mapping
-func.func @test_mapping() -> tensor<4xf32> {
-  // CHECK: darwinn.mapping
-  %0 = "darwinn.mapping"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
 // CHECK-LABEL: mask_indices
 func.func @test_mask_indices(%arg0: tensor<4x8xf32>) -> tensor<4xi32> {
   // CHECK: darwinn.mask_indices
@@ -720,26 +696,10 @@ func.func @test_narrow_to_narrow_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: narrow_to_wide
-func.func @test_narrow_to_wide(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_narrow_to_wide(%arg0: !darwinn<distributed_view<3x3x16xbf16>@TILE_MEMORY>) -> !darwinn<distributed_view<3x3x16xbf16>@TILE_REGISTERS> {
   // CHECK: darwinn.narrow_to_wide
-  %0 = "darwinn.narrow_to_wide"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
-// CHECK-LABEL: narrow_to_wide_shard
-func.func @test_narrow_to_wide_shard(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.narrow_to_wide_shard
-  %0 = "darwinn.narrow_to_wide_shard"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
-// CHECK-LABEL: narrow_to_wide_slice
-func.func @test_narrow_to_wide_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.narrow_to_wide_slice
-  %0 = "darwinn.narrow_to_wide_slice"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "darwinn.narrow_to_wide"(%arg0) <{shards = [#darwinn.narrow_to_wide_shard<shard_id = [], slices = []>], traversal = affine_map<(d0, d1, d2, d3) -> (d1, d2, d3)>}> : (!darwinn<distributed_view<3x3x16xbf16>@TILE_MEMORY>) -> !darwinn<distributed_view<3x3x16xbf16>@TILE_REGISTERS>
+  return %0 : !darwinn<distributed_view<3x3x16xbf16>@TILE_REGISTERS>
 }
 
 // -----
@@ -800,10 +760,10 @@ func.func @test_parallel_mesh_copy(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -
 
 // -----
 // CHECK-LABEL: preemption_point
-func.func @test_preemption_point() -> tensor<4xf32> {
-  // CHECK: darwinn.preemption_point
-  %0 = "darwinn.preemption_point"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+func.func @test_preemption_point() {
+  // CHECK: darwinn.preemption_point {{.*}}hardware_preemption_point = false{{.*}} : () -> ()
+  "darwinn.preemption_point"() <{hardware_preemption_point = false}> : () -> ()
+  return
 }
 
 // -----
@@ -848,10 +808,10 @@ func.func @test_resampler_options() -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: reshape_op
-func.func @test_reshape_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.reshape_op
-  %0 = "darwinn.reshape_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+func.func @test_reshape_op(%arg0: !darwinn<distributed_tensor<2x2xf32>@HOST_MEMORY>) -> !darwinn<distributed_tensor<4xf32>@HOST_MEMORY> {
+  // CHECK: darwinn.reshape_op {{.*}} -> !darwinn<distributed_tensor<4xf32>@HOST_MEMORY>
+  %0 = "darwinn.reshape_op"(%arg0) {sharding_begins = affine_map<() -> (0)>, sharding_domain = [], sharding_ends = affine_map<() -> (3)>} : (!darwinn<distributed_tensor<2x2xf32>@HOST_MEMORY>) -> !darwinn<distributed_tensor<4xf32>@HOST_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xf32>@HOST_MEMORY>
 }
 
 // -----
@@ -1078,19 +1038,11 @@ func.func @test_split(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 }
 
 // -----
-// CHECK-LABEL: start_offset_and_stride
-func.func @test_start_offset_and_stride() -> tensor<4xf32> {
-  // CHECK: darwinn.start_offset_and_stride
-  %0 = "darwinn.start_offset_and_stride"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
 // CHECK-LABEL: static_compute_op
-func.func @test_static_compute_op() -> tensor<4xf32> {
+func.func @test_static_compute_op(%lhs: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>, %rhs: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>, %destination: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY> {
   // CHECK: darwinn.static_compute_op
-  %0 = "darwinn.static_compute_op"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "darwinn.static_compute_op"(%lhs, %rhs, %destination) <{compute = #darwinn.compute_op_options<inner_operation = <ELEMENTWISE>, linear_function = <ADD>>, traversal = affine_map<(d0, d1) -> (d1)>}> : (!darwinn<distributed_view<4xbf16>@TILE_MEMORY>, !darwinn<distributed_view<4xbf16>@TILE_MEMORY>, !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
 }
 
 // -----
@@ -1103,10 +1055,10 @@ func.func @test_static_sparse_compute_op() -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: static_unary_compute_op
-func.func @test_static_unary_compute_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_static_unary_compute_op(%input: !darwinn<distributed_view<4xf32>@TILE_MEMORY>, %destination: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY> {
   // CHECK: darwinn.static_unary_compute_op
-  %0 = "darwinn.static_unary_compute_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "darwinn.static_unary_compute_op"(%input, %destination) <{compute = #darwinn.compute_op_options<inner_operation = <UNARY>, linear_function = <ADD>>, traversal = affine_map<(d0, d1) -> (d1)>}> : (!darwinn<distributed_view<4xf32>@TILE_MEMORY>, !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
 }
 
 // -----
@@ -1199,26 +1151,10 @@ func.func @test_synchronized_unary_compute_op(%arg0: tensor<4xf32>) -> tensor<4x
 
 // -----
 // CHECK-LABEL: tensor_op
-func.func @test_tensor_op() -> tensor<4xf32> {
+func.func @test_tensor_op(%lhs: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>, %rhs: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>, %destination: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY> {
   // CHECK: darwinn.tensor_op
-  %0 = "darwinn.tensor_op"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
-// CHECK-LABEL: tensor_op_shard
-func.func @test_tensor_op_shard() -> tensor<4xf32> {
-  // CHECK: darwinn.tensor_op_shard
-  %0 = "darwinn.tensor_op_shard"() : () -> tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-
-// -----
-// CHECK-LABEL: tensor_op_slice
-func.func @test_tensor_op_slice(%arg0: tensor<4xf32>) -> tensor<4xf32> {
-  // CHECK: darwinn.tensor_op_slice
-  %0 = "darwinn.tensor_op_slice"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "darwinn.tensor_op"(%lhs, %rhs, %destination) <{compute = #darwinn.compute_op_options<inner_operation = <ELEMENTWISE>, linear_function = <ADD>>, shards = [#darwinn.tensor_op_shard<shard_id = [], slices = []>], traversal = affine_map<(d0, d1) -> (d1)>}> : (!darwinn<distributed_view<4xbf16>@TILE_MEMORY>, !darwinn<distributed_view<4xbf16>@TILE_MEMORY>, !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
 }
 
 // -----
@@ -1303,10 +1239,10 @@ func.func @test_unary_map(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: unary_tensor_op
-func.func @test_unary_tensor_op(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_unary_tensor_op(%input: !darwinn<distributed_view<4xf32>@TILE_MEMORY>, %destination: !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY> {
   // CHECK: darwinn.unary_tensor_op
-  %0 = "darwinn.unary_tensor_op"(%arg0) : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  %0 = "darwinn.unary_tensor_op"(%input, %destination) <{compute = #darwinn.compute_op_options<inner_operation = <UNARY>, linear_function = <ADD>>, slice = [], traversal = affine_map<(d0, d1) -> (d1)>}> : (!darwinn<distributed_view<4xf32>@TILE_MEMORY>, !darwinn<distributed_view<4xbf16>@TILE_MEMORY>) -> !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
+  return %0 : !darwinn<distributed_tensor<4xbf16>@TILE_MEMORY>
 }
 
 // -----

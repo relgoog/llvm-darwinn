@@ -53,32 +53,6 @@ bool isSingleCopy(Type src, Type dst) {
   return srcRanked.getNumElements() == dstRanked.getNumElements();
 }
 
-struct CopyOpLowering : public RewritePattern {
-  CopyOpLowering(MLIRContext *ctx)
-      : RewritePattern("darwinn.copy_op", 1, ctx) {}
-
-  LogicalResult matchAndRewrite(Operation *op,
-                                PatternRewriter &rewriter) const override {
-    if (op->getNumResults() != 1 || op->getNumOperands() < 1)
-      return failure();
-    Value src = op->getOperand(0);
-    Type dstTy = op->getResult(0).getType();
-    if (!hasSameElementType(src.getType(), dstTy))
-      return failure();
-    if (auto srcRanked = dyn_cast<RankedTensorType>(src.getType()))
-      if (auto dstRanked = dyn_cast<RankedTensorType>(dstTy))
-        if (srcRanked.hasStaticShape() && dstRanked.hasStaticShape() &&
-            srcRanked.getNumElements() != dstRanked.getNumElements())
-          return failure();
-    SmallVector<NamedAttribute> attrs;
-    for (auto attr : op->getAttrs())
-      attrs.push_back(attr);
-    Operation *copy =
-        makeVmOp(rewriter, op->getLoc(), "dive_vm.copy", src, dstTy, attrs);
-    rewriter.replaceOp(op, copy->getResults());
-    return success();
-  }
-};
 struct Slice1dLowering : public RewritePattern {
   StringRef root;
   Slice1dLowering(StringRef rootName, MLIRContext *ctx)
@@ -159,34 +133,6 @@ struct DiveRefReductionLowering : public RewritePattern {
           nested.create<linalg::YieldOp>(nloc, out);
         });
     rewriter.replaceOp(op, generic->getResult(0));
-    return success();
-  }
-};
-
-struct DarwinnFillLowering : public RewritePattern {
-  DarwinnFillLowering(MLIRContext *ctx)
-      : RewritePattern("darwinn.fill", 1, ctx) {}
-
-  LogicalResult matchAndRewrite(Operation *op,
-                                PatternRewriter &rewriter) const override {
-    if (op->getNumResults() != 1 || op->getNumOperands() != 1)
-      return failure();
-    Value scalar = op->getOperand(0);
-    Type dstTy = op->getResult(0).getType();
-    auto dstRanked = dyn_cast<RankedTensorType>(dstTy);
-    if (!dstRanked || !dstRanked.hasStaticShape())
-      return failure();
-    Type elem = dstRanked.getElementType();
-    Type scalarTy = scalar.getType();
-    if (auto shaped = dyn_cast<ShapedType>(scalarTy)) {
-      if (shaped.getElementType() != elem)
-        return failure();
-    } else if (scalarTy != elem) {
-      return failure();
-    }
-    Location loc = op->getLoc();
-    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), elem);
-    rewriter.replaceOpWithNewOp<linalg::FillOp>(op, TypeRange{dstTy}, ValueRange{scalar}, ValueRange{empty});
     return success();
   }
 };
@@ -3437,8 +3383,6 @@ static Value emitAtan2(OpBuilder &b, Location loc, Value x, Value y) { return b.
 
 void mlir::darwinn::populateLowerCopySlicePatterns(RewritePatternSet &patterns) {
   MLIRContext *ctx = patterns.getContext();
-  patterns.add<CopyOpLowering>(ctx);
-  patterns.add<DarwinnFillLowering>(ctx);
   patterns.add<DynamicSliceLowering>("darwinn.dynamic_slice",
                                      /*isUpdate=*/false, ctx);
   patterns.add<DynamicSliceLowering>("darwinn.dynamic_slice_with_copy",

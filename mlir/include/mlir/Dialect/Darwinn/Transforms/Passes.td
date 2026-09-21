@@ -1309,7 +1309,7 @@ def DwcShardingUsingDivePass : Pass<"sharding-using-dive", "func::FuncOp"> {
   let description = [{
     Seen at 0xde9635 in task3_passes.tsv, this pass folds same-type one-operand one-result
     `darwinn.broadcast_shard`, `darwinn.host_to_ssram_shard`, `darwinn.host_to_tile_shard`,
-    `darwinn.narrow_to_narrow_shard`, `darwinn.narrow_to_wide_shard`, `darwinn.tensor_op_shard`,
+    `darwinn.narrow_to_narrow_shard`,
     `darwinn.tile_to_host_shard` and `darwinn.tile_to_tile_shard` identities with replaceAllUsesWith and
     erase. It then requires every remaining op to sit in the darwinn dialect and pass
     checkDwcConvertibleTypes, failing other dialects with sharding-using-dive accepts darwinn ops only.

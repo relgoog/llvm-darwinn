@@ -17,19 +17,6 @@ include "mlir/IR/OpBase.td"
 
 include "mlir/Dialect/Darwinn/IR/DarwinnDialect.td"
 
-// Operator: aux_tensor_type
-def Darwinn_AuxTensorTypeOp : Darwinn_Op<"aux_tensor_type"> {
-  let summary = "Darwinn aux_tensor_type operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: binary_map
 def Darwinn_BinaryMapOp : Darwinn_Op<"binary_map"> {
   let summary = "Darwinn binary_map operation.";
@@ -231,19 +218,6 @@ def Darwinn_ConstBiasScaleOp : Darwinn_Op<"const_bias_scale"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: const_type
-def Darwinn_ConstTypeOp : Darwinn_Op<"const_type"> {
-  let summary = "Darwinn const_type operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: constant_generator
 def Darwinn_ConstantGeneratorOp : Darwinn_Op<"constant_generator"> {
   let summary = "Darwinn constant_generator operation.";
@@ -300,17 +274,6 @@ def Darwinn_CopyFromHostOp : Darwinn_Op<"copy_from_host"> {
 }
 
 // Operator: copy_op
-def Darwinn_CopyOpOp : Darwinn_Op<"copy_op"> {
-  let summary = "Darwinn copy_op operation.";
-  let description = [{
-    Copies `input` to `output` unchanged.
-    `input` and `output` have the same shape and element type.
-  }];
-  let arguments = (ins AnyRankedTensor:$input);
-  let results = (outs AnyRankedTensor:$output);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: copy_using_wide
 def Darwinn_CopyUsingWideOp : Darwinn_Op<"copy_using_wide"> {
@@ -339,16 +302,6 @@ def Darwinn_CostHintOp : Darwinn_Op<"cost_hint"> {
 }
 
 // Operator: create_empty_tensor
-def Darwinn_CreateEmptyTensorOp : Darwinn_Op<"create_empty_tensor"> {
-  let summary = "Darwinn create_empty_tensor operation.";
-  let description = [{
-    Takes any number of operands. Sibling spellings `darwinn.communicated.create_empty_tensor` and `darwinn.lisa.empty_tensor` name the same constructor in the packed registry; no distinct sibling dialects are evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: custom_tiling_options
 def Darwinn_CustomTilingOptionsOp : Darwinn_Op<"custom_tiling_options"> {
@@ -530,17 +483,6 @@ def Darwinn_FenceOp : Darwinn_Op<"fence"> {
 }
 
 // Operator: fill
-def Darwinn_FillOp : Darwinn_Op<"fill"> {
-  let summary = "Darwinn fill operation.";
-  let description = [{
-    Takes at most one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: filter
 def Darwinn_FilterOp : Darwinn_Op<"filter"> {
@@ -684,17 +626,6 @@ def Darwinn_GetIndexedSliceOp : Darwinn_Op<"get_indexed_slice"> {
 }
 
 // Operator: get_tensor
-def Darwinn_GetTensorOp : Darwinn_Op<"get_tensor"> {
-  let summary = "Darwinn get_tensor operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: hib_gather
 def Darwinn_HibGatherOp : Darwinn_Op<"hib_gather"> {
@@ -865,25 +796,6 @@ def Darwinn_InterpolateOp : Darwinn_Op<"interpolate"> {
 }
 
 // Operator: interpolate_hardware
-def Darwinn_InterpolateHardwareOp : Darwinn_Op<"interpolate_hardware"> {
-  let summary = "Darwinn interpolate_hardware operation.";
-  let description = [{
-    Hardware pooling of `input` to `output` with `kernel`, `stride` and `pad`.
-    Every kernel entry is at least 1 and every stride entry is at least 1.
-    Padding entries are non negative with each side below its kernel extent.
-    Static spatial dims must match the pooled size formula. Non spatial dims
-    carry over unchanged.
-  }];
-  let arguments = (ins
-    AnyRankedTensor:$input,
-    DenseI64ArrayAttr:$kernel,
-    DenseI64ArrayAttr:$stride,
-    DenseI64ArrayAttr:$pad
-  );
-  let results = (outs AnyRankedTensor:$output);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: interpolate_method
 def Darwinn_InterpolateMethodOp : Darwinn_Op<"interpolate_method"> {
@@ -1041,19 +953,6 @@ def Darwinn_LocalCopyAttributesOp : Darwinn_Op<"local_copy_attributes"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: mapping
-def Darwinn_MappingOp : Darwinn_Op<"mapping"> {
-  let summary = "Darwinn mapping operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: mask_indices
 def Darwinn_MaskIndicesOp : Darwinn_Op<"mask_indices"> {
   let summary = "Darwinn mask_indices operation.";
@@ -1190,43 +1089,6 @@ def Darwinn_NarrowToNarrowSliceOp : Darwinn_Op<"narrow_to_narrow_slice"> {
 }
 
 // Operator: narrow_to_wide
-def Darwinn_NarrowToWideOp : Darwinn_Op<"narrow_to_wide"> {
-  let summary = "Darwinn narrow_to_wide operation.";
-  let description = [{
-    Takes one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: narrow_to_wide_shard
-def Darwinn_NarrowToWideShardOp : Darwinn_Op<"narrow_to_wide_shard"> {
-  let summary = "Darwinn narrow_to_wide_shard operation.";
-  let description = [{
-    Takes one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: narrow_to_wide_slice
-def Darwinn_NarrowToWideSliceOp : Darwinn_Op<"narrow_to_wide_slice"> {
-  let summary = "Darwinn narrow_to_wide_slice operation.";
-  let description = [{
-    Takes at least one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: nlu_e8m0_rounding
 def Darwinn_NluE8m0RoundingOp : Darwinn_Op<"nlu_e8m0_rounding"> {
@@ -1320,17 +1182,6 @@ def Darwinn_ParallelMeshCopyOp : Darwinn_Op<"parallel_mesh_copy"> {
 }
 
 // Operator: preemption_point
-def Darwinn_PreemptionPointOp : Darwinn_Op<"preemption_point"> {
-  let summary = "Darwinn preemption_point operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: probe
 def Darwinn_ProbeOp : Darwinn_Op<"probe"> {
@@ -1406,17 +1257,6 @@ def Darwinn_ResamplerOptionsOp : Darwinn_Op<"resampler_options"> {
 }
 
 // Operator: reshape_op
-def Darwinn_ReshapeOpOp : Darwinn_Op<"reshape_op"> {
-  let summary = "Darwinn reshape_op operation.";
-  let description = [{
-    Takes one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: ring_to_tile_options
 def Darwinn_RingToTileOptionsOp : Darwinn_Op<"ring_to_tile_options"> {
@@ -1800,50 +1640,11 @@ def Darwinn_SplitOp : Darwinn_Op<"split"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: start_offset_and_stride
-def Darwinn_StartOffsetAndStrideOp : Darwinn_Op<"start_offset_and_stride"> {
-  let summary = "Darwinn start_offset_and_stride operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: static_compute_op
-def Darwinn_StaticComputeOpOp : Darwinn_Op<"static_compute_op"> {
-  let summary = "Darwinn static_compute_op operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: static_sparse_compute_op
 def Darwinn_StaticSparseComputeOpOp : Darwinn_Op<"static_sparse_compute_op"> {
   let summary = "Darwinn static_sparse_compute_op operation.";
   let description = [{
     Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: static_unary_compute_op
-def Darwinn_StaticUnaryComputeOpOp : Darwinn_Op<"static_unary_compute_op"> {
-  let summary = "Darwinn static_unary_compute_op operation.";
-  let description = [{
-    Takes one operand.
     No kernel shape is evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
@@ -1996,43 +1797,6 @@ def Darwinn_SynchronizedUnaryComputeOpOp : Darwinn_Op<"synchronized_unary_comput
 }
 
 // Operator: tensor_op
-def Darwinn_TensorOpOp : Darwinn_Op<"tensor_op"> {
-  let summary = "Darwinn tensor_op operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: tensor_op_shard
-def Darwinn_TensorOpShardOp : Darwinn_Op<"tensor_op_shard"> {
-  let summary = "Darwinn tensor_op_shard operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: tensor_op_slice
-def Darwinn_TensorOpSliceOp : Darwinn_Op<"tensor_op_slice"> {
-  let summary = "Darwinn tensor_op_slice operation.";
-  let description = [{
-    Takes at least one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: terminate
 def Darwinn_TerminateOp : Darwinn_Op<"terminate"> {
@@ -2178,17 +1942,6 @@ def Darwinn_UnaryMapOp : Darwinn_Op<"unary_map"> {
 }
 
 // Operator: unary_tensor_op
-def Darwinn_UnaryTensorOpOp : Darwinn_Op<"unary_tensor_op"> {
-  let summary = "Darwinn unary_tensor_op operation.";
-  let description = [{
-    Takes one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: vex_info
 def Darwinn_VexInfoOp : Darwinn_Op<"vex_info"> {
@@ -2278,5 +2031,9 @@ def Darwinn_ZeroPointOp : Darwinn_Op<"zero_point"> {
   let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
+
+include "mlir/Dialect/Darwinn/IR/DarwinnStorageOps.td"
+
+include "mlir/Dialect/Darwinn/IR/DarwinnComputeOps.td"
 
 #endif // DARWINN_OPS

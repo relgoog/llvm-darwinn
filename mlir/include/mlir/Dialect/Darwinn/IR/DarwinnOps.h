@@ -23,8 +23,7 @@
 
 #include "mlir/Dialect/Darwinn/IR/DarwinnOpsDialect.h.inc"
 
-#define GET_ATTRDEF_CLASSES
-#include "mlir/Dialect/Darwinn/IR/DarwinnAttributes.h.inc"
+#include "mlir/Dialect/Darwinn/IR/DarwinnScheduledAttrs.h"
 
 #include "mlir/Dialect/Darwinn/IR/DarwinnDistributed.h"
 

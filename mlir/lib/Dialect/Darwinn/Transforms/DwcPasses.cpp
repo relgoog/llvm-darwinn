@@ -498,8 +498,8 @@ static LogicalResult checkDwcConvertibleTypes(Operation *op) {
 
 static bool isDwcIdentityOperation(Operation *op) {
   StringRef name = op->getName().getStringRef();
-  if (name != "dwc.identity" && name != "darwinn.copy_op" &&
-      name != "darwinn.convert" && name != "darwinn.bitcast")
+  if (name != "dwc.identity" && name != "darwinn.convert" &&
+      name != "darwinn.bitcast")
     return false;
   if (op->getNumOperands() != 1 || op->getNumResults() != 1 ||
       op->getNumRegions() != 0 || op->getNumSuccessors() != 0)
@@ -4058,7 +4058,7 @@ struct DwcDynamicUpdateSliceLoweringPass
       StringRef name = op->getName().getStringRef();
       if (name != "darwinn.iota" && name != "darwinn.reshape_op" &&
           name != "darwinn.broadcast_slice" && name != "darwinn.narrow_to_narrow_slice" &&
-          name != "darwinn.narrow_to_wide_slice" && name != "darwinn.wide_to_narrow_slice" &&
+          name != "darwinn.wide_to_narrow_slice" &&
           name != "darwinn.sparse_narrow_to_wide_slice" && name != "darwinn.get_indexed_slice" &&
           name != "darwinn.slice_1d_extent" && name != "darwinn.slice_1d_extent_with_padding_info" &&
           name != "darwinn.create_empty_tensor" && name != "darwinn.get_tensor" &&
@@ -6088,8 +6088,6 @@ struct DwcShardingUsingDivePass
           name != "darwinn.host_to_ssram_shard" &&
           name != "darwinn.host_to_tile_shard" &&
           name != "darwinn.narrow_to_narrow_shard" &&
-          name != "darwinn.narrow_to_wide_shard" &&
-          name != "darwinn.tensor_op_shard" &&
           name != "darwinn.tile_to_host_shard" &&
           name != "darwinn.tile_to_tile_shard")
         return;
@@ -6114,8 +6112,6 @@ struct DwcShardingUsingDivePass
           name != "darwinn.host_to_ssram_shard" &&
           name != "darwinn.host_to_tile_shard" &&
           name != "darwinn.narrow_to_narrow_shard" &&
-          name != "darwinn.narrow_to_wide_shard" &&
-          name != "darwinn.tensor_op_shard" &&
           name != "darwinn.tile_to_host_shard" &&
           name != "darwinn.tile_to_tile_shard")
         return WalkResult::advance();
