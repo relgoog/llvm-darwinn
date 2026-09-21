@@ -216,11 +216,10 @@ LogicalResult dwc::ConvolutionOp::verify() {
     return (*this)->emitOpError("attribute 'y_dilation_rate' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
     return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
-  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
-    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   for (const char *name : {"x_dilation_rate", "x_stride", "y_dilation_rate", "y_stride"}) {
-    if (llvm::cast<IntegerAttr>((*this)->getAttr(name)).getInt() != 1)
-      return (*this)->emitOpError("attribute '") << name << "' expects 1";
+    int64_t value = llvm::cast<IntegerAttr>((*this)->getAttr(name)).getInt();
+    if (value < 1 || value > 8)
+      return (*this)->emitOpError("attribute '") << name << "' expects stride or dilation in [1, 8]";
   }
   return success();
 }
@@ -944,12 +943,17 @@ LogicalResult dwc::RescalingOp::verify() {
 }
 
 LogicalResult dwc::ReshapeOp::verify() {
-  if (getInputs().size() != 1)
-    return emitOpError("expects 1 operands, got ") << getInputs().size();
-  if (auto ranked = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType())) {
-    if (ranked.getRank() != 3 && ranked.getRank() != 4)
-      return (*this)->emitOpError("operand 0 expects Rank 3 or Rank 4 tensor");
-  }
+  if (getInputs().size() != 1 || getOutputs().size() != 1)
+    return emitOpError("expects one input and one output");
+
+  auto input = dyn_cast<RankedTensorType>(getInputs()[0].getType());
+  auto output = dyn_cast<RankedTensorType>(getOutputs()[0].getType());
+  if (!input || !output || !input.hasStaticShape() || !output.hasStaticShape())
+    return emitOpError("expects statically shaped tensors");
+  if (input.getElementType() != output.getElementType() ||
+      input.getNumElements() != output.getNumElements())
+    return emitOpError("expects matching element type and element count");
+
   return success();
 }
 
@@ -1270,8 +1274,6 @@ LogicalResult dwc::TransposedConvolutionOp::verify() {
     return (*this)->emitOpError("attribute 'y_out_dim' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
     return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
-  if (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != ActivationFunction::None)
-    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
   return success();
 }
 
@@ -1444,8 +1446,35 @@ LogicalResult dwc::HostedTensorOp::verify() {
 }
 
 LogicalResult dwc::ImageInterpolationOp::verify() {
-  if (getInputs().size() != 1 && getInputs().size() != 2)
-    return emitOpError("expects 1 or 2 operands, got ") << getInputs().size();
+  if (getInputs().size() != 1 || getOutputs().size() != 1)
+    return emitOpError("expects one input and one output");
+
+  auto algorithm = (*this)->getAttrOfType<StringAttr>("algorithm");
+  if (!algorithm || (algorithm.getValue() != "BILINEAR" &&
+                     algorithm.getValue() != "NEAREST_NEIGHBOR"))
+    return emitOpError("expects algorithm BILINEAR or NEAREST_NEIGHBOR");
+
+  auto stride = (*this)->getAttrOfType<StringAttr>("stride_method");
+  if (!stride || (stride.getValue() != "TENSORFLOW_DEFAULT" &&
+                  stride.getValue() != "TENSORFLOW_ALIGN_CORNERS" &&
+                  stride.getValue() != "HALF_PIXEL_CENTERS"))
+    return emitOpError("expects stride_method TENSORFLOW_DEFAULT, TENSORFLOW_ALIGN_CORNERS, or HALF_PIXEL_CENTERS");
+
+  auto input = dyn_cast<RankedTensorType>(getInputs()[0].getType());
+  auto output = dyn_cast<RankedTensorType>(getOutputs()[0].getType());
+  if (!input || !output || input.getRank() != 4 || output.getRank() != 4 ||
+      !input.hasStaticShape() || !output.hasStaticShape())
+    return emitOpError("expects static rank-four NHWC tensors");
+  if (input.getElementType() != output.getElementType() ||
+      input.getDimSize(0) != output.getDimSize(0) ||
+      input.getDimSize(3) != output.getDimSize(3))
+    return emitOpError("expects matching element type, batch size, and channel count");
+  if (input.getDimSize(1) <= 0 || input.getDimSize(2) <= 0 ||
+      output.getDimSize(1) <= 0 || output.getDimSize(2) <= 0)
+    return emitOpError("expects positive input and output spatial dimensions");
+  if (algorithm.getValue() == "BILINEAR" && !input.getElementType().isF32())
+    return emitOpError("expects f32 for bilinear interpolation");
+
   return success();
 }
 

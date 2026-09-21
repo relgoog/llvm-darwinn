@@ -22,6 +22,10 @@
 
 include "mlir/Pass/PassBase.td"
 
+def DiveExpandMemrefCopyPass : Pass<"dive-expand-memref-copy", "func::FuncOp"> {
+  let summary = "Expand ranked memory copies into structured loops";
+}
+
 def DwcAckrModelConverterPass : Pass<"ackr-model-converter", "func::FuncOp"> {
   let summary = "DWC pass ackr-model-converter";
   let description = [{

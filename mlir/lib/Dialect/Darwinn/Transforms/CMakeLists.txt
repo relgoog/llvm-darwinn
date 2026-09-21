@@ -22,10 +22,10 @@ add_mlir_dialect_library(MLIRDwcTransforms
   MLIRMathDialect
   MLIRMathToLLVM
   MLIRMathToLibm
+  MLIRMemRefDialect
   MLIRPass
   MLIRSCFDialect
   MLIRSCFToControlFlow
   MLIRTensorDialect
   MLIRTransformUtils
   )
-

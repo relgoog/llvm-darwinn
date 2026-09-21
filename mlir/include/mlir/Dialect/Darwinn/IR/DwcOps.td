@@ -563,7 +563,7 @@ def Dwc_RescalingOp : Dwc_Op<"rescaling"> {
 def Dwc_ReshapeOp : Dwc_Op<"reshape"> {
   let summary = "DWC reshape operation.";
   let description = [{
-    Exactly 1 Rank 3 or Rank 4 tensor operand per the blob constraints.
+    Reshapes one static tensor while preserving element type, count, and order.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
@@ -1211,7 +1211,10 @@ def Dwc_HostedTensorOp : Dwc_Op<"hosted_tensor"> {
 def Dwc_ImageInterpolationOp : Dwc_Op<"image_interpolation"> {
   let summary = "DWC image_interpolation operation.";
   let description = [{
-    Takes any number of operands. Registry-evidenced op with no verifier constraints in the blob.
+    Resizes one static NHWC tensor to the output spatial dimensions.
+    Requires `algorithm` as BILINEAR or NEAREST_NEIGHBOR and `stride_method` as
+    TENSORFLOW_DEFAULT, TENSORFLOW_ALIGN_CORNERS, or HALF_PIXEL_CENTERS.
+    Bilinear interpolation requires f32 elements.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

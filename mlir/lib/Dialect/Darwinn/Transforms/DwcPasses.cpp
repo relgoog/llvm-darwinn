@@ -33,6 +33,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
@@ -48,6 +49,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include <map>
 #include <string>
@@ -56,6 +58,7 @@ namespace mlir {
 namespace darwinn {
 #define GEN_PASS_DECL
 #include "DwcPasses.h.inc"
+#define GEN_PASS_DEF_DIVEEXPANDMEMREFCOPYPASS
 #define GEN_PASS_DEF_DWCACKRMODELCONVERTERPASS
 #define GEN_PASS_DEF_DWCADDBOUNDLOWERPASS
 #define GEN_PASS_DEF_DWCADDDIVEABIARGUMENTSPASS
@@ -418,6 +421,54 @@ namespace {
 // Sibling-owned pattern sets hook into dwc-lower-hlops through the forward
 // declarations above, so this file needs no new headers from siblings.
 
+struct DiveExpandMemrefCopyPass
+    : public darwinn::impl::DiveExpandMemrefCopyPassBase<
+          DiveExpandMemrefCopyPass> {
+  using Base::Base;
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<linalg::LinalgDialect, memref::MemRefDialect>();
+  }
+
+  void runOnOperation() override {
+    SmallVector<memref::CopyOp> copies;
+    WalkResult result = getOperation().walk([&](memref::CopyOp copy) {
+      auto source = dyn_cast<MemRefType>(copy.getSource().getType());
+      auto target = dyn_cast<MemRefType>(copy.getTarget().getType());
+      if (!source || !target) {
+        copy.emitError("dive-expand-memref-copy requires ranked source and target memrefs");
+        return WalkResult::interrupt();
+      }
+      if (source.getRank() != target.getRank() ||
+          source.getElementType() != target.getElementType()) {
+        copy.emitError("dive-expand-memref-copy requires matching ranks and element types");
+        return WalkResult::interrupt();
+      }
+
+      copies.push_back(copy);
+      return WalkResult::advance();
+    });
+
+    if (result.wasInterrupted())
+      return signalPassFailure();
+
+    OpBuilder builder(&getContext());
+    for (memref::CopyOp copy : copies) {
+      int64_t rank = cast<MemRefType>(copy.getSource().getType()).getRank();
+      SmallVector<AffineMap> maps(2, builder.getMultiDimIdentityMap(rank));
+      SmallVector<utils::IteratorType> iterators(rank, utils::IteratorType::parallel);
+      builder.setInsertionPoint(copy);
+      linalg::GenericOp::create(
+          builder, copy.getLoc(), TypeRange{}, ValueRange{copy.getSource()},
+          ValueRange{copy.getTarget()}, maps, iterators,
+          [](OpBuilder &nested, Location loc, ValueRange values) {
+            linalg::YieldOp::create(nested, loc, values.front());
+          });
+      copy.erase();
+    }
+  }
+};
+
 static bool isDwcConvertibleType(Type t) {
   if (isa<IntegerType, FloatType, IndexType>(t))
     return true;
@@ -444,6 +495,78 @@ static LogicalResult checkDwcConvertibleTypes(Operation *op) {
   return success();
 }
 
+static bool isDwcIdentityOperation(Operation *op) {
+  StringRef name = op->getName().getStringRef();
+  if (name != "dwc.identity" && name != "darwinn.copy_op" &&
+      name != "darwinn.convert" && name != "darwinn.bitcast")
+    return false;
+  if (op->getNumOperands() != 1 || op->getNumResults() != 1 ||
+      op->getNumRegions() != 0 || op->getNumSuccessors() != 0)
+    return false;
+
+  Type type = op->getOperand(0).getType();
+  return type == op->getResult(0).getType() &&
+         isa<IntegerType, FloatType, IndexType, RankedTensorType>(type);
+}
+
+static LogicalResult requireEliminatedOperations(
+    Operation *root, StringRef passName, ArrayRef<StringRef> dialects,
+    ArrayRef<StringRef> operations = {}, StringRef detail = {},
+    ArrayRef<StringRef> preservedOperations = {}) {
+  WalkResult result = root->walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if (llvm::is_contained(preservedOperations, name))
+      return WalkResult::advance();
+    if (!llvm::is_contained(dialects, op->getName().getDialectNamespace()) &&
+        !llvm::is_contained(operations, name))
+      return WalkResult::advance();
+
+    auto diagnostic = op->emitError();
+    diagnostic << passName << " cannot lower " << name;
+    if (!detail.empty())
+      diagnostic << ". " << detail;
+    return WalkResult::interrupt();
+  });
+
+  return failure(result.wasInterrupted());
+}
+
+static LogicalResult checkDiveVmRuntimeLowering(func::FuncOp func,
+                                               StringRef passName) {
+  SmallVector<Operation *> constants;
+  func.walk([&](Operation *op) {
+    StringRef name = op->getName().getStringRef();
+    if ((name == "dive_vm.const" || name == "dive_vm.const_bytes") &&
+        op->getNumOperands() == 0 && op->getNumRegions() == 0 &&
+        op->getNumSuccessors() == 0 && op->use_empty())
+      constants.push_back(op);
+  });
+
+  for (Operation *op : constants)
+    op->erase();
+
+  return requireEliminatedOperations(
+      func, passName, {"dive_vm"}, {},
+      "A runtime ABI lowering for these operands, results, and attributes is "
+      "not implemented", {"dive_vm.tpu_offload"});
+}
+
+static LogicalResult checkDiveVmTensorLowering(func::FuncOp func,
+                                              StringRef passName) {
+  WalkResult result = func.walk([&](Operation *op) {
+    if (op->getName().getDialectNamespace() != "dive_vm")
+      return WalkResult::advance();
+    if (!llvm::any_of(op->getOperandTypes(), llvm::IsaPred<TensorType>) &&
+        !llvm::any_of(op->getResultTypes(), llvm::IsaPred<TensorType>))
+      return WalkResult::advance();
+
+    op->emitError() << passName << " has no tensor lowering for this operation";
+    return WalkResult::interrupt();
+  });
+
+  return failure(result.wasInterrupted());
+}
+
 static LogicalResult applyLocalCopySliceLowering(func::FuncOp func) {
   SmallVector<Operation *> dead;
   func.getOperation()->walk([&](Operation *op) {
@@ -456,6 +579,9 @@ static LogicalResult applyLocalCopySliceLowering(func::FuncOp func) {
     dead.push_back(op);
   });
   for (Operation *op : dead) {
+    if (!isDwcIdentityOperation(op))
+      continue;
+
     op->getResult(0).replaceAllUsesWith(op->getOperand(0));
     op->erase();
   }
@@ -475,6 +601,9 @@ static LogicalResult applyLocalConvertLowering(func::FuncOp func) {
     dead.push_back(op);
   });
   for (Operation *op : dead) {
+    if (!isDwcIdentityOperation(op))
+      continue;
+
     op->getResult(0).replaceAllUsesWith(op->getOperand(0));
     op->erase();
   }
@@ -571,7 +700,6 @@ static LogicalResult applyDwcLowerGatherOob(func::FuncOp func,
   OpBuilder builder(func.getOperation()->getContext());
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
-    StringRef name = op->getName().getStringRef();
     if (op->getName().getStringRef() == "darwinn.gather" || op->getName().getStringRef() == "darwinn.gather_copy" ||
         op->getName().getStringRef() == "darwinn.hib_gather")
       targets.push_back(op);
@@ -625,7 +753,6 @@ static LogicalResult applyDwcLowerCopyLike(func::FuncOp func,
   OpBuilder builder(func.getOperation()->getContext());
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
-    StringRef name = op->getName().getStringRef();
     if (op->getName().getStringRef() == "darwinn.copy_op" || op->getName().getStringRef() == "darwinn.copy_from_host" ||
         op->getName().getStringRef() == "darwinn.copy_using_wide")
       targets.push_back(op);
@@ -707,7 +834,6 @@ static LogicalResult applyDwcLowerConstInline(func::FuncOp func,
   OpBuilder builder(func.getOperation()->getContext());
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
-    StringRef name = op->getName().getStringRef();
     if (op->getName().getStringRef() == "arith.constant" || op->getName().getStringRef() == "darwinn.constant_generator")
       targets.push_back(op);
   });
@@ -742,7 +868,6 @@ static LogicalResult applyDwcLowerScalarArith(func::FuncOp func,
   OpBuilder builder(func.getOperation()->getContext());
   SmallVector<Operation *> targets;
   func.getOperation()->walk([&](Operation *op) {
-    StringRef name = op->getName().getStringRef();
     if (op->getName().getStringRef() == "darwinn.tgc_elementwise_add" ||
         op->getName().getStringRef() == "darwinn.tgc_elementwise_mul" ||
         op->getName().getStringRef() == "darwinn.tgc_elementwise_sub")
@@ -755,7 +880,6 @@ static LogicalResult applyDwcLowerScalarArith(func::FuncOp func,
     if (!dwcLowerSameRankedShape(op->getOperand(0).getType(), resultType) ||
         !dwcLowerSameRankedShape(op->getOperand(1).getType(), resultType))
       continue;
-    StringRef name = op->getName().getStringRef();
     StringRef target;
     if (isa<IntegerType>(dwcLowerElementOf(resultType))) {
       if (op->getName().getStringRef() == "darwinn.tgc_elementwise_add")
@@ -804,6 +928,9 @@ struct DwcAckrModelConverterPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -852,6 +979,9 @@ struct DwcAddBoundLowerPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -1088,6 +1218,9 @@ struct DwcBitcastConvertPass
         targets.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -1142,6 +1275,9 @@ struct DwcChloLegalizeToHloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -1262,39 +1398,9 @@ struct DwcConvertDiveVmTensorToScfPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. DiveVmOps.td names no scf target for dive_vm
-    // tensor ops and all_pseudocode.json carries no scf loop shape for them.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
+    if (failed(checkDiveVmTensorLowering(
+            getOperation(), "convert-dive-vm-tensor-to-scf")))
+      signalPassFailure();
   }
 };
 
@@ -1305,40 +1411,9 @@ struct DwcConvertDiveVmTensorToTensorPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. DiveVmOps.td names no tensor target for
-    // dive_vm tensor ops and all_pseudocode.json carries no tensor shape
-    // contract for them.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
+    if (failed(checkDiveVmTensorLowering(
+            getOperation(), "convert-dive-vm-tensor-to-tensor")))
+      signalPassFailure();
   }
 };
 
@@ -1349,286 +1424,13 @@ struct DwcConvertDiveVmToLlvmPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect,
+                    arith::ArithDialect, memref::MemRefDialect>();
   }
 
   void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    MLIRContext *ctx = root->getContext();
-    OpBuilder builder(ctx);
-    auto moduleOp = func->getParentOfType<ModuleOp>();
-    if (!moduleOp) {
-      func.emitError("convert-dive-vm-to-llvm needs a parent module");
-      return signalPassFailure();
-    }
-    SmallVector<Operation *> vmOps;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (dialect && dialect->getNamespace() == "dive_vm")
-        vmOps.push_back(op);
-    });
-    unsigned lowered = 0;
-    for (Operation *op : vmOps) {
-      if (failed(checkDwcConvertibleTypes(op)))
-        return signalPassFailure();
-      if (op->getNumResults() > 1) {
-        op->emitError(
-            "unsupported multi-result dive_vm op in convert-dive-vm-to-llvm");
-        return signalPassFailure();
-      }
-      if (op->getName().getStringRef() == "dive_vm.br") {
-        if (op->getNumResults()) {
-          op->emitError("unsupported result on dive_vm.br in convert-dive-vm-to-llvm");
-          return signalPassFailure();
-        }
-        Block *block = op->getBlock();
-        if (!block) {
-          op->emitError("dive_vm.br outside a block in convert-dive-vm-to-llvm");
-          return signalPassFailure();
-        }
-        Block *cont = block->splitBlock(op);
-        builder.setInsertionPointToEnd(block);
-        LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
-        op->erase();
-        ++lowered;
-        continue;
-      }
-      if (op->getName().getStringRef() == "dive_vm.cond_br") {
-        if (op->getNumResults()) {
-          op->emitError("unsupported result on dive_vm.cond_br in convert-dive-vm-to-llvm");
-          return signalPassFailure();
-        }
-        Block *block = op->getBlock();
-        if (!block) {
-          op->emitError("dive_vm.cond_br outside a block in convert-dive-vm-to-llvm");
-          return signalPassFailure();
-        }
-        Value cond;
-        bool hasI1Cond = false;
-        if (op->getNumOperands()) {
-          cond = op->getOperand(0);
-          if (auto intTy = dyn_cast<IntegerType>(cond.getType()))
-            hasI1Cond = intTy.getWidth() == 1;
-        }
-        Block *cont = block->splitBlock(op);
-        builder.setInsertionPointToEnd(block);
-        if (hasI1Cond) {
-          LLVM::CondBrOp::create(builder, op->getLoc(), cond, cont,
-                                 ValueRange(), cont, ValueRange());
-        } else {
-          LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
-        }
-        op->erase();
-        ++lowered;
-        continue;
-      }
-      const char *callee = nullptr;
-      if (op->getName().getStringRef() == "dive_vm.const" ||
-          op->getName().getStringRef() == "dive_vm.const_bytes") {
-        if (!op->use_empty()) {
-          op->emitError("dive_vm const carries no LLVM callee, use it or drop it");
-          return signalPassFailure();
-        }
-        op->erase();
-        ++lowered;
-        continue;
-      }
-      if (op->getName().getStringRef() == "dive_vm.add")
-        callee = "DiveRuntime_Log";
-      else if (op->getName().getStringRef() == "dive_vm.copy")
-        callee = "DiveVm_MemCpy";
-      else if (op->getName().getStringRef() == "dive_vm.gather")
-        callee = "DiveVm_Gather";
-      else if (op->getName().getStringRef() == "dive_vm.legacy_scalar")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.cast" || op->getName().getStringRef() == "dive_vm.bitcast")
-        callee = "DiveVm_Cast";
-      else if (op->getName().getStringRef() == "dive_vm.sign")
-        callee = "DiveVm_Sign";
-      else if (op->getName().getStringRef() == "dive_vm.add_imm" || op->getName().getStringRef() == "dive_vm.sub" ||
-               op->getName().getStringRef() == "dive_vm.sub_imm" || op->getName().getStringRef() == "dive_vm.mul" ||
-               op->getName().getStringRef() == "dive_vm.mul_imm" || op->getName().getStringRef() == "dive_vm.div" ||
-               op->getName().getStringRef() == "dive_vm.div_imm" || op->getName().getStringRef() == "dive_vm.rem" ||
-               op->getName().getStringRef() == "dive_vm.rem_imm" || op->getName().getStringRef() == "dive_vm.min" ||
-               op->getName().getStringRef() == "dive_vm.min_imm" || op->getName().getStringRef() == "dive_vm.max" ||
-               op->getName().getStringRef() == "dive_vm.max_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.arithmetic_left_shift" ||
-               op->getName().getStringRef() == "dive_vm.arithmetic_left_shift_imm" ||
-               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift" ||
-               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift_imm" ||
-               op->getName().getStringRef() == "dive_vm.logical_right_shift" ||
-               op->getName().getStringRef() == "dive_vm.logical_right_shift_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.bitwise_and" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_and_imm" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_or" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_or_imm" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_xor" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_xor_imm" ||
-               op->getName().getStringRef() == "dive_vm.logical_and" ||
-               op->getName().getStringRef() == "dive_vm.logical_and_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.pow" || op->getName().getStringRef() == "dive_vm.pow_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.equal" || op->getName().getStringRef() == "dive_vm.equal_imm" ||
-               op->getName().getStringRef() == "dive_vm.not_equal" || op->getName().getStringRef() == "dive_vm.not_equal_imm" ||
-               op->getName().getStringRef() == "dive_vm.less" || op->getName().getStringRef() == "dive_vm.less_imm" ||
-               op->getName().getStringRef() == "dive_vm.less_equal" ||
-               op->getName().getStringRef() == "dive_vm.less_equal_imm" || op->getName().getStringRef() == "dive_vm.greater" ||
-               op->getName().getStringRef() == "dive_vm.greater_imm" ||
-               op->getName().getStringRef() == "dive_vm.greater_equal" ||
-               op->getName().getStringRef() == "dive_vm.greater_equal_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.allocate")
-        callee = "DiveRuntime_Allocate";
-      else if (op->getName().getStringRef() == "dive_vm.load" || op->getName().getStringRef() == "dive_vm.store" ||
-               op->getName().getStringRef() == "dive_vm.load_indirect" ||
-               op->getName().getStringRef() == "dive_vm.store_indirect" || op->getName().getStringRef() == "dive_vm.copy_imm")
-        callee = "DiveVm_MemCpy";
-      else if (op->getName().getStringRef() == "dive_vm.fill")
-        callee = "_ZN7silicon4dive7kernels4FillERKNS0_"
-                 "11interpreter14ResolvedTensorERS3_";
-      else if (op->getName().getStringRef() == "dive_vm.pad")
-        callee = "_ZN7silicon4dive7kernels3PadERKNS0_"
-                 "11interpreter14ResolvedTensorES5_S5_RS3_";
-      else if (op->getName().getStringRef() == "dive_vm.roll")
-        callee = "_ZN7silicon4dive7kernels4RollERKNS0_"
-                 "11interpreter14ResolvedTensorEijS5_";
-      else if (op->getName().getStringRef() == "dive_vm.one_hot")
-        callee = "_ZN7silicon4dive7kernels6OneHotERKNS0_"
-                 "11interpreter14ResolvedTensorES5_S5_jiS5_";
-      else if (op->getName().getStringRef() == "dive_vm.cumsum")
-        callee = "_ZN7silicon4dive7kernels6CumsumERKNS0_"
-                 "11interpreter14ResolvedTensorEibbRS3_";
-      else if (op->getName().getStringRef() == "dive_vm.gather_nd")
-        callee = "_ZN7silicon4dive7kernels8GatherNdERKNS0_"
-                 "11interpreter14ResolvedTensorES5_iRNS2_16UnresolvedTensorE";
-      else if (op->getName().getStringRef() == "dive_vm.scatter_nd")
-        callee = "_ZN7silicon4dive7kernels9ScatterNdERKNS0_"
-                 "11interpreter14ResolvedTensorES5_RS3_";
-      else if (op->getName().getStringRef() == "dive_vm.top_k")
-        callee = "_ZN7silicon4dive7kernels4TopKERNS0_"
-                 "11interpreter14ResolvedTensorES4_S4_";
-      else if (op->getName().getStringRef() == "dive_vm.multinomial")
-        callee = "DiveVm_ComputeMultinomial";
-      else if (op->getName().getStringRef() == "dive_vm.mask_indices")
-        callee = "DiveVm_MaskIndices";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_input_activation")
-        callee = "DiveVm_GetAddressOfInputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_output_activation")
-        callee = "DiveVm_GetAddressOfOutputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter_region")
-        callee = "DiveVm_GetAddressOfParameterRegion";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter")
-        callee = "DiveVm_GetAddressOfParameterRegion";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_scratch")
-        callee = "DiveVm_GetAddressOfScratch";
-      else if (op->getName().getStringRef() == "dive_vm.translate_sram_address" ||
-               op->getName().getStringRef() == "dive_vm.view_on_address")
-        callee = "DiveTpu_CastSharedMemoryAddressToPointer";
-      else if (op->getName().getStringRef() == "dive_vm.get_const")
-        callee = "DiveVm_GetConst";
-      else if (op->getName().getStringRef() == "dive_vm.patch_instruction_for_strided_io")
-        callee = "DiveVm_PatchInstructionForStridedIo";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_fence_completion")
-        callee = "DiveTpu_WaitForFenceCompletion";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_vica_completion")
-        callee = "DiveTpu_WaitForVicaCompletion";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_power_island_transition_complete")
-        callee = "DiveVm_WaitForPowmgKllandTransitionComplete";
-      else if (op->getName().getStringRef() == "dive_vm.perform_software_preemption_if_requested")
-        callee = "DiveTpu_PerformSoftwarePreemptionIfRequested";
-      else if (op->getName().getStringRef() == "dive_vm.set_dtc_mode")
-        callee = "DiveVm_SetDtcMode";
-      else if (op->getName().getStringRef() == "dive_vm.read_gn_stats")
-        callee = "DiveDtc_ReadGnStatsSum";
-      else if (op->getName().getStringRef() == "dive_vm.transition_dtc_power_island")
-        callee = "DiveDtc_TransitionDtcPowmgKllandOn";
-      else if (op->getName().getStringRef() == "dive_vm.enable_itc_tracing")
-        callee = "DiveItcTracing_Enable";
-      else if (op->getName().getStringRef() == "dive_vm.disable_itc_tracing")
-        callee = "DiveItcTracing_Disable";
-      else if (op->getName().getStringRef() == "dive_vm.print")
-        callee = "DiveRuntime_Log";
-      else if (op->getName().getStringRef() == "dive_vm.benchmark")
-        callee = "DiveVm_Benchmark";
-      else if (op->getName().getStringRef() == "dive_vm.program_tensor_mapping_table")
-        callee = "DiveVm_PrepareAndProgramTensorMappingTable";
-      else if (op->getName().getStringRef() == "dive_vm.write_dma_descriptor")
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else if (op->getName().getStringRef() == "dive_vm.write_hib_data")
-        callee = "DiveTpu_WriteHibData";
-      else if (op->getName().getStringRef() == "dive_vm.write_scalar_arch_register")
-        callee = "DiveTpu_WriteScalarArchRegister";
-      else if (op->getName().getStringRef() == "dive_vm.cache_clean_invalidate")
-        callee = "DiveSystem_CacheCleanInvalidate";
-      else if (op->getName().getStringRef() == "dive_vm.extract_slice" ||
-               op->getName().getStringRef() == "dive_vm.insert_slice")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
-      else if (op->getName().getStringRef() == "dive_vm.select")
-        callee = "_ZN7silicon4dive7kernels6SelectERKNS0_"
-                 "11interpreter14ResolvedTensorES5_S5_S5_";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
-        callee = "DiveVm_GetAddressOfInputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.dynamic_slice_y")
-        callee = "DiveVm_ComputeDynamicSliceYMulticastBitmapAndAddress";
-      else if (op->getName().getStringRef() == "dive_vm.put_bits")
-        callee = "DiveVm_PutBits";
-      else if (op->getName().getStringRef() == "dive_vm.dvfs")
-        callee = "DiveVm_UpdateDvfsHint";
-      else if (op->getName().getStringRef() == "dive_vm.shape_of_activation")
-        callee = "DiveVm_GetShapeOfActivation";
-      else if (op->getName().getStringRef() == "dive_vm.cuda_emu_custom_op")
-        callee = "DiveVm_InitializeAndReturnGlobalCustomOpContext";
-      else if (op->getName().getStringRef() == "dive_vm.hib_gather_edit")
-        callee = "DiveVm_HIBGatherEditE32";
-      else if (op->getName().getStringRef() == "dive_vm.reduction") {
-        op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
-        return signalPassFailure();
-      } else {
-        op->emitError("unsupported dive_vm op in convert-dive-vm-to-llvm");
-        return signalPassFailure();
-      }
-      Type opaque = LLVM::LLVMPointerType::get(ctx);
-      SmallVector<Type> paramTypes(op->getNumOperands(), opaque);
-      Type resultType = op->getNumResults() ? opaque : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
-          builder, moduleOp, callee, paramTypes, resultType);
-      if (failed(calleeOp))
-        return signalPassFailure();
-      builder.setInsertionPoint(op);
-      SmallVector<Value> bridged;
-      for (Value v : op->getOperands()) {
-        auto cast = UnrealizedConversionCastOp::create(builder, op->getLoc(),
-                                                       opaque, v);
-        bridged.push_back(cast.getResult(0));
-      }
-      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       ValueRange(bridged));
-      if (op->getNumResults()) {
-        auto back = UnrealizedConversionCastOp::create(
-            builder, op->getLoc(), op->getResult(0).getType(),
-            call.getResult());
-        op->getResult(0).replaceAllUsesWith(back.getResult(0));
-      }
-      op->erase();
-      ++lowered;
-    }
-    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
+    if (failed(checkDiveVmRuntimeLowering(getOperation(), "convert-dive-vm-to-llvm")))
+      signalPassFailure();
   }
 };
 
@@ -1639,286 +1441,13 @@ struct DwcConvertDiveVmToMemrefPass
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect,
+                    arith::ArithDialect, memref::MemRefDialect>();
   }
 
   void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    MLIRContext *ctx = root->getContext();
-    OpBuilder builder(ctx);
-    auto moduleOp = func->getParentOfType<ModuleOp>();
-    if (!moduleOp) {
-      func.emitError("convert-dive-vm-to-memref needs a parent module");
-      return signalPassFailure();
-    }
-    SmallVector<Operation *> vmOps;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (dialect && dialect->getNamespace() == "dive_vm")
-        vmOps.push_back(op);
-    });
-    unsigned lowered = 0;
-    for (Operation *op : vmOps) {
-      if (failed(checkDwcConvertibleTypes(op)))
-        return signalPassFailure();
-      if (op->getNumResults() > 1) {
-        op->emitError(
-            "unsupported multi-result dive_vm op in convert-dive-vm-to-memref");
-        return signalPassFailure();
-      }
-      if (op->getName().getStringRef() == "dive_vm.br") {
-        if (op->getNumResults()) {
-          op->emitError("unsupported result on dive_vm.br in convert-dive-vm-to-memref");
-          return signalPassFailure();
-        }
-        Block *block = op->getBlock();
-        if (!block) {
-          op->emitError("dive_vm.br outside a block in convert-dive-vm-to-memref");
-          return signalPassFailure();
-        }
-        Block *cont = block->splitBlock(op);
-        builder.setInsertionPointToEnd(block);
-        LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
-        op->erase();
-        ++lowered;
-        continue;
-      }
-      if (op->getName().getStringRef() == "dive_vm.cond_br") {
-        if (op->getNumResults()) {
-          op->emitError("unsupported result on dive_vm.cond_br in convert-dive-vm-to-memref");
-          return signalPassFailure();
-        }
-        Block *block = op->getBlock();
-        if (!block) {
-          op->emitError("dive_vm.cond_br outside a block in convert-dive-vm-to-memref");
-          return signalPassFailure();
-        }
-        Value cond;
-        bool hasI1Cond = false;
-        if (op->getNumOperands()) {
-          cond = op->getOperand(0);
-          if (auto intTy = dyn_cast<IntegerType>(cond.getType()))
-            hasI1Cond = intTy.getWidth() == 1;
-        }
-        Block *cont = block->splitBlock(op);
-        builder.setInsertionPointToEnd(block);
-        if (hasI1Cond) {
-          LLVM::CondBrOp::create(builder, op->getLoc(), cond, cont,
-                                 ValueRange(), cont, ValueRange());
-        } else {
-          LLVM::BrOp::create(builder, op->getLoc(), ValueRange(), cont);
-        }
-        op->erase();
-        ++lowered;
-        continue;
-      }
-      const char *callee = nullptr;
-      if (op->getName().getStringRef() == "dive_vm.const" ||
-          op->getName().getStringRef() == "dive_vm.const_bytes") {
-        if (!op->use_empty()) {
-          op->emitError("dive_vm const carries no LLVM callee, use it or drop it");
-          return signalPassFailure();
-        }
-        op->erase();
-        ++lowered;
-        continue;
-      }
-      if (op->getName().getStringRef() == "dive_vm.add")
-        callee = "DiveRuntime_Log";
-      else if (op->getName().getStringRef() == "dive_vm.copy")
-        callee = "DiveVm_MemCpy";
-      else if (op->getName().getStringRef() == "dive_vm.gather")
-        callee = "DiveVm_Gather";
-      else if (op->getName().getStringRef() == "dive_vm.legacy_scalar")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.cast" || op->getName().getStringRef() == "dive_vm.bitcast")
-        callee = "DiveVm_Cast";
-      else if (op->getName().getStringRef() == "dive_vm.sign")
-        callee = "DiveVm_Sign";
-      else if (op->getName().getStringRef() == "dive_vm.add_imm" || op->getName().getStringRef() == "dive_vm.sub" ||
-               op->getName().getStringRef() == "dive_vm.sub_imm" || op->getName().getStringRef() == "dive_vm.mul" ||
-               op->getName().getStringRef() == "dive_vm.mul_imm" || op->getName().getStringRef() == "dive_vm.div" ||
-               op->getName().getStringRef() == "dive_vm.div_imm" || op->getName().getStringRef() == "dive_vm.rem" ||
-               op->getName().getStringRef() == "dive_vm.rem_imm" || op->getName().getStringRef() == "dive_vm.min" ||
-               op->getName().getStringRef() == "dive_vm.min_imm" || op->getName().getStringRef() == "dive_vm.max" ||
-               op->getName().getStringRef() == "dive_vm.max_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.arithmetic_left_shift" ||
-               op->getName().getStringRef() == "dive_vm.arithmetic_left_shift_imm" ||
-               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift" ||
-               op->getName().getStringRef() == "dive_vm.arithmetic_right_shift_imm" ||
-               op->getName().getStringRef() == "dive_vm.logical_right_shift" ||
-               op->getName().getStringRef() == "dive_vm.logical_right_shift_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.bitwise_and" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_and_imm" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_or" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_or_imm" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_xor" ||
-               op->getName().getStringRef() == "dive_vm.bitwise_xor_imm" ||
-               op->getName().getStringRef() == "dive_vm.logical_and" ||
-               op->getName().getStringRef() == "dive_vm.logical_and_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.pow" || op->getName().getStringRef() == "dive_vm.pow_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.equal" || op->getName().getStringRef() == "dive_vm.equal_imm" ||
-               op->getName().getStringRef() == "dive_vm.not_equal" || op->getName().getStringRef() == "dive_vm.not_equal_imm" ||
-               op->getName().getStringRef() == "dive_vm.less" || op->getName().getStringRef() == "dive_vm.less_imm" ||
-               op->getName().getStringRef() == "dive_vm.less_equal" ||
-               op->getName().getStringRef() == "dive_vm.less_equal_imm" || op->getName().getStringRef() == "dive_vm.greater" ||
-               op->getName().getStringRef() == "dive_vm.greater_imm" ||
-               op->getName().getStringRef() == "dive_vm.greater_equal" ||
-               op->getName().getStringRef() == "dive_vm.greater_equal_imm")
-        callee = "_ZN7silicon4dive7kernels21DiveVm_LegacyScalarOpENS1_"
-                 "24DiveVmLegacyScalarOpTypeEiPKPhPKlPKNS1_"
-                 "19DiveVmPrimitiveTypeEPKiPKbPKfSC_bi";
-      else if (op->getName().getStringRef() == "dive_vm.allocate")
-        callee = "DiveRuntime_Allocate";
-      else if (op->getName().getStringRef() == "dive_vm.load" || op->getName().getStringRef() == "dive_vm.store" ||
-               op->getName().getStringRef() == "dive_vm.load_indirect" ||
-               op->getName().getStringRef() == "dive_vm.store_indirect" || op->getName().getStringRef() == "dive_vm.copy_imm")
-        callee = "DiveVm_MemCpy";
-      else if (op->getName().getStringRef() == "dive_vm.fill")
-        callee = "_ZN7silicon4dive7kernels4FillERKNS0_"
-                 "11interpreter14ResolvedTensorERS3_";
-      else if (op->getName().getStringRef() == "dive_vm.pad")
-        callee = "_ZN7silicon4dive7kernels3PadERKNS0_"
-                 "11interpreter14ResolvedTensorES5_S5_RS3_";
-      else if (op->getName().getStringRef() == "dive_vm.roll")
-        callee = "_ZN7silicon4dive7kernels4RollERKNS0_"
-                 "11interpreter14ResolvedTensorEijS5_";
-      else if (op->getName().getStringRef() == "dive_vm.one_hot")
-        callee = "_ZN7silicon4dive7kernels6OneHotERKNS0_"
-                 "11interpreter14ResolvedTensorES5_S5_jiS5_";
-      else if (op->getName().getStringRef() == "dive_vm.cumsum")
-        callee = "_ZN7silicon4dive7kernels6CumsumERKNS0_"
-                 "11interpreter14ResolvedTensorEibbRS3_";
-      else if (op->getName().getStringRef() == "dive_vm.gather_nd")
-        callee = "_ZN7silicon4dive7kernels8GatherNdERKNS0_"
-                 "11interpreter14ResolvedTensorES5_iRNS2_16UnresolvedTensorE";
-      else if (op->getName().getStringRef() == "dive_vm.scatter_nd")
-        callee = "_ZN7silicon4dive7kernels9ScatterNdERKNS0_"
-                 "11interpreter14ResolvedTensorES5_RS3_";
-      else if (op->getName().getStringRef() == "dive_vm.top_k")
-        callee = "_ZN7silicon4dive7kernels4TopKERNS0_"
-                 "11interpreter14ResolvedTensorES4_S4_";
-      else if (op->getName().getStringRef() == "dive_vm.multinomial")
-        callee = "DiveVm_ComputeMultinomial";
-      else if (op->getName().getStringRef() == "dive_vm.mask_indices")
-        callee = "DiveVm_MaskIndices";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_input_activation")
-        callee = "DiveVm_GetAddressOfInputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_output_activation")
-        callee = "DiveVm_GetAddressOfOutputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter_region")
-        callee = "DiveVm_GetAddressOfParameterRegion";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_parameter")
-        callee = "DiveVm_GetAddressOfParameterRegion";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_scratch")
-        callee = "DiveVm_GetAddressOfScratch";
-      else if (op->getName().getStringRef() == "dive_vm.translate_sram_address" ||
-               op->getName().getStringRef() == "dive_vm.view_on_address")
-        callee = "DiveTpu_CastSharedMemoryAddressToPointer";
-      else if (op->getName().getStringRef() == "dive_vm.get_const")
-        callee = "DiveVm_GetConst";
-      else if (op->getName().getStringRef() == "dive_vm.patch_instruction_for_strided_io")
-        callee = "DiveVm_PatchInstructionForStridedIo";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_fence_completion")
-        callee = "DiveTpu_WaitForFenceCompletion";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_vica_completion")
-        callee = "DiveTpu_WaitForVicaCompletion";
-      else if (op->getName().getStringRef() == "dive_vm.wait_for_power_island_transition_complete")
-        callee = "DiveVm_WaitForPowmgKllandTransitionComplete";
-      else if (op->getName().getStringRef() == "dive_vm.perform_software_preemption_if_requested")
-        callee = "DiveTpu_PerformSoftwarePreemptionIfRequested";
-      else if (op->getName().getStringRef() == "dive_vm.set_dtc_mode")
-        callee = "DiveVm_SetDtcMode";
-      else if (op->getName().getStringRef() == "dive_vm.read_gn_stats")
-        callee = "DiveDtc_ReadGnStatsSum";
-      else if (op->getName().getStringRef() == "dive_vm.transition_dtc_power_island")
-        callee = "DiveDtc_TransitionDtcPowmgKllandOn";
-      else if (op->getName().getStringRef() == "dive_vm.enable_itc_tracing")
-        callee = "DiveItcTracing_Enable";
-      else if (op->getName().getStringRef() == "dive_vm.disable_itc_tracing")
-        callee = "DiveItcTracing_Disable";
-      else if (op->getName().getStringRef() == "dive_vm.print")
-        callee = "DiveRuntime_Log";
-      else if (op->getName().getStringRef() == "dive_vm.benchmark")
-        callee = "DiveVm_Benchmark";
-      else if (op->getName().getStringRef() == "dive_vm.program_tensor_mapping_table")
-        callee = "DiveVm_PrepareAndProgramTensorMappingTable";
-      else if (op->getName().getStringRef() == "dive_vm.write_dma_descriptor")
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else if (op->getName().getStringRef() == "dive_vm.write_hib_data")
-        callee = "DiveTpu_WriteHibData";
-      else if (op->getName().getStringRef() == "dive_vm.write_scalar_arch_register")
-        callee = "DiveTpu_WriteScalarArchRegister";
-      else if (op->getName().getStringRef() == "dive_vm.cache_clean_invalidate")
-        callee = "DiveSystem_CacheCleanInvalidate";
-      else if (op->getName().getStringRef() == "dive_vm.extract_slice" ||
-               op->getName().getStringRef() == "dive_vm.insert_slice")
-        callee = "_ZN9platforms7darwinn4dive11runtime_lib10MemCpyPerfEPhPKhi";
-      else if (op->getName().getStringRef() == "dive_vm.select")
-        callee = "_ZN7silicon4dive7kernels6SelectERKNS0_"
-                 "11interpreter14ResolvedTensorES5_S5_S5_";
-      else if (op->getName().getStringRef() == "dive_vm.address_of_activation")
-        callee = "DiveVm_GetAddressOfInputActivation";
-      else if (op->getName().getStringRef() == "dive_vm.dynamic_slice_y")
-        callee = "DiveVm_ComputeDynamicSliceYMulticastBitmapAndAddress";
-      else if (op->getName().getStringRef() == "dive_vm.put_bits")
-        callee = "DiveVm_PutBits";
-      else if (op->getName().getStringRef() == "dive_vm.dvfs")
-        callee = "DiveVm_UpdateDvfsHint";
-      else if (op->getName().getStringRef() == "dive_vm.shape_of_activation")
-        callee = "DiveVm_GetShapeOfActivation";
-      else if (op->getName().getStringRef() == "dive_vm.cuda_emu_custom_op")
-        callee = "DiveVm_InitializeAndReturnGlobalCustomOpContext";
-      else if (op->getName().getStringRef() == "dive_vm.hib_gather_edit")
-        callee = "DiveVm_HIBGatherEditE32";
-      else if (op->getName().getStringRef() == "dive_vm.reduction") {
-        op->emitError("dive_vm.reduction needs a (float*, float*, int*, int, int, int) TopKVector signature, not the op operand list");
-        return signalPassFailure();
-      } else {
-        op->emitError("unsupported dive_vm op in convert-dive-vm-to-memref");
-        return signalPassFailure();
-      }
-      Type opaque = LLVM::LLVMPointerType::get(ctx);
-      SmallVector<Type> paramTypes(op->getNumOperands(), opaque);
-      Type resultType = op->getNumResults() ? opaque : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
-          builder, moduleOp, callee, paramTypes, resultType);
-      if (failed(calleeOp))
-        return signalPassFailure();
-      builder.setInsertionPoint(op);
-      SmallVector<Value> bridged;
-      for (Value v : op->getOperands()) {
-        auto cast = UnrealizedConversionCastOp::create(builder, op->getLoc(),
-                                                       opaque, v);
-        bridged.push_back(cast.getResult(0));
-      }
-      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       ValueRange(bridged));
-      if (op->getNumResults()) {
-        auto back = UnrealizedConversionCastOp::create(
-            builder, op->getLoc(), op->getResult(0).getType(),
-            call.getResult());
-        op->getResult(0).replaceAllUsesWith(back.getResult(0));
-      }
-      op->erase();
-      ++lowered;
-    }
-    root->setAttr("dive_vm.lowered_count", builder.getI64IntegerAttr(lowered));
+    if (failed(checkDiveVmRuntimeLowering(getOperation(), "convert-dive-vm-to-memref")))
+      signalPassFailure();
   }
 };
 
@@ -1929,40 +1458,15 @@ struct DwcConvertDwcToDiveVmTensorPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. DiveVmOps.td names no dive_vm tensor form for
-    // darwinn ops and all_pseudocode.json carries no tensor type contract.
     func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.copy_op" && name != "darwinn.convert" &&
-          name != "darwinn.bitcast")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "darwinn")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
+    if (failed(applyLocalCopySliceLowering(func)) ||
+        failed(applyLocalConvertLowering(func)))
       return signalPassFailure();
+
+    if (failed(requireEliminatedOperations(
+            func, "convert-dwc-to-dive-vm-tensor", {"darwinn", "dwc"}, {},
+            "A DiveVm tensor representation is not implemented for this operation")))
+      signalPassFailure();
   }
 };
 
@@ -1989,6 +1493,9 @@ struct DwcConvertDwgToDiveVmPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2035,6 +1542,9 @@ struct DwcConvertDynamicShapeScopeToDiveVmPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2082,6 +1592,9 @@ struct DwcConvertGenericNormToPseudoOpPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2150,6 +1663,9 @@ struct DwcConvertScatterToGenericScatterPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2212,6 +1728,9 @@ struct DwcConvertSpatialReductionToPoolingPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2241,6 +1760,9 @@ struct DwcConvertTfToDwcPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2286,6 +1808,9 @@ struct DwcConvertToKInMSparsityPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2316,72 +1841,12 @@ struct DwcConvertTpuOffloadToDiveVmPass
   }
 
   void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    MLIRContext *ctx = root->getContext();
-    OpBuilder builder(ctx);
-    auto moduleOp = func->getParentOfType<ModuleOp>();
-    if (!moduleOp) {
-      func.emitError("convert-tpu-offload-to-dive-vm needs a parent module");
-      return signalPassFailure();
-    }
-    SmallVector<Operation *> offloadOps;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (dialect && dialect->getNamespace() == "edgetpu")
-        offloadOps.push_back(op);
-    });
-    unsigned lowered = 0;
-    for (Operation *op : offloadOps) {
-      if (failed(checkDwcConvertibleTypes(op)))
-        return signalPassFailure();
-      if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result edgetpu op in "
-                      "convert-tpu-offload-to-dive-vm");
-        return signalPassFailure();
-      }
-      StringRef opName = op->getName().getStringRef();
-      StringRef callee;
-      if (opName == "edgetpu.convolution_sub_channel" ||
-          opName == "edgetpu.convolution_sub_channel_drq" ||
-          opName == "edgetpu.transposed_convolution_sub_channel" ||
-          opName == "edgetpu.transposed_convolution_sub_channel_drq" ||
-          opName == "edgetpu.depthwise_convolution_fp8" ||
-          opName == "edgetpu.transpose_convolution_fp8" ||
-          opName == "edgetpu.attention_v1" ||
-          opName == "edgetpu.convert_yuv_to_rgb" ||
-          opName == "edgetpu.fast_walsh_hadamard_transform" ||
-          opName == "edgetpu.annotate_materialize_policy")
-        callee = "DiveTpu_EnqueueInstructions";
-      else if (opName == "edgetpu.matrix_multiply_sub_channel" ||
-               opName == "edgetpu.matrix_multiply_sub_channel_drq" ||
-               opName == "edgetpu.fully_connected_sub_channel" ||
-               opName == "edgetpu.fully_connected_sub_channel_drq" ||
-               opName == "edgetpu.fully_connected_fp8")
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else {
-        op->emitError("unsupported edgetpu op in "
-                      "convert-tpu-offload-to-dive-vm");
-        return signalPassFailure();
-      }
-      SmallVector<Type> paramTypes;
-      for (Value v : op->getOperands())
-        paramTypes.push_back(v.getType());
-      Type resultType = op->getNumResults() ? op->getResult(0).getType()
-                                            : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
-          builder, moduleOp, callee, paramTypes, resultType);
-      if (failed(calleeOp))
-        return signalPassFailure();
-      builder.setInsertionPoint(op);
-      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       op->getOperands());
-      if (op->getNumResults())
-        op->getResult(0).replaceAllUsesWith(call.getResult());
-      op->erase();
-      ++lowered;
-    }
-    root->setAttr("edgetpu.lowered_count", builder.getI64IntegerAttr(lowered));
+    if (failed(requireEliminatedOperations(
+            getOperation(), "convert-tpu-offload-to-dive-vm", {"edgetpu"},
+            {"dive_vm.tpu_offload"},
+            "TPU instruction packet generation and its runtime ABI are not "
+            "implemented")))
+      signalPassFailure();
   }
 };
 
@@ -2396,79 +1861,12 @@ struct DwcConvertTpuOffloadToLlvmPass
   }
 
   void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    MLIRContext *ctx = root->getContext();
-    OpBuilder builder(ctx);
-    auto moduleOp = func->getParentOfType<ModuleOp>();
-    if (!moduleOp) {
-      func.emitError("convert-tpu-offload-to-llvm needs a parent module");
-      return signalPassFailure();
-    }
-    SmallVector<Operation *> offloadOps;
-    root->walk([&](Operation *op) {
-      StringRef opName = op->getName().getStringRef();
-      bool isOffload = opName == "dive_vm.tpu_offload";
-      Dialect *dialect = op->getDialect();
-      if (!isOffload && dialect && dialect->getNamespace() == "edgetpu")
-        isOffload = true;
-      if (isOffload)
-        offloadOps.push_back(op);
-    });
-    unsigned lowered = 0;
-    for (Operation *op : offloadOps) {
-      if (failed(checkDwcConvertibleTypes(op)))
-        return signalPassFailure();
-      if (op->getNumResults() > 1) {
-        op->emitError("unsupported multi-result offload op in "
-                      "convert-tpu-offload-to-llvm");
-        return signalPassFailure();
-      }
-      StringRef opName = op->getName().getStringRef();
-      StringRef callee;
-      if (opName == "dive_vm.tpu_offload")
-        callee = "DiveRuntime_ExecuteChildModel";
-      else if (opName == "edgetpu.convolution_sub_channel" ||
-               opName == "edgetpu.convolution_sub_channel_drq" ||
-               opName == "edgetpu.transposed_convolution_sub_channel" ||
-               opName == "edgetpu.transposed_convolution_sub_channel_drq" ||
-               opName == "edgetpu.depthwise_convolution_fp8" ||
-               opName == "edgetpu.transpose_convolution_fp8" ||
-               opName == "edgetpu.attention_v1" ||
-               opName == "edgetpu.convert_yuv_to_rgb" ||
-               opName == "edgetpu.fast_walsh_hadamard_transform" ||
-               opName == "edgetpu.annotate_materialize_policy")
-        callee = "DiveTpu_EnqueueInstructions";
-      else if (opName == "edgetpu.matrix_multiply_sub_channel" ||
-               opName == "edgetpu.matrix_multiply_sub_channel_drq" ||
-               opName == "edgetpu.fully_connected_sub_channel" ||
-               opName == "edgetpu.fully_connected_sub_channel_drq" ||
-               opName == "edgetpu.fully_connected_fp8")
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else {
-        op->emitError("unsupported edgetpu op in "
-                      "convert-tpu-offload-to-llvm");
-        return signalPassFailure();
-      }
-      SmallVector<Type> paramTypes;
-      for (Value v : op->getOperands())
-        paramTypes.push_back(v.getType());
-      Type resultType = op->getNumResults() ? op->getResult(0).getType()
-                                            : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
-          builder, moduleOp, callee, paramTypes, resultType);
-      if (failed(calleeOp))
-        return signalPassFailure();
-      builder.setInsertionPoint(op);
-      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       op->getOperands());
-      if (op->getNumResults())
-        op->getResult(0).replaceAllUsesWith(call.getResult());
-      op->erase();
-      ++lowered;
-    }
-    root->setAttr("tpu_offload.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    if (failed(requireEliminatedOperations(
+            getOperation(), "convert-tpu-offload-to-llvm", {"edgetpu"},
+            {"dive_vm.tpu_offload"},
+            "TPU instruction packet generation and its runtime ABI are not "
+            "implemented")))
+      signalPassFailure();
   }
 };
 
@@ -2496,6 +1894,9 @@ struct DwcConvertXlaSupportedStablehloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2523,40 +1924,9 @@ struct DwcConvertDiveVmTensorToLinalgPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. DiveVmOps.td names no linalg target for
-    // dive_vm tensor ops and all_pseudocode.json carries no linalg
-    // decomposition shape for them.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
+    if (failed(checkDiveVmTensorLowering(
+            getOperation(), "convert-dive-vm-tensor-to-linalg")))
+      signalPassFailure();
   }
 };
 
@@ -2567,40 +1937,9 @@ struct DwcConvertDiveVmTensorToLinalgSymbolPass
   using Base::Base;
 
   void runOnOperation() override {
-    // No honest rewrite exists. DiveVmOps.td names no linalg target for
-    // dive_vm tensor ops and all_pseudocode.json carries no linalg
-    // decomposition shape for them.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
+    if (failed(checkDiveVmTensorLowering(
+            getOperation(), "ConvertDiveVmTensorToLinalg")))
+      signalPassFailure();
   }
 };
 
@@ -2615,72 +1954,12 @@ struct DwcConvertTpuOffloadToLlvmSymbolPass
   }
 
   void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    MLIRContext *ctx = root->getContext();
-    OpBuilder builder(ctx);
-    auto moduleOp = func->getParentOfType<ModuleOp>();
-    if (!moduleOp) {
-      func.emitError("ConvertTpuOffloadToLlvm needs a parent module");
-      return signalPassFailure();
-    }
-    SmallVector<Operation *> offloadOps;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (dialect && dialect->getNamespace() == "edgetpu")
-        offloadOps.push_back(op);
-    });
-    unsigned lowered = 0;
-    for (Operation *op : offloadOps) {
-      if (failed(checkDwcConvertibleTypes(op)))
-        return signalPassFailure();
-      if (op->getNumResults() > 1) {
-        op->emitError(
-            "unsupported multi-result edgetpu op in ConvertTpuOffloadToLlvm");
-        return signalPassFailure();
-      }
-      StringRef opName = op->getName().getStringRef();
-      StringRef callee;
-      if (opName == "edgetpu.convolution_sub_channel" ||
-          opName == "edgetpu.convolution_sub_channel_drq" ||
-          opName == "edgetpu.transposed_convolution_sub_channel" ||
-          opName == "edgetpu.transposed_convolution_sub_channel_drq" ||
-          opName == "edgetpu.depthwise_convolution_fp8" ||
-          opName == "edgetpu.transpose_convolution_fp8" ||
-          opName == "edgetpu.attention_v1" ||
-          opName == "edgetpu.convert_yuv_to_rgb" ||
-          opName == "edgetpu.fast_walsh_hadamard_transform" ||
-          opName == "edgetpu.annotate_materialize_policy")
-        callee = "DiveTpu_EnqueueInstructions";
-      else if (opName == "edgetpu.matrix_multiply_sub_channel" ||
-               opName == "edgetpu.matrix_multiply_sub_channel_drq" ||
-               opName == "edgetpu.fully_connected_sub_channel" ||
-               opName == "edgetpu.fully_connected_sub_channel_drq" ||
-               opName == "edgetpu.fully_connected_fp8")
-        callee = "DiveTpu_EnqueueDmaDescriptor";
-      else {
-        op->emitError("unsupported edgetpu op in ConvertTpuOffloadToLlvm");
-        return signalPassFailure();
-      }
-      SmallVector<Type> paramTypes;
-      for (Value v : op->getOperands())
-        paramTypes.push_back(v.getType());
-      Type resultType = op->getNumResults() ? op->getResult(0).getType()
-                                            : LLVM::LLVMVoidType::get(ctx);
-      FailureOr<LLVM::LLVMFuncOp> calleeOp = LLVM::lookupOrCreateFn(
-          builder, moduleOp, callee, paramTypes, resultType);
-      if (failed(calleeOp))
-        return signalPassFailure();
-      builder.setInsertionPoint(op);
-      auto call = LLVM::CallOp::create(builder, op->getLoc(), *calleeOp,
-                                       op->getOperands());
-      if (op->getNumResults())
-        op->getResult(0).replaceAllUsesWith(call.getResult());
-      op->erase();
-      ++lowered;
-    }
-    root->setAttr("tpu_offload.lowered_count",
-                  builder.getI64IntegerAttr(lowered));
+    if (failed(requireEliminatedOperations(
+            getOperation(), "ConvertTpuOffloadToLlvm", {"edgetpu"},
+            {"dive_vm.tpu_offload"},
+            "TPU instruction packet generation and its runtime ABI are not "
+            "implemented")))
+      signalPassFailure();
   }
 };
 
@@ -2721,6 +2000,9 @@ struct DwcCopyOpLoweringPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2749,6 +2031,9 @@ struct DwcDarwinnBundlingPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2870,6 +2155,9 @@ struct DwcDiveIoOptimizationPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -2886,105 +2174,12 @@ struct DwcDiveProgramTpuPass
   }
 
   void runOnOperation() override {
-    // Grouping decides packet membership and order only. Each packet then gets
-    // one LLVM global holding ordered dispatch function references plus one
-    // DiveRuntime_ExecuteChildModel call. No binary packet layout is invented.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    MLIRContext *ctx = root->getContext();
-    OpBuilder builder(ctx);
-    std::map<std::string, SmallVector<Operation *>> groups;
-    root->walk([&](Operation *op) {
-      if (op->getName().getStringRef() != "dive_vm.tpu_offload")
-        return;
-      std::string key = "default";
-      if (auto program = dyn_cast<StringAttr>(op->getAttr("tpu.program")))
-        key = program.getValue().str();
-      groups[key].push_back(op);
-    });
-    SmallVector<Attribute> order;
-    unsigned packet = 0;
-    for (auto &entry : groups) {
-      order.push_back(builder.getStringAttr(entry.first));
-      unsigned pos = 0;
-      for (Operation *op : entry.second) {
-        op->setAttr("tpu.packet_id", builder.getI64IntegerAttr(packet));
-        op->setAttr("tpu.packet_order", builder.getI64IntegerAttr(pos++));
-      }
-      ++packet;
-    }
-    root->setAttr("tpu.packet_count", builder.getI64IntegerAttr(packet));
-    root->setAttr("tpu.packet_order", builder.getArrayAttr(order));
-
-    if (groups.empty())
-      return;
-    auto moduleOp = func->getParentOfType<ModuleOp>();
-    if (!moduleOp) {
-      func.emitError("dive-program-tpu needs a parent module");
-      return signalPassFailure();
-    }
-
-    Type ptrTy = LLVM::LLVMPointerType::get(ctx);
-    Type i64Ty = builder.getI64Type();
-    Type voidTy = LLVM::LLVMVoidType::get(ctx);
-    FailureOr<LLVM::LLVMFuncOp> dispatchFn = LLVM::lookupOrCreateFn(
-        builder, moduleOp, "DiveRuntime_ExecuteChildModel", {ptrTy, i64Ty},
-        voidTy);
-    if (failed(dispatchFn))
-      return signalPassFailure();
-
-    struct Packet {
-      LLVM::GlobalOp global;
-      Type arrayTy;
-      uint64_t count;
-    };
-    SmallVector<Packet> packets;
-    unsigned id = 0;
-    for (auto &entry : groups) {
-      uint64_t n = entry.second.size();
-      Type arrayTy = LLVM::LLVMArrayType::get(ptrTy, n);
-      std::string name = "tpu_packet_" + std::to_string(id++);
-      while (SymbolTable::lookupSymbolIn(moduleOp, name))
-        name += "_";
-      OpBuilder::InsertionGuard guard(builder);
-      builder.setInsertionPointToStart(moduleOp.getBody());
-      LLVM::GlobalOp global = LLVM::GlobalOp::create(
-          builder, func.getLoc(), arrayTy, /*isConstant=*/true,
-          LLVM::Linkage::Internal, name, /*value=*/Attribute(),
-          /*alignment=*/0);
-      Block *init = builder.createBlock(&global.getInitializerRegion());
-      builder.setInsertionPointToStart(init);
-      Value table = LLVM::PoisonOp::create(builder, func.getLoc(), arrayTy);
-      for (uint64_t i = 0; i < n; ++i) {
-        Value fnPtr = LLVM::AddressOfOp::create(builder, func.getLoc(), ptrTy,
-                                                dispatchFn->getSymNameAttr());
-        SmallVector<int64_t> pos{static_cast<int64_t>(i)};
-        table = LLVM::InsertValueOp::create(builder, func.getLoc(), table,
-                                            fnPtr, pos);
-      }
-      LLVM::ReturnOp::create(builder, func.getLoc(), ArrayRef<Value>({table}));
-      packets.push_back({global, arrayTy, n});
-    }
-
-    if (func.getBody().empty())
-      return;
-    Block &entryBlock = func.getBody().front();
-    if (Operation *term = entryBlock.getTerminator())
-      builder.setInsertionPoint(term);
-    else
-      builder.setInsertionPointToEnd(&entryBlock);
-    for (auto &item : packets) {
-      Value base = LLVM::AddressOfOp::create(builder, func.getLoc(), ptrTy,
-                                             item.global.getSymNameAttr());
-      Value table =
-          LLVM::GEPOp::create(builder, func.getLoc(), ptrTy, item.arrayTy, base,
-                              ArrayRef<LLVM::GEPArg>{0, 0});
-      Value count = LLVM::ConstantOp::create(
-          builder, func.getLoc(), i64Ty,
-          builder.getI64IntegerAttr(static_cast<int64_t>(item.count)));
-      SmallVector<Value> args{table, count};
-      LLVM::CallOp::create(builder, func.getLoc(), *dispatchFn, args);
-    }
+    if (failed(requireEliminatedOperations(
+            getOperation(), "dive-program-tpu", {"edgetpu"},
+            {"dive_vm.tpu_offload"},
+            "TPU instruction packet generation and its runtime ABI are not "
+            "implemented")))
+      signalPassFailure();
   }
 };
 
@@ -3011,39 +2206,9 @@ struct DwcDiveVmBufferizePass
   using Base::Base;
 
   void runOnOperation() override {
-    // No buffer layout is evidenced in all_pseudocode.json so only same type dive_vm identities fold.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-
-    SmallVector<Operation *> dead;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-
-    bool failedLegal = false;
-    root->walk([&](Operation *op) {
-      Dialect *dialect = op->getDialect();
-      if (!dialect || dialect->getNamespace() != "dive_vm")
-        return WalkResult::advance();
-      if (failed(checkDwcConvertibleTypes(op))) {
-        failedLegal = true;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (failedLegal)
-      return signalPassFailure();
+    if (failed(checkDiveVmTensorLowering(
+            getOperation(), "dive-vm-bufferize")))
+      signalPassFailure();
   }
 };
 
@@ -3104,6 +2269,9 @@ struct DwcDwcCheckIllegalTpuOpsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3256,6 +2424,9 @@ struct DwcDwcLegalizePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3310,6 +2481,9 @@ struct DwcDwcLegalizeHloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3369,6 +2543,9 @@ struct DwcDwcLegalizeHloToTfPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3428,6 +2605,9 @@ struct DwcDwcLegalizeIntAndQuantTypesPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3487,6 +2667,9 @@ struct DwcDwcLegalizeInt64ConstantsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3545,6 +2728,9 @@ struct DwcDwcLegalizePassSymbol
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3602,6 +2788,9 @@ struct DwcDwcLegalizeStablehloAnnotateMaterializePolicyPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3660,6 +2849,9 @@ struct DwcDwcLegalizeStablehloCompositePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3718,6 +2910,9 @@ struct DwcDwcLegalizeTfPipelinePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3777,6 +2972,9 @@ struct DwcDwcLegalizeTflCudaemuCustomOpsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3835,6 +3033,9 @@ struct DwcDwcLegalizeTflMultinomialPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3893,6 +3094,9 @@ struct DwcDwcLegalizeTflVariableTensorsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -3951,6 +3155,9 @@ struct DwcDwcLegalizeUint32TypesPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -4055,6 +3262,9 @@ struct DwcDwcLowerControlFlowPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -4145,36 +3355,28 @@ struct DwcDwcLowerHlopsPass
   void runOnOperation() override {
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
+    func::FuncOp func = getOperation();
+    if (failed(requireEliminatedOperations(
+            func, "dwc-lower-hlops", {},
+            {"dwc.normalization", "dwc.vica_fused_norm"},
+            "Normalization semantics are not implemented for this operation")))
+      return signalPassFailure();
+
+    if (failed(applyLocalCopySliceLowering(func)))
+      return signalPassFailure();
+    if (failed(applyLocalConvertLowering(func)))
+      return signalPassFailure();
+
     RewritePatternSet patterns(&getContext());
     darwinn::populateLowerCopySlicePatterns(patterns);
     darwinn::populateLowerConvertPatterns(patterns);
     if (failed(
             applyPatternsGreedily(getOperation(), std::move(patterns))))
       return signalPassFailure();
-    func::FuncOp func = getOperation();
-    if (failed(applyLocalCopySliceLowering(func)))
-      return signalPassFailure();
-    if (failed(applyLocalConvertLowering(func)))
-      return signalPassFailure();
-    SmallVector<Operation *> dead;
-    func.getOperation()->walk([&](Operation *op) {
-      StringRef name = op->getName().getStringRef();
-      if (name != "darwinn.vica_unary_compute_op" &&
-          name != "darwinn.vica_depth_to_space_op" &&
-          name != "darwinn.static_unary_compute_op" &&
-          name != "darwinn.synchronized_unary_compute_op" &&
-          name != "darwinn.streaming_unary_compute_op")
-        return;
-      if (op->getNumOperands() != 1 || op->getNumResults() != 1)
-        return;
-      if (op->getOperand(0).getType() != op->getResult(0).getType())
-        return;
-      dead.push_back(op);
-    });
-    for (Operation *op : dead) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
+    if (failed(requireEliminatedOperations(
+            func, "dwc-lower-hlops", {"darwinn", "dwc"}, {},
+            "No supported pattern matches these operands, result types, and attributes")))
+      signalPassFailure();
   }
 };
 
@@ -4326,6 +3528,9 @@ struct DwcDwcLowerScalarOpsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -4723,6 +3928,9 @@ struct DwcDwgCreateDarwinnCustomOpPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -4860,6 +4068,9 @@ struct DwcDynamicUpdateSliceLoweringPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -4930,6 +4141,9 @@ struct DwcFmModelConverterPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -4979,6 +4193,9 @@ struct DwcFpa2bvModelConverterPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5100,6 +4317,9 @@ struct
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5141,6 +4361,9 @@ struct DwcLegalizePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5195,6 +4418,9 @@ struct DwcLegalizeAffinePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5251,6 +4477,9 @@ struct DwcLegalizeDwcPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5306,6 +4535,9 @@ struct DwcLegalizeDwcInputOutputOpsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5364,6 +4596,9 @@ struct DwcLegalizeDwgTensorPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5420,6 +4655,9 @@ struct DwcLegalizeQuantTypesPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5477,6 +4715,9 @@ struct DwcLegalizeScfPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5532,6 +4773,9 @@ struct DwcLegalizeShapeOpsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5589,6 +4833,9 @@ struct DwcLegalizeTestUsingLayerirFlowPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5647,6 +4894,9 @@ struct DwcLegalizeTfXlacallmoduleOpToStablehloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5695,6 +4945,9 @@ struct DwcLegalizeThreadObliviousOpPassPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5756,6 +5009,9 @@ struct DwcLegalizeTypesForDiveVmTensorPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -5814,6 +5070,9 @@ struct DwcLegalizeStablehloCompositePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6018,6 +5277,9 @@ struct DwcMarkDiveVmTensorInsertSliceOpsPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6069,6 +5331,9 @@ struct DwcMhloLegalizeEinsumToDotGeneralPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6160,6 +5425,9 @@ struct DwcMlirDarwinnComputeEnginePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6273,6 +5541,9 @@ struct DwcPlatformsDarwinnCodeGeneratorEntryScoreTypePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6309,6 +5580,9 @@ struct
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6363,6 +5637,9 @@ struct DwcR52ReadsDiveBuffersPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6413,6 +5690,9 @@ struct DwcRedistributeLoweringPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6462,6 +5742,9 @@ struct DwcRedistributeLoweringPassRemarksPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6516,6 +5799,9 @@ struct DwcReinterpretCastRankLegalizePassPass
         targets.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6622,6 +5908,9 @@ struct DwcVicaShapeLegalizationPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6670,6 +5959,9 @@ struct DwcRunR52OpsOnDivePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6804,6 +6096,9 @@ struct DwcShardingUsingDivePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6873,6 +6168,9 @@ struct DwcSplitOpLoweringPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6924,6 +6222,9 @@ struct DwcStablehloCompositeLegalizeTflCustomPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -6972,6 +6273,9 @@ struct DwcStablehloCustomCallLegalizeCompositePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7020,6 +6324,9 @@ struct DwcStablehloLegalizeCompositeToCallPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7081,6 +6388,9 @@ struct DwcStablehloLegalizeToHloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7143,6 +6453,9 @@ struct DwcStablehloLegalizeToVhloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7205,6 +6518,9 @@ struct DwcStablehloLegalizeVhloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7284,6 +6600,9 @@ struct DwcTfLegalizeHloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7340,6 +6659,9 @@ struct DwcTflCustomLoweringRewritingPassPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7389,6 +6711,9 @@ struct DwcTflLegalizeChloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7448,6 +6773,9 @@ struct DwcTflLegalizeHashtablesTfPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7509,6 +6837,9 @@ struct DwcTflLegalizeHloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7565,6 +6896,9 @@ struct DwcTflLegalizeTensorlistPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7626,6 +6960,9 @@ struct DwcTflLegalizeTfPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7685,6 +7022,9 @@ struct DwcTflLegalizeTfWhilePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7747,6 +7087,9 @@ struct DwcTflLegalizeVariablesTfPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7917,6 +7260,9 @@ struct DwcVhloLegalizeStablehloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -7978,6 +7324,9 @@ struct DwcVhloLegalizeToStablehloPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -9082,6 +8431,9 @@ struct DwcDwcQuantizedCastCleanupPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -9308,6 +8660,9 @@ struct DwcDwcElideReshapePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -9340,6 +8695,9 @@ struct DwcDwcRemoveReshapeAroundGatherOpPass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -9685,6 +9043,9 @@ struct DwcDwcOptimizeReshapePass
       dead.push_back(op);
     });
     for (Operation *op : dead) {
+      if (!isDwcIdentityOperation(op))
+        continue;
+
       op->getResult(0).replaceAllUsesWith(op->getOperand(0));
       op->erase();
     }
@@ -11710,5 +11071,3 @@ struct DwcDwcTransformZinConvolutionShapePass
   }
 };
 } // namespace
-
-
