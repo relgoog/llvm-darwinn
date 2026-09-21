@@ -1,5 +1,6 @@
 add_mlir_library(MLIRDarwinnEncoding
   PARTIAL_SOURCES_INTENDED
+  Allocation.cpp
   Compression.cpp
   Dma.cpp
   Encoding.cpp
