@@ -3,12 +3,15 @@
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/Dialect/Darwinn/IR/DwcOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassRegistry.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
+#include <array>
 #include <limits>
 
 #define GET_ATTRDEF_CLASSES
@@ -33,6 +36,90 @@ bool isSupportedTensor(Type type, bool rankFour = false) {
   return llvm::all_of(tensor.getShape(), [](int64_t extent) {
     return extent > 0 && extent <= std::numeric_limits<int32_t>::max();
   });
+}
+
+bool isConvolution(Operation *operation) {
+  return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp>(operation);
+}
+
+LogicalResult validateConvolution(Operation *operation) {
+  bool depthwise = isa<dwc::DepthwiseConvolutionOp>(operation);
+  auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto filter = cast<RankedTensorType>(operation->getOperand(1).getType());
+  auto output = cast<RankedTensorType>(operation->getResult(0).getType());
+
+  if (!isSupportedTensor(input, true) || !isSupportedTensor(filter) ||
+      !isSupportedTensor(output, true) || !input.getElementType().isBF16() ||
+      !filter.getElementType().isBF16())
+    return unsupported(operation, "convolution requires positive static bf16 NHWC input and "
+                                  "HWCF or depthwise HWC filter with bf16 or f32 output");
+
+  auto activation = operation->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+  auto cell = operation->getAttrOfType<dwc::CellOperationAttr>("cell_operation");
+  auto padding = operation->getAttrOfType<dwc::PaddingAttr>("pad");
+
+  if (cell.getValue() != dwc::CellOperation::Mac || padding.getValue() != dwc::Padding::None ||
+      (activation.getValue() != dwc::ActivationFunction::None &&
+       activation.getValue() != dwc::ActivationFunction::Relu))
+    return unsupported(operation, "convolution requires MAC, explicit padding and NONE or RELU "
+                                  "activation with optional typed clip bounds");
+
+  if (operation->getAttrOfType<IntegerAttr>("x_dilation_rate").getInt() != 1 ||
+      operation->getAttrOfType<IntegerAttr>("y_dilation_rate").getInt() != 1)
+    return unsupported(operation, "convolution dilation must be one");
+
+  for (unsigned axis = 1; axis <= 2; ++axis) {
+    int64_t stride = operation->getAttrOfType<IntegerAttr>(axis == 1 ? "y_stride" : "x_stride")
+                         .getInt();
+    int64_t extent = input.getDimSize(axis);
+    int64_t kernel = filter.getDimSize(axis - 1);
+    if (extent < kernel || output.getDimSize(axis) != (extent - kernel) / stride + 1)
+      return unsupported(operation, "convolution output shape does not match filter and stride");
+  }
+
+  if (operation->getNumOperands() == 3 &&
+      (!isSupportedTensor(operation->getOperand(2).getType()) ||
+       !cast<ShapedType>(operation->getOperand(2).getType()).getElementType().isF32()))
+    return unsupported(operation, "convolution bias requires a positive static f32 tensor");
+
+  if (depthwise && filter.getRank() != 3)
+    return unsupported(operation, "depthwise convolution requires multiplier-one HWC filters");
+
+  return success();
+}
+
+LogicalResult validatePadding(tensor::PadOp operation) {
+  auto input = operation.getSourceType();
+  auto output = operation.getResultType();
+  if (!isSupportedTensor(input, true) || !isSupportedTensor(output, true) ||
+      !input.getElementType().isBF16() || !operation.getLow().empty() ||
+      !operation.getHigh().empty() || operation.getNofold())
+    return unsupported(operation, "padding requires static rank-four bf16 storage and static "
+                                  "spatial bounds without nofold");
+
+  Value paddingValue = operation.getConstantPaddingValue();
+  auto constant = paddingValue ? paddingValue.getDefiningOp<arith::ConstantOp>() : arith::ConstantOp{};
+  auto value = constant ? dyn_cast<FloatAttr>(constant.getValue()) : FloatAttr{};
+  if (!value || !value.getValue().isZero() || value.getValue().isNegative())
+    return unsupported(operation, "padding requires positive floating-point zero");
+
+  for (auto [axis, low, high] :
+       llvm::enumerate(operation.getStaticLow(), operation.getStaticHigh())) {
+    if (low < 0 || high < 0 || low > std::numeric_limits<int32_t>::max() ||
+        high > std::numeric_limits<int32_t>::max() ||
+        ((axis == 0 || axis == 3) && (low != 0 || high != 0)) ||
+        output.getDimSize(axis) != input.getDimSize(axis) + low + high)
+      return unsupported(operation, "padding bounds must be nonnegative spatial extents matching "
+                                    "the result shape");
+  }
+
+  for (Operation &nested : operation.getRegion().front()) {
+    if (&nested == constant.getOperation() || isa<tensor::YieldOp>(nested))
+      continue;
+    return unsupported(operation, "padding region must contain only its constant and yield");
+  }
+
+  return success();
 }
 
 LogicalResult validateCwise(dwc::CwiseOp operation) {
@@ -153,10 +240,29 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
           (isa<dwc::RescalingOp>(operation) &&
            (name == "activation_function" || name == "output_activation_per_z_out_scales" ||
             name == "per_z_out_scales_padding")) ||
+          (isConvolution(&operation) &&
+           (name == "activation_function" || name == "cell_operation" || name == "pad" ||
+            name == "x_dilation_rate" || name == "x_stride" || name == "y_dilation_rate" ||
+            name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max")) ||
+          (isa<tensor::PadOp>(operation) &&
+           (name == "static_low" || name == "static_high" || name == "operandSegmentSizes" ||
+            name == "nofold")) ||
           (isa<dwc::GenericConstantOp, arith::ConstantOp>(operation) &&
            (name == "value" || name == "darwinn.is_parameter"));
       if (!known)
         return unsupported(&operation, "unsupported semantic attribute " + name);
+    }
+
+    if (isConvolution(&operation)) {
+      if (failed(validateConvolution(&operation)))
+        return failure();
+      continue;
+    }
+
+    if (auto padding = dyn_cast<tensor::PadOp>(operation)) {
+      if (failed(validatePadding(padding)))
+        return failure();
+      continue;
     }
 
     if (auto cwise = dyn_cast<dwc::CwiseOp>(operation)) {
@@ -172,6 +278,21 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
     }
 
     if (isa<dwc::GenericConstantOp, arith::ConstantOp>(operation)) {
+      if (auto scalar = operation.getAttrOfType<FloatAttr>("value")) {
+        if (!isa<arith::ConstantOp>(operation) || !scalar.getType().isBF16() ||
+            !scalar.getValue().isZero() || scalar.getValue().isNegative())
+          return unsupported(&operation, "scalar constants are only supported for positive-zero "
+                                         "bf16 padding");
+
+        for (Operation *user : operation.getResult(0).getUsers()) {
+          auto yielded = dyn_cast<tensor::YieldOp>(user);
+          auto padding = yielded ? dyn_cast<tensor::PadOp>(yielded->getParentOp()) : tensor::PadOp{};
+          if (!padding || failed(validatePadding(padding)))
+            return unsupported(&operation, "scalar constants may only supply tensor padding");
+        }
+        continue;
+      }
+
       auto value = operation.getAttrOfType<ElementsAttr>("value");
       if (operation.getNumOperands() != 0 || operation.getNumResults() != 1 || !value ||
           !isSupportedTensor(operation.getResult(0).getType()) ||
@@ -247,16 +368,63 @@ public:
         continue;
 
       if (isa<dwc::GenericConstantOp, arith::ConstantOp>(operation)) {
+        if (operation.getAttrOfType<FloatAttr>("value"))
+          continue;
         auto value = operation.getAttrOfType<ElementsAttr>("value");
         auto type = tileType(operation.getResult(0).getType());
         auto parameter = operation.getAttrOfType<BoolAttr>("darwinn.is_parameter");
-        ConstTypeAttr kind;
-        if (parameter && parameter.getValue())
-          kind = ConstTypeAttr::get(context, ConstKind::Parameter);
-        Value filled =
-            FillOp::create(builder, location, type, value, kind, sliceBegins(type.getRank()),
-                           builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()));
-        values.map(operation.getResult(0), filled);
+        unsigned ordinaryRole = parameter && parameter.getValue() ? 1 : 0;
+        std::array<bool, 3> roles{};
+        Value source = operation.getResult(0);
+
+        for (OpOperand &use : source.getUses()) {
+          unsigned role = ordinaryRole;
+          if (isConvolution(use.getOwner()) && use.getOperandNumber() != 0)
+            role = use.getOperandNumber();
+          roles[role] = true;
+        }
+
+        if (source.use_empty())
+          roles[ordinaryRole] = true;
+        auto &fills = constantValues[source];
+
+        for (auto [role, needed] : llvm::enumerate(roles)) {
+          if (!needed)
+            continue;
+          ConstTypeAttr kind;
+          if (role != 0)
+            kind = ConstTypeAttr::get(context,
+                                      role == 1 ? ConstKind::Parameter : ConstKind::BiasOrScale);
+          fills[role] = FillOp::create(builder, location, type, value, kind,
+                                       sliceBegins(type.getRank()), builder.getI32ArrayAttr({1, 1}),
+                                       sliceEnds(type.getShape()));
+        }
+
+        if (fills[ordinaryRole])
+          values.map(source, fills[ordinaryRole]);
+        continue;
+      }
+
+      if (auto padding = dyn_cast<tensor::PadOp>(operation)) {
+        SmallVector<AffineExpr> forward;
+        SmallVector<AffineExpr> reverse;
+        for (auto [axis, low] : llvm::enumerate(padding.getStaticLow())) {
+          forward.push_back(builder.getAffineDimExpr(axis) + low);
+          reverse.push_back(builder.getAffineDimExpr(axis) - low);
+        }
+        auto mapping = MappingAttr::get(
+            context, AffineMapAttr::get(AffineMap::get(4, 0, forward, context)),
+            AffineMapAttr::get(AffineMap::get(4, 0, reverse, context)));
+        auto type = tileType(padding.getResultType());
+        Value padded = RedistributeOp::create(
+            builder, location, type, values.lookup(padding.getSource()), Value{}, mapping,
+            sliceBegins(4), builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()));
+        values.map(padding.getResult(), padded);
+        continue;
+      }
+
+      if (isConvolution(&operation)) {
+        values.map(operation.getResult(0), lowerConvolution(&operation));
         continue;
       }
 
@@ -318,6 +486,89 @@ public:
   }
 
 private:
+  Value lowerConvolution(Operation *operation) {
+    bool depthwise = isa<dwc::DepthwiseConvolutionOp>(operation);
+    Location location = operation->getLoc();
+    unsigned rank = depthwise ? 8 : 7;
+    SmallVector<AffineExpr> dimensions;
+    for (unsigned axis = 0; axis < rank; ++axis)
+      dimensions.push_back(builder.getAffineDimExpr(axis));
+
+    auto operandStorage = [&](unsigned index) {
+      Value source = operation->getOperand(index);
+      auto found = constantValues.find(source);
+      Value storage = index != 0 && found != constantValues.end()
+                          ? found->second[index]
+                          : values.lookup(source);
+      return redistribute(storage, DistributedMemorySpace::TileMemory);
+    };
+
+    Value input = operandStorage(0);
+    Value filter = operandStorage(1);
+    if (depthwise) {
+      auto type = cast<DistributedTensorType>(filter.getType());
+      auto shape = type.getShape();
+      auto expanded = DistributedTensorType::get(
+          context, {shape[0], shape[1], 1, 1, shape[2]}, type.getElementType(),
+          DistributedMemorySpace::TileMemory);
+      auto zero = builder.getAffineConstantExpr(0);
+      auto mapping = MappingAttr::get(
+          context,
+          AffineMapAttr::get(AffineMap::get(
+              3, 0, {dimensions[0], dimensions[1], zero, zero, dimensions[2]}, context)),
+          AffineMapAttr::get(AffineMap::get(
+              5, 0, {dimensions[0], dimensions[1], dimensions[4]}, context)));
+      filter = RedistributeOp::create(
+          builder, location, expanded, filter, Value{}, mapping, sliceBegins(5),
+          builder.getI32ArrayAttr({1, 1}), sliceEnds(expanded.getShape()));
+    }
+
+    int64_t xStride = operation->getAttrOfType<IntegerAttr>("x_stride").getInt();
+    int64_t yStride = operation->getAttrOfType<IntegerAttr>("y_stride").getInt();
+    AffineExpr channel = dimensions[depthwise ? 7 : 5];
+    Value inputView = view(input, AffineMap::get(
+        rank, 0, {dimensions[0], dimensions[1] * yStride + dimensions[3],
+                  dimensions[2] * xStride + dimensions[4], channel}, context));
+    SmallVector<AffineExpr> filterCoordinates(dimensions.begin() + 3, dimensions.end());
+    Value filterView = view(filter, AffineMap::get(rank, 0, filterCoordinates, context));
+    auto outputType = tileType(operation->getResult(0).getType());
+    auto traversal = AffineMap::get(
+        rank, 0, {dimensions[0], dimensions[1], dimensions[2], dimensions.back()}, context);
+    Value empty = CreateEmptyTensorOp::create(
+        builder, location, outputType, sliceBegins(4), builder.getI32ArrayAttr({1, 1}),
+        sliceEnds(outputType.getShape()));
+    Value destination = view(empty, traversal);
+    SmallVector<Value> auxiliary;
+    ArrayAttr auxiliaryKinds;
+
+    if (operation->getNumOperands() == 3) {
+      auxiliary.push_back(view(operandStorage(2),
+                               AffineMap::get(rank, 0, {dimensions.back()}, context)));
+      auxiliaryKinds = builder.getArrayAttr({AuxTensorTypeAttr::get(context, AuxTensorKind::Bias)});
+    }
+
+    auto lower = operation->getAttrOfType<FloatAttr>("activation_clip_min");
+    auto upper = operation->getAttrOfType<FloatAttr>("activation_clip_max");
+    if (!lower) {
+      lower = builder.getF32FloatAttr(-std::numeric_limits<float>::infinity());
+      upper = builder.getF32FloatAttr(std::numeric_limits<float>::infinity());
+    }
+
+    auto activation = operation->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+    if (activation.getValue() == dwc::ActivationFunction::Relu) {
+      float bound = std::min(std::max(0.0f, lower.getValue().convertToFloat()),
+                             upper.getValue().convertToFloat());
+      lower = builder.getF32FloatAttr(bound);
+    }
+
+    Value computed = StaticComputeOpOp::create(
+        builder, location, outputType, inputView, filterView, destination, auxiliary,
+        computeOptions(depthwise ? InnerOperationKind::Stencil : InnerOperationKind::Vmc,
+                       LinearFunctionKind::Mac, lower, upper),
+        traversal, auxiliaryKinds, CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
+    return GetTensorOp::create(builder, location, outputType, computed);
+  }
+
   DistributedTensorType tileType(Type type) {
     auto tensor = cast<ShapedType>(type);
     return DistributedTensorType::get(context, tensor.getShape(), tensor.getElementType(),
@@ -345,12 +596,18 @@ private:
                                   builder.getI32ArrayAttr({1, 1}), sliceEnds(inputType.getShape()));
   }
 
-  Value view(Value storage, ArrayRef<int64_t> iterationShape) {
+  Value view(Value storage, AffineMap traversal) {
     auto type = cast<DistributedTensorType>(storage.getType());
     auto viewType = DistributedViewType::get(context, type.getShape(), type.getElementType(),
                                              type.getMemorySpace());
     auto created = DistributedCreateViewOp::create(builder, storage.getLoc(), viewType, storage,
                                                    AffineMapAttr{}, AffineMapAttr{});
+    created->setAttr("traversal", AffineMapAttr::get(traversal));
+    return created;
+  }
+
+  Value view(Value storage, ArrayRef<int64_t> iterationShape) {
+    auto type = cast<DistributedTensorType>(storage.getType());
     SmallVector<AffineExpr> coordinates;
     unsigned leading = iterationShape.size() - type.getRank();
 
@@ -360,16 +617,19 @@ private:
                                       : builder.getAffineDimExpr(leading + axis));
     }
 
-    created->setAttr("traversal", AffineMapAttr::get(AffineMap::get(iterationShape.size(), 0,
-                                                                    coordinates, context)));
-    return created;
+    return view(storage, AffineMap::get(iterationShape.size(), 0, coordinates, context));
   }
 
-  ComputeOpOptionsAttr computeOptions(InnerOperationKind inner, LinearFunctionKind linear) {
+  ComputeOpOptionsAttr computeOptions(InnerOperationKind inner, LinearFunctionKind linear,
+                                      FloatAttr lower = {}, FloatAttr upper = {}) {
+    if (!lower) {
+      lower = builder.getF32FloatAttr(-std::numeric_limits<float>::infinity());
+      upper = builder.getF32FloatAttr(std::numeric_limits<float>::infinity());
+    }
+
     return ComputeOpOptionsAttr::get(
         context, inner, {}, {}, builder.getF32FloatAttr(1), {}, builder.getF32FloatAttr(0),
-        builder.getF32FloatAttr(-std::numeric_limits<float>::infinity()),
-        builder.getF32FloatAttr(std::numeric_limits<float>::infinity()), {}, linear, {}, {},
+        lower, upper, {}, linear, {}, {},
         builder.getI32IntegerAttr(0), NluFunctionKind::Linear, NluPreprocessKind::None,
         NluPredicateKind::None, NluPredicateKind::None, {}, false, {}, {}, {}, {}, {}, {}, {});
   }
@@ -377,6 +637,7 @@ private:
   OpBuilder builder;
   MLIRContext *context;
   IRMapping values;
+  llvm::DenseMap<Value, std::array<Value, 3>> constantValues;
 };
 
 class LowerSemanticToDistributedPass
@@ -392,7 +653,8 @@ public:
   }
 
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<DarwinnDialect, dwc::DwcDialect, func::FuncDialect, arith::ArithDialect>();
+    registry.insert<DarwinnDialect, dwc::DwcDialect, func::FuncDialect, arith::ArithDialect,
+                    tensor::TensorDialect>();
   }
 
   void runOnOperation() final {
