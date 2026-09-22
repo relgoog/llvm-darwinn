@@ -10,6 +10,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   LowerRuntime.cpp
   PlanSharding.cpp
   PlanTensorTraversals.cpp
+  PropagateDistributedSlices.cpp
 
   DEPENDS
   MLIRDwcPassIncGen
