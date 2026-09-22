@@ -2817,4 +2817,21 @@ def DwcDwcTransformZinConvolutionShapePass : Pass<"dwc-transform-zin-convolution
     Blob-evidenced test pass. Transform zin convolution shape.
   }];
 }
+
+
+def DarwinnPlanShardingPass : Pass<"darwinn-plan-sharding", "func::FuncOp"> {
+  let summary = "Plan sharding for explicitly sliced distributed computation";
+  let constructor = "mlir::darwinn::createDarwinnPlanShardingPass()";
+  let dependentDialects = ["affine::AffineDialect", "darwinn::DarwinnDialect"];
+  let options = [
+    Option<"target", "target", "std::string", "\"g5\"", "Target architecture">,
+    Option<"memoryLimitRatio", "memory-limit-ratio", "double", "0.0",
+           "Fraction of target tile memory available for sharding">,
+    Option<"greedyBase", "greedy-base", "double", "0.0",
+           "Growth factor when searching sharding counts">,
+    Option<"preferEvenDivisions", "prefer-even-divisions", "bool", "false",
+           "Prefer counts that divide the selected axis evenly">
+  ];
+}
+
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES

@@ -17,6 +17,8 @@ namespace darwinn {
 #define GEN_PASS_DECL
 #include "mlir/Dialect/Darwinn/Transforms/Passes.h.inc"
 
+std::unique_ptr<Pass> createDarwinnPlanShardingPass();
+
 #define GEN_PASS_REGISTRATION
 #include "mlir/Dialect/Darwinn/Transforms/Passes.h.inc"
 
