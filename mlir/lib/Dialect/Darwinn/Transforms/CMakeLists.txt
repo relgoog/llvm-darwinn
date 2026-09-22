@@ -11,6 +11,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   LowerPutBits.cpp
   LowerRuntime.cpp
   LowerSemanticToDistributed.cpp
+  OptimizePointwise.cpp
   PlanSharding.cpp
   PlanTensorTraversals.cpp
   PropagateDistributedSlices.cpp
