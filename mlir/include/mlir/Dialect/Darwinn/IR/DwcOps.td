@@ -551,7 +551,9 @@ def Dwc_RemainderOp : Dwc_Op<"remainder"> {
 def Dwc_RescalingOp : Dwc_Op<"rescaling"> {
   let summary = "DWC rescaling operation.";
   let description = [{
-    Exactly 1 16-bit float or bfloat16 operand per the blob element constraint. Requires `activation_function`, `output_activation_per_z_out_scales`, `per_z_out_scales_padding`.
+    Rescales a tensor with an optional bias operand and compatible output shape.
+    Requires `activation_function`, f32 `output_activation_per_z_out_scales`, and
+    `per_z_out_scales_padding`.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);

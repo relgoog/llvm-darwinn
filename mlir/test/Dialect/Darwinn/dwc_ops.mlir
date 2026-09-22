@@ -353,10 +353,11 @@ func.func @test_remainder(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: func.func @test_rescaling(
-func.func @test_rescaling(%arg0: tensor<4xf16>) -> tensor<4xf16> {
+func.func @test_rescaling(%arg0: tensor<4xf32>) -> tensor<4xbf16> {
+  %none = "dwc.const_none"() : () -> none
   // CHECK: dwc.rescaling
-  %0 = "dwc.rescaling"(%arg0) {activation_function = #dwc.activation_function<NONE>, output_activation_per_z_out_scales = [], per_z_out_scales_padding = #dwc.per_z_out_scale_padding<NONE>} : (tensor<4xf16>) -> tensor<4xf16>
-  return %0 : tensor<4xf16>
+  %0 = "dwc.rescaling"(%arg0, %none) {activation_function = #dwc.activation_function<NONE>, output_activation_per_z_out_scales = [], per_z_out_scales_padding = #dwc.per_z_out_scale_padding<NONE>} : (tensor<4xf32>, none) -> tensor<4xbf16>
+  return %0 : tensor<4xbf16>
 }
 
 // -----

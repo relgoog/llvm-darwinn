@@ -195,9 +195,15 @@ def Dwc_ClassificationTypeEnum : Dwc_I32Enum<
 def Dwc_ClassificationTypeAttr : Dwc_I32EnumAttr<"classification_type", Dwc_ClassificationTypeEnum>;
 
 def Dwc_PerZOutScalePaddingNone : I32EnumAttrCase<"None", 0, "NONE">;
+def Dwc_PerZOutScalePaddingFloatMax : I32EnumAttrCase<"FloatMax", 1, "FLOAT_MAX">;
+def Dwc_PerZOutScalePaddingFloatMin : I32EnumAttrCase<"FloatMin", 2, "FLOAT_MIN">;
+def Dwc_PerZOutScalePaddingFloatZero : I32EnumAttrCase<"FloatZero", 3, "FLOAT_ZERO">;
 def Dwc_PerZOutScalePaddingEnum : Dwc_I32Enum<
   "PerZOutScalePadding", "DWC per-z-out scale padding", [
-    Dwc_PerZOutScalePaddingNone
+    Dwc_PerZOutScalePaddingNone,
+    Dwc_PerZOutScalePaddingFloatMax,
+    Dwc_PerZOutScalePaddingFloatMin,
+    Dwc_PerZOutScalePaddingFloatZero
   ]>;
 def Dwc_PerZOutScalePaddingAttr : Dwc_I32EnumAttr<"per_z_out_scale_padding", Dwc_PerZOutScalePaddingEnum>;
 

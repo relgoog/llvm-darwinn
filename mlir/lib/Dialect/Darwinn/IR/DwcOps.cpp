@@ -11,6 +11,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/TypeUtilities.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 
@@ -957,24 +958,66 @@ LogicalResult dwc::RemainderOp::verify() {
 }
 
 LogicalResult dwc::RescalingOp::verify() {
-  if (getInputs().size() != 1)
-    return emitOpError("expects 1 operands, got ") << getInputs().size();
+  if (getInputs().size() != 2 || getOutputs().size() != 1)
+    return emitOpError("expects an input, an optional bias and one output");
+
+  auto input = dyn_cast<RankedTensorType>(getInputs()[0].getType());
+  auto output = dyn_cast<RankedTensorType>(getOutputs()[0].getType());
+  if (!input || !output || failed(verifyCompatibleShape(input, output)))
+    return emitOpError("expects ranked input and output tensors with compatible shapes");
+
+  auto supportedElement = [](Type element) {
+    return isa<Float16Type, BFloat16Type, Float32Type, quant::UniformQuantizedType>(element);
+  };
+
+  if (!supportedElement(input.getElementType()) || !supportedElement(output.getElementType()))
+    return emitOpError("expects f16, bf16, f32 or uniform quantized input and output elements");
+
+  Type biasType = getInputs()[1].getType();
+  if (!isa<NoneType>(biasType)) {
+    auto bias = dyn_cast<RankedTensorType>(biasType);
+    if (!bias)
+      return emitOpError("expects a ranked bias tensor or none");
+
+    Type inputElement = input.getElementType();
+    Type biasElement = bias.getElementType();
+    if (isa<FloatType>(inputElement)) {
+      if (!isa<Float16Type, BFloat16Type, Float32Type>(biasElement))
+        return emitOpError("expects floating input and bias together");
+    } else {
+      auto inputQuantized = cast<quant::UniformQuantizedType>(inputElement);
+      auto biasQuantized = dyn_cast<quant::UniformQuantizedType>(biasElement);
+      if (!biasQuantized || biasQuantized.getStorageTypeIntegralWidth() != 32 ||
+          !biasQuantized.isSigned() || biasQuantized.getZeroPoint() != 0 ||
+          biasQuantized.getScale() != inputQuantized.getScale())
+        return emitOpError("expects uniform quantized i32 bias with zero point zero "
+                           "and the input scale");
+    }
+  }
+
   if (!(*this)->hasAttr("activation_function"))
-    return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'activation_function'");
+    return (*this)->emitOpError(
+        "expected op 'dwc.rescaling' to have attribute 'activation_function'");
   if (!(*this)->hasAttr("output_activation_per_z_out_scales"))
-    return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'output_activation_per_z_out_scales'");
+    return (*this)->emitOpError(
+        "expected op 'dwc.rescaling' to have attribute 'output_activation_per_z_out_scales'");
   if (!(*this)->hasAttr("per_z_out_scales_padding"))
-    return (*this)->emitOpError("expected op 'dwc.rescaling' to have attribute 'per_z_out_scales_padding'");
+    return (*this)->emitOpError(
+        "expected op 'dwc.rescaling' to have attribute 'per_z_out_scales_padding'");
   if (!llvm::isa<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales")))
     return (*this)->emitOpError("attribute 'output_activation_per_z_out_scales' expects ArrayAttr");
   if (!llvm::isa<ActivationFunctionAttr>((*this)->getAttr("activation_function")))
     return (*this)->emitOpError("attribute 'activation_function' expects ActivationFunctionAttr");
   if (!llvm::isa<PerZOutScalePaddingAttr>((*this)->getAttr("per_z_out_scales_padding")))
-    return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects PerZOutScalePaddingAttr");
-  if (llvm::cast<PerZOutScalePaddingAttr>((*this)->getAttr("per_z_out_scales_padding")).getValue() != PerZOutScalePadding::None)
-    return (*this)->emitOpError("attribute 'per_z_out_scales_padding' expects NONE");
-  if (!llvm::cast<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales")).empty())
-    return (*this)->emitOpError("attribute 'output_activation_per_z_out_scales' expects empty array");
+    return (*this)->emitOpError(
+        "attribute 'per_z_out_scales_padding' expects PerZOutScalePaddingAttr");
+  for (Attribute attribute :
+       cast<ArrayAttr>((*this)->getAttr("output_activation_per_z_out_scales"))) {
+    auto scale = dyn_cast<FloatAttr>(attribute);
+    if (!scale || !scale.getType().isF32())
+      return emitOpError("attribute 'output_activation_per_z_out_scales' expects f32 entries");
+  }
+
   switch (llvm::cast<ActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue()) {
   case ActivationFunction::None:
   case ActivationFunction::Exp:
@@ -984,13 +1027,10 @@ LogicalResult dwc::RescalingOp::verify() {
   case ActivationFunction::GeluApproximated:
     break;
   default:
-    return (*this)->emitOpError("attribute 'activation_function' expects NONE, EXP, LOGISTIC, TANH, RECIPROCAL_SQRT, or GELU_APPROXIMATED");
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE, EXP, LOGISTIC, "
+                                "TANH, RECIPROCAL_SQRT, or GELU_APPROXIMATED");
   }
-  auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
-  Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();
-  if (llvm::isa<Float16Type, BFloat16Type>(element))
-    return success();
-  return (*this)->emitOpError("operand 0 expects 16-bit float or bfloat16");
+  return success();
 }
 
 LogicalResult dwc::ReshapeOp::verify() {
