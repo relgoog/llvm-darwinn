@@ -17,6 +17,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Dialect/DiveVm/IR/DiveVmDialect.td"
+include "mlir/Dialect/LLVMIR/LLVMOpBase.td"
 
 //===----------------------------------------------------------------------===//
 // Operator: add
@@ -64,12 +65,9 @@ def DiveVm_AddressOfActivationOp : DiveVm_Op<"address_of_activation"> {
 // Operator: address_of_input_activation
 //===----------------------------------------------------------------------===//
 def DiveVm_AddressOfInputActivationOp : DiveVm_Op<"address_of_input_activation"> {
-  let summary = "DiveVM address_of_input_activation operation.";
-  let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.address_of_input_activation to DiveVm_GetAddressOfInputActivation. No darwinn lowering forwarding to dive_vm.address_of_input_activation evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
+  let summary = "Resolves an input activation address from a request.";
+  let arguments = (ins LLVM_DefaultPointer:$request, I32Attr:$index);
+  let results = (outs I64:$address);
   let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
@@ -78,12 +76,9 @@ def DiveVm_AddressOfInputActivationOp : DiveVm_Op<"address_of_input_activation">
 // Operator: address_of_output_activation
 //===----------------------------------------------------------------------===//
 def DiveVm_AddressOfOutputActivationOp : DiveVm_Op<"address_of_output_activation"> {
-  let summary = "DiveVM address_of_output_activation operation.";
-  let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.address_of_output_activation to DiveVm_GetAddressOfOutputActivation. No darwinn lowering forwarding to dive_vm.address_of_output_activation evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
+  let summary = "Resolves an output activation address from a request.";
+  let arguments = (ins LLVM_DefaultPointer:$request, I32Attr:$index);
+  let results = (outs I64:$address);
   let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
@@ -106,12 +101,9 @@ def DiveVm_AddressOfParameterOp : DiveVm_Op<"address_of_parameter"> {
 // Operator: address_of_parameter_region
 //===----------------------------------------------------------------------===//
 def DiveVm_AddressOfParameterRegionOp : DiveVm_Op<"address_of_parameter_region"> {
-  let summary = "DiveVM address_of_parameter_region operation.";
-  let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.address_of_parameter_region to DiveVm_GetAddressOfParameterRegion. No darwinn lowering forwarding to dive_vm.address_of_parameter_region evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
+  let summary = "Resolves a parameter region address from program information.";
+  let arguments = (ins LLVM_DefaultPointer:$program_info, I32Attr:$index);
+  let results = (outs I64:$address);
   let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
@@ -120,13 +112,9 @@ def DiveVm_AddressOfParameterRegionOp : DiveVm_Op<"address_of_parameter_region">
 // Operator: address_of_scratch
 //===----------------------------------------------------------------------===//
 def DiveVm_AddressOfScratchOp : DiveVm_Op<"address_of_scratch"> {
-  let summary = "DiveVM address_of_scratch operation.";
-  let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.address_of_scratch to DiveVm_GetAddressOfScratch. No darwinn lowering forwarding to dive_vm.address_of_scratch evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
-  let hasVerifier = 1;
+  let summary = "Resolves the scratch address from program information.";
+  let arguments = (ins LLVM_DefaultPointer:$program_info);
+  let results = (outs I64:$address);
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -582,12 +570,8 @@ def DiveVm_DisableItcTracingOp : DiveVm_Op<"disable_itc_tracing"> {
 // Operator: dispatch_hardware_instruction
 //===----------------------------------------------------------------------===//
 def DiveVm_DispatchHardwareInstructionOp : DiveVm_Op<"dispatch_hardware_instruction"> {
-  let summary = "DiveVM dispatch_hardware_instruction operation.";
-  let description = [{
-    Verifier accepts any operand count. No callee symbol for dive_vm.dispatch_hardware_instruction evidenced in convert-dive-vm-to-llvm or convert-dive-vm-to-memref, and no darwinn lowering forwarding to it evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
+  let summary = "Enqueues a resolved instruction chunk.";
+  let arguments = (ins LLVM_DefaultPointer:$bytes, I64:$size, I64Attr:$index);
   let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
@@ -1450,13 +1434,7 @@ def DiveVm_PatchInstructionForStridedIoOp : DiveVm_Op<"patch_instruction_for_str
 // Operator: perform_software_preemption_if_requested
 //===----------------------------------------------------------------------===//
 def DiveVm_PerformSoftwarePreemptionIfRequestedOp : DiveVm_Op<"perform_software_preemption_if_requested"> {
-  let summary = "DiveVM perform_software_preemption_if_requested operation.";
-  let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.perform_software_preemption_if_requested to DiveTpu_PerformSoftwarePreemptionIfRequested. No darwinn lowering forwarding to dive_vm.perform_software_preemption_if_requested evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
-  let hasVerifier = 1;
+  let summary = "Checks for a pending software preemption request.";
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1874,13 +1852,8 @@ def DiveVm_ViewOnAddressOp : DiveVm_Op<"view_on_address"> {
 // Operator: wait_for_fence_completion
 //===----------------------------------------------------------------------===//
 def DiveVm_WaitForFenceCompletionOp : DiveVm_Op<"wait_for_fence_completion"> {
-  let summary = "DiveVM wait_for_fence_completion operation.";
-  let description = [{
-    Verifier accepts any operand count. convert-dive-vm-to-llvm and convert-dive-vm-to-memref map dive_vm.wait_for_fence_completion to DiveTpu_WaitForFenceCompletion. No darwinn lowering forwarding to dive_vm.wait_for_fence_completion evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$operands);
-  let results = (outs Variadic<AnyType>:$results);
-  let hasVerifier = 1;
+  let summary = "Waits for a fence with an explicit software preemption policy.";
+  let arguments = (ins BoolAttr:$software_preemption);
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
@@ -1952,6 +1925,21 @@ def DiveVm_WriteScalarArchRegisterOp : DiveVm_Op<"write_scalar_arch_register"> {
   let results = (outs Variadic<AnyType>:$results);
   let hasVerifier = 1;
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+
+def DiveVm_InstructionChunkOp : DiveVm_Op<"instruction_chunk"> {
+  let summary = "Resolves mutable instruction chunk storage and its byte size.";
+  let arguments = (ins LLVM_DefaultPointer:$program_info, I64Attr:$index);
+  let results = (outs LLVM_DefaultPointer:$bytes, I64:$size);
+  let hasVerifier = 1;
+  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
+}
+
+def DiveVm_GetStatusCodeOp : DiveVm_Op<"get_status_code"> {
+  let summary = "Reads the runtime status code.";
+  let results = (outs I32:$status);
+  let assemblyFormat = "attr-dict `:` type($status)";
 }
 
 #endif // DIVEVM_OPS

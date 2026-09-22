@@ -49,9 +49,9 @@ def DwcAddBoundLowerPass : Pass<"add_bound_lower", "func::FuncOp"> {
 def DwcAddDiveAbiArgumentsPass : Pass<"add-dive-abi-arguments", "func::FuncOp"> {
   let summary = "DWC pass add-dive-abi-arguments";
   let description = [{
-    Seen at 0xd7a252 in task3_passes.tsv, this pass appends a 64-bit integer argument to the function
-    type and the entry block, then stamps the dive.abi_args_added unit attr. It returns early when that
-    attr is already present.
+    Rejects ABI construction without a complete execution plan. Control entry
+    lowering creates the program-info and request arguments together with the
+    runtime calls that use them.
   }];
 }
 
@@ -178,13 +178,12 @@ def DwcConvertDiveVmTensorToTensorPass : Pass<"convert-dive-vm-tensor-to-tensor"
   }];
 }
 
-def DwcConvertDiveVmToLlvmPass : Pass<"convert-dive-vm-to-llvm", "func::FuncOp"> {
+def DwcConvertDiveVmToLlvmPass : Pass<"convert-dive-vm-to-llvm", "ModuleOp"> {
   let summary = "DWC pass convert-dive-vm-to-llvm";
   let description = [{
-    Seen at 0xdcb7dd in task3_passes.tsv, this pass lowers dive_vm.br to LLVM.BrOp and dive_vm.cond_br
-    to LLVM.CondBrOp or BrOp by i1 condition, and maps each other supported dive_vm op name to its
-    runtime callee through lookupOrCreateFn plus an LLVM call. It checks each op with
-    checkDwcConvertibleTypes, rejects multi-result and unknown ops, and records dive_vm.lowered_count.
+    Lowers typed runtime operations to the G5 firmware ABI and resolves bit
+    patches to byte stores. Runtime declarations are checked across the module
+    before insertion. Unsupported DiveVm operations produce a diagnostic.
   }];
 }
 
@@ -2818,5 +2817,4 @@ def DwcDwcTransformZinConvolutionShapePass : Pass<"dwc-transform-zin-convolution
     Blob-evidenced test pass. Transform zin convolution shape.
   }];
 }
-
 #endif // MLIR_LIB_DIALECT_DARWINN_TRANSFORMS_DWCPASSES

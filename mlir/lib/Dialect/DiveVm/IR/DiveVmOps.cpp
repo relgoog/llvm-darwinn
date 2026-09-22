@@ -835,12 +835,14 @@ LogicalResult dive_vm::AddressOfActivationOp::verify() {
 }
 
 LogicalResult dive_vm::AddressOfInputActivationOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
+  if (getIndexAttr().getInt() < 0)
+    return emitOpError("requires a nonnegative signed 32-bit index");
   return success();
 }
 
 LogicalResult dive_vm::AddressOfOutputActivationOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
+  if (getIndexAttr().getInt() < 0)
+    return emitOpError("requires a nonnegative signed 32-bit index");
   return success();
 }
 
@@ -850,12 +852,8 @@ LogicalResult dive_vm::AddressOfParameterOp::verify() {
 }
 
 LogicalResult dive_vm::AddressOfParameterRegionOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult dive_vm::AddressOfScratchOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
+  if (getIndexAttr().getInt() < 0)
+    return emitOpError("requires a nonnegative signed 32-bit index");
   return success();
 }
 
@@ -1006,7 +1004,14 @@ LogicalResult dive_vm::DisableItcTracingOp::verify() {
 }
 
 LogicalResult dive_vm::DispatchHardwareInstructionOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
+  if (getIndexAttr().getInt() < 0 || getIndex() > UINT32_MAX)
+    return emitOpError("requires an unsigned 32-bit chunk index");
+  return success();
+}
+
+LogicalResult dive_vm::InstructionChunkOp::verify() {
+  if (getIndexAttr().getInt() < 0 || getIndex() > UINT32_MAX)
+    return emitOpError("requires an unsigned 32-bit chunk index");
   return success();
 }
 
@@ -1283,11 +1288,6 @@ LogicalResult dive_vm::PatchInstructionForStridedIoOp::verify() {
   return success();
 }
 
-LogicalResult dive_vm::PerformSoftwarePreemptionIfRequestedOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
 LogicalResult dive_vm::PowOp::verify() {
   return verifyDwcArityN(*this, getOperands().size(), 2);
 }
@@ -1437,11 +1437,6 @@ LogicalResult dive_vm::TranslateSramAddressOp::verify() {
 }
 
 LogicalResult dive_vm::ViewOnAddressOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult dive_vm::WaitForFenceCompletionOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
 }

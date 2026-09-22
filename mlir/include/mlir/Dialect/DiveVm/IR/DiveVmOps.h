@@ -13,6 +13,7 @@
 #ifndef MLIR_DIALECT_DIVEVM_IR_DIVEVMOPS_H
 #define MLIR_DIALECT_DIVEVM_IR_DIVEVMOPS_H
 
+#include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"

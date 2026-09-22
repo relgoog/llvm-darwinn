@@ -28,6 +28,7 @@
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MathToLibm/MathToLibm.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Dialect/Darwinn/Transforms/LowerRuntime.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -1018,20 +1019,10 @@ struct DwcAddDiveAbiArgumentsPass
   using Base::Base;
 
   void runOnOperation() override {
-    func::FuncOp func = getOperation();
-    if (func->hasAttr("dive.abi_args_added"))
-      return;
-    FunctionType type = func.getFunctionType();
-    MLIRContext *ctx = &getContext();
-    SmallVector<Type> inputs(type.getInputs().begin(), type.getInputs().end());
-    inputs.push_back(IntegerType::get(ctx, 64));
-    func.setFunctionType(FunctionType::get(ctx, inputs, type.getResults()));
-    if (!func.getBody().empty()) {
-      Block &entry = func.getBody().front();
-      entry.addArgument(inputs.back(), func.getLoc());
-    }
-    OpBuilder builder(ctx);
-    func->setAttr("dive.abi_args_added", builder.getUnitAttr());
+    getOperation().emitError(
+        "runtime ABI arguments require a complete execution plan with "
+        "program-info and request pointers");
+    signalPassFailure();
   }
 };
 
@@ -1433,7 +1424,17 @@ struct DwcConvertDiveVmToLlvmPass
   }
 
   void runOnOperation() override {
-    if (failed(checkDiveVmRuntimeLowering(getOperation(), "convert-dive-vm-to-llvm")))
+    ModuleOp module = getOperation();
+    if (failed(darwinn::lowerDiveVmRuntime(module)))
+      return signalPassFailure();
+
+    WalkResult result = module.walk([&](func::FuncOp function) {
+      if (failed(checkDiveVmRuntimeLowering(function, "convert-dive-vm-to-llvm")))
+        return WalkResult::interrupt();
+      return WalkResult::advance();
+    });
+
+    if (result.wasInterrupted())
       signalPassFailure();
   }
 };

@@ -52,34 +52,34 @@ func.func @test_address_of_activation() -> tensor<4xi32> {
 
 // -----
 // CHECK-LABEL: func.func @test_address_of_input_activation(
-func.func @test_address_of_input_activation() -> tensor<4xi32> {
+func.func @test_address_of_input_activation(%request: !llvm.ptr) -> i64 {
   // CHECK: dive_vm.address_of_input_activation
-  %0 = dive_vm.address_of_input_activation : () -> tensor<4xi32>
-  return %0 : tensor<4xi32>
+  %0 = dive_vm.address_of_input_activation %request {index = 0 : i32} : (!llvm.ptr) -> i64
+  return %0 : i64
 }
 
 // -----
 // CHECK-LABEL: func.func @test_address_of_output_activation(
-func.func @test_address_of_output_activation() -> tensor<4xi32> {
+func.func @test_address_of_output_activation(%request: !llvm.ptr) -> i64 {
   // CHECK: dive_vm.address_of_output_activation
-  %0 = dive_vm.address_of_output_activation : () -> tensor<4xi32>
-  return %0 : tensor<4xi32>
+  %0 = dive_vm.address_of_output_activation %request {index = 0 : i32} : (!llvm.ptr) -> i64
+  return %0 : i64
 }
 
 // -----
 // CHECK-LABEL: func.func @test_address_of_parameter_region(
-func.func @test_address_of_parameter_region() -> tensor<4xi32> {
+func.func @test_address_of_parameter_region(%program_info: !llvm.ptr) -> i64 {
   // CHECK: dive_vm.address_of_parameter_region
-  %0 = dive_vm.address_of_parameter_region : () -> tensor<4xi32>
-  return %0 : tensor<4xi32>
+  %0 = dive_vm.address_of_parameter_region %program_info {index = 0 : i32} : (!llvm.ptr) -> i64
+  return %0 : i64
 }
 
 // -----
 // CHECK-LABEL: func.func @test_address_of_scratch(
-func.func @test_address_of_scratch() -> tensor<4xi32> {
+func.func @test_address_of_scratch(%program_info: !llvm.ptr) -> i64 {
   // CHECK: dive_vm.address_of_scratch
-  %0 = dive_vm.address_of_scratch : () -> tensor<4xi32>
-  return %0 : tensor<4xi32>
+  %0 = dive_vm.address_of_scratch %program_info : (!llvm.ptr) -> i64
+  return %0 : i64
 }
 
 // -----
@@ -298,10 +298,10 @@ func.func @test_disable_itc_tracing(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: func.func @test_dispatch_hardware_instruction(
-func.func @test_dispatch_hardware_instruction(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_dispatch_hardware_instruction(%bytes: !llvm.ptr, %size: i64) {
   // CHECK: dive_vm.dispatch_hardware_instruction
-  %0 = dive_vm.dispatch_hardware_instruction %arg0 : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  dive_vm.dispatch_hardware_instruction %bytes, %size {index = 0 : i64} : (!llvm.ptr, i64) -> ()
+  return
 }
 
 // -----
@@ -537,10 +537,10 @@ func.func @test_patch_instruction_for_strided_io(%arg0: tensor<4xf32>) -> tensor
 
 // -----
 // CHECK-LABEL: func.func @test_perform_software_preemption_if_requested(
-func.func @test_perform_software_preemption_if_requested(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_perform_software_preemption_if_requested() {
   // CHECK: dive_vm.perform_software_preemption_if_requested
-  %0 = dive_vm.perform_software_preemption_if_requested %arg0 : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  dive_vm.perform_software_preemption_if_requested : () -> ()
+  return
 }
 
 // -----
@@ -688,10 +688,10 @@ func.func @test_view_on_address(%arg0: tensor<4xf32>) -> tensor<4xf32> {
 
 // -----
 // CHECK-LABEL: func.func @test_wait_for_fence_completion(
-func.func @test_wait_for_fence_completion(%arg0: tensor<4xf32>) -> tensor<4xf32> {
+func.func @test_wait_for_fence_completion() {
   // CHECK: dive_vm.wait_for_fence_completion
-  %0 = dive_vm.wait_for_fence_completion %arg0 : (tensor<4xf32>) -> tensor<4xf32>
-  return %0 : tensor<4xf32>
+  dive_vm.wait_for_fence_completion {software_preemption = true} : () -> ()
+  return
 }
 
 // -----
