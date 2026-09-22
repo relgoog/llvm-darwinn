@@ -1473,8 +1473,14 @@ struct ConvolutionLowering : public RewritePattern {
       return failure();
     if (inRanked.getRank() != 4 || filtRanked.getRank() != (depthwise ? 3 : 4) || dstRanked.getRank() != 4)
       return failure();
-    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
-        filtRanked.getElementType() != dstRanked.getElementType())
+    Type inputElement = inRanked.getElementType();
+    Type outputElement = dstRanked.getElementType();
+    bool mixed = inputElement.isBF16();
+    Type arithmeticElement = mixed ? rewriter.getF32Type() : inputElement;
+
+    if (!isa<FloatType>(inputElement) || inputElement != filtRanked.getElementType() ||
+        (mixed ? !outputElement.isBF16() && !outputElement.isF32()
+               : inputElement != outputElement))
       return failure();
     int64_t outputChannels = depthwise ? inRanked.getDimSize(3) : filtRanked.getDimSize(3);
     if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != filtRanked.getDimSize(2) ||
@@ -1497,7 +1503,7 @@ struct ConvolutionLowering : public RewritePattern {
 
       if (!biasType || biasType.getRank() != 1 ||
           biasType.getDimSize(0) != outputChannels ||
-          biasType.getElementType() != dstRanked.getElementType())
+          biasType.getElementType() != arithmeticElement)
         return failure();
     }
 
@@ -1505,27 +1511,43 @@ struct ConvolutionLowering : public RewritePattern {
     auto clipMax = op->getAttrOfType<FloatAttr>("activation_clip_max");
 
     if (static_cast<bool>(clipMin) != static_cast<bool>(clipMax) ||
-        (clipMin && (clipMin.getType() != dstRanked.getElementType() ||
-                     clipMax.getType() != dstRanked.getElementType() ||
+        (clipMin && (clipMin.getType() != arithmeticElement ||
+                     clipMax.getType() != arithmeticElement ||
                      clipMin.getValue().isNaN() || clipMax.getValue().isNaN() ||
                      clipMin.getValue().compare(clipMax.getValue()) == APFloat::cmpGreaterThan)))
       return failure();
 
     Location loc = op->getLoc();
-    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
-    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    auto arithmeticType = RankedTensorType::get(dstRanked.getShape(), arithmeticElement);
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), arithmeticElement);
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(arithmeticElement));
     Value initial = rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty}).getResult(0);
     auto strides = rewriter.getI64TensorAttr({yStride, xStride});
     auto dilations = rewriter.getI64TensorAttr({yDilation, xDilation});
     Value result = depthwise
         ? rewriter.create<linalg::DepthwiseConv2DNhwcHwcOp>(
-              loc, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{initial},
+              loc, TypeRange{arithmeticType}, ValueRange{input, filter}, ValueRange{initial},
               strides, dilations).getResult(0)
         : rewriter.create<linalg::Conv2DNhwcHwcfOp>(
-              loc, TypeRange{dstTy}, ValueRange{input, filter}, ValueRange{initial},
+              loc, TypeRange{arithmeticType}, ValueRange{input, filter}, ValueRange{initial},
               strides, dilations).getResult(0);
-    rewriter.replaceOp(op, applyConvolutionActivation(rewriter, loc, result, activation.getValue(),
-                                                        bias, clipMin, clipMax));
+    result = applyConvolutionActivation(rewriter, loc, result, activation.getValue(),
+                                        bias, clipMin, clipMax);
+
+    if (arithmeticElement != outputElement) {
+      Value converted = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), outputElement);
+      auto identity = rewriter.getMultiDimIdentityMap(dstRanked.getRank());
+      SmallVector<utils::IteratorType> iterators(dstRanked.getRank(), utils::IteratorType::parallel);
+      result = rewriter.create<linalg::GenericOp>(
+          loc, TypeRange{dstTy}, ValueRange{result}, ValueRange{converted},
+          ArrayRef<AffineMap>{identity, identity}, iterators,
+          [&](OpBuilder &nested, Location nestedLoc, ValueRange args) {
+            Value truncated = nested.create<arith::TruncFOp>(nestedLoc, outputElement, args[0]);
+            nested.create<linalg::YieldOp>(nestedLoc, truncated);
+          }).getResult(0);
+    }
+
+    rewriter.replaceOp(op, result);
     return success();
   }
 };

@@ -22,6 +22,7 @@
 #include "mlir/Dialect/Async/Passes.h"
 #include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/Darwinn/Transforms/LegalizeBfloat16.h"
 #include "mlir/Dialect/Darwinn/Transforms/LowerSemanticToDistributed.h"
 #include "mlir/Dialect/Darwinn/Transforms/Passes.h"
 #include "mlir/Dialect/Darwinn/Transforms/PlanTensorTraversals.h"
@@ -74,6 +75,7 @@ void mlir::registerAllPasses() {
   arith::registerArithPasses();
   bufferization::registerBufferizationPasses();
   darwinn::registerDwcPasses();
+  darwinn::registerLegalizeBfloat16Pass();
   darwinn::registerLowerSemanticToDistributedPass();
   darwinn::registerPlanTensorTraversalsPass();
   func::registerFuncPasses();

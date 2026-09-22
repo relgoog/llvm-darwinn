@@ -235,10 +235,16 @@ static LogicalResult verifyConvolution(Operation *op, bool depthwise) {
       !input.hasStaticShape() || !filter.hasStaticShape() || !output.hasStaticShape())
     return op->emitOpError("expects static NHWC input/output and HWCF or depthwise HWC filter");
 
-  if (!isa<FloatType>(input.getElementType()) ||
-      input.getElementType() != filter.getElementType() ||
-      input.getElementType() != output.getElementType())
-    return op->emitOpError("expects matching floating-point input, filter, and output types");
+  Type inputElement = input.getElementType();
+  Type outputElement = output.getElementType();
+  bool mixed = inputElement.isBF16();
+  Type arithmeticElement = mixed ? Float32Type::get(op->getContext()) : inputElement;
+
+  if (!isa<FloatType>(inputElement) || inputElement != filter.getElementType() ||
+      (mixed ? !outputElement.isBF16() && !outputElement.isF32()
+             : inputElement != outputElement))
+    return op->emitOpError("expects matching floating-point input and filter types with "
+                           "the same output type or bf16 input and f32 output");
 
   int64_t outputChannels = depthwise ? input.getDimSize(3) : filter.getDimSize(3);
 
@@ -251,8 +257,8 @@ static LogicalResult verifyConvolution(Operation *op, bool depthwise) {
     auto bias = dyn_cast<RankedTensorType>(op->getOperand(2).getType());
 
     if (!bias || bias.getRank() != 1 || bias.getDimSize(0) != outputChannels ||
-        bias.getElementType() != output.getElementType())
-      return op->emitOpError("expects rank-one bias matching output channels and element type");
+        bias.getElementType() != arithmeticElement)
+      return op->emitOpError("expects rank-one bias matching output channels and arithmetic element type");
   }
 
   auto clipMin = op->getAttrOfType<FloatAttr>("activation_clip_min");
@@ -263,11 +269,11 @@ static LogicalResult verifyConvolution(Operation *op, bool depthwise) {
       static_cast<bool>(clipMin) != static_cast<bool>(clipMax))
     return op->emitOpError("expects paired floating-point activation clip bounds");
 
-  if (clipMin && (clipMin.getType() != output.getElementType() ||
-                  clipMax.getType() != output.getElementType() ||
+  if (clipMin && (clipMin.getType() != arithmeticElement ||
+                  clipMax.getType() != arithmeticElement ||
                   clipMin.getValue().isNaN() || clipMax.getValue().isNaN() ||
                   clipMin.getValue().compare(clipMax.getValue()) == APFloat::cmpGreaterThan))
-    return op->emitOpError("expects ordered, non-NaN activation bounds matching output type");
+    return op->emitOpError("expects ordered, non-NaN activation bounds matching arithmetic type");
 
   return success();
 }
