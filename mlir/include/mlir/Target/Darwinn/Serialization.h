@@ -48,6 +48,54 @@ struct ProgramChunk {
   llvm::SmallVector<ProgramFragment, 0> fragments;
 };
 
+struct InstructionRef {
+  uint32_t chunk = 0;
+  uint32_t fragment = 0;
+  uint32_t instruction = 0;
+
+  bool operator==(const InstructionRef &other) const {
+    return chunk == other.chunk && fragment == other.fragment &&
+           instruction == other.instruction;
+  }
+};
+
+struct InstructionLayout {
+  struct ScalarFenceInfo {
+    uint32_t tag;
+    bool sendInterrupt;
+  };
+
+  InstructionRef instruction;
+  uint64_t chunkByteOffset = 0;
+  uint64_t byteLength = 0;
+  std::optional<uint64_t> hibAddressBitOffset;
+  std::optional<ScalarFenceInfo> scalarFence;
+};
+
+class EncodedProgram {
+public:
+  EncodedProgram(EncodedProgram &&) = default;
+  EncodedProgram &operator=(EncodedProgram &&) = delete;
+  EncodedProgram(const EncodedProgram &) = delete;
+  EncodedProgram &operator=(const EncodedProgram &) = delete;
+
+  llvm::ArrayRef<InstructionBytes> getChunks() const { return chunks; }
+  llvm::ArrayRef<InstructionLayout> getLayout() const { return layout; }
+  const InstructionLayout *findInstruction(InstructionRef instruction) const;
+
+private:
+  EncodedProgram() = default;
+  friend llvm::Expected<EncodedProgram>
+  serializeProgram(llvm::ArrayRef<ProgramChunk>, const ScalarEncoder &,
+                   std::optional<CompressionLayout>);
+  friend llvm::Expected<llvm::SmallVector<InstructionBytes, 0>>
+  serializeChunks(llvm::ArrayRef<ProgramChunk>, const ScalarEncoder &,
+                  std::optional<CompressionLayout>);
+
+  llvm::SmallVector<InstructionBytes, 0> chunks;
+  llvm::SmallVector<InstructionLayout, 0> layout;
+};
+
 class FragmentEncoder {
 public:
   explicit FragmentEncoder(
@@ -73,6 +121,10 @@ llvm::Expected<llvm::SmallVector<InstructionBytes, 0>>
 serializeChunks(llvm::ArrayRef<ProgramChunk> chunks,
                 const ScalarEncoder &scalarEncoder,
                 std::optional<CompressionLayout> dmaCompression = std::nullopt);
+
+llvm::Expected<EncodedProgram> serializeProgram(
+    llvm::ArrayRef<ProgramChunk> chunks, const ScalarEncoder &scalarEncoder,
+    std::optional<CompressionLayout> dmaCompression = std::nullopt);
 
 }
 

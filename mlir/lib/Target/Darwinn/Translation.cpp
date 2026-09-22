@@ -61,7 +61,8 @@ LogicalResult translateModule(ModuleOp module, llvm::raw_ostream &output) {
 
 FailureOr<llvm::SmallVector<InstructionBytes, 0>>
 mlir::darwinn::translateProgram(isa::ProgramOp program) {
-  if (failed(verify(program)))
+  auto source = convertProgram(program);
+  if (failed(source))
     return failure();
 
   auto config = program.getTargetConfig();
@@ -70,22 +71,36 @@ mlir::darwinn::translateProgram(isa::ProgramOp program) {
   if (!scalarEncoder)
     return program.emitError(llvm::toString(scalarEncoder.takeError()));
 
-  llvm::SmallVector<InstructionBytes, 0> chunks;
+  auto encoded = serializeChunks(*source, *scalarEncoder);
+  if (!encoded)
+    return program.emitError(llvm::toString(encoded.takeError()));
+  return std::move(*encoded);
+}
+
+FailureOr<llvm::SmallVector<ProgramChunk, 0>>
+mlir::darwinn::convertProgram(isa::ProgramOp program) {
+  if (failed(verify(program)))
+    return failure();
+
+  llvm::SmallVector<ProgramChunk, 0> chunks;
+
   for (auto chunk : program.getBody().front().getOps<isa::ChunkOp>()) {
-    InstructionBytes chunkBytes;
+    ProgramChunk sourceChunk;
+
     for (auto fragment : chunk.getBody().front().getOps<isa::FragmentOp>()) {
-      FragmentEncoder encoder(*scalarEncoder);
+      ProgramFragment sourceFragment;
+
       for (Operation &operation : fragment.getBody().front()) {
         auto instruction = convertInstruction(&operation);
         if (!instruction)
           return operation.emitError(llvm::toString(instruction.takeError()));
-        auto bytes = encoder.encode(*instruction);
-        if (!bytes)
-          return operation.emitError(llvm::toString(bytes.takeError()));
-        chunkBytes.append(bytes->begin(), bytes->end());
+        sourceFragment.instructions.push_back(std::move(*instruction));
       }
+
+      sourceChunk.fragments.push_back(std::move(sourceFragment));
     }
-    chunks.push_back(std::move(chunkBytes));
+
+    chunks.push_back(std::move(sourceChunk));
   }
 
   return chunks;

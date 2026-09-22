@@ -4,6 +4,7 @@ add_mlir_library(MLIRDarwinnEncoding
   Compression.cpp
   Dma.cpp
   Encoding.cpp
+  ExecutionPlan.cpp
   Memory.cpp
   Parameters.cpp
   Serialization.cpp

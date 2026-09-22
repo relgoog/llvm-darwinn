@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   DwcPasses.cpp
   LegalizeBfloat16.cpp
   LowerConvert.cpp
+  LowerExecutionPlan.cpp
   LowerCopySlice.cpp
   LowerPutBits.cpp
   LowerRuntime.cpp
@@ -23,6 +24,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   MLIRArithDialect
   MLIRControlFlowToLLVM
   MLIRDarwinnDialect
+  MLIRDarwinnEncoding
   MLIRDiveVmDialect
   MLIRFuncDialect
   MLIRFuncToLLVM
