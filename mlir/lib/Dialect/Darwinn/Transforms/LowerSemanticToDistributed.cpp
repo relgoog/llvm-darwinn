@@ -42,6 +42,54 @@ bool isConvolution(Operation *operation) {
   return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp>(operation);
 }
 
+LogicalResult validateStructure(Operation *operation) {
+  if (operation->getNumOperands() != 1 || operation->getNumResults() != 1 ||
+      !isSupportedTensor(operation->getOperand(0).getType()) ||
+      !isSupportedTensor(operation->getResult(0).getType()))
+    return unsupported(operation, "reshape and transpose require one positive static tensor "
+                                  "input and output of rank one through four");
+
+  auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto output = cast<RankedTensorType>(operation->getResult(0).getType());
+  if (input.getElementType() != output.getElementType())
+    return unsupported(operation, "reshape and transpose must preserve element type");
+
+  SmallVector<int64_t, 2> counts;
+  for (auto type : {input, output}) {
+    int64_t count = 1;
+    for (int64_t extent : type.getShape()) {
+      if (count > std::numeric_limits<int64_t>::max() / extent)
+        return unsupported(operation, "tensor element count exceeds signed 64-bit storage");
+      count *= extent;
+    }
+    counts.push_back(count);
+  }
+
+  if (counts[0] != counts[1])
+    return unsupported(operation, "reshape and transpose must preserve element count");
+  if (isa<dwc::ReshapeOp>(operation))
+    return success();
+
+  auto permutation = operation->getAttrOfType<DenseIntElementsAttr>("permutation");
+  if (!permutation || permutation.getType().getRank() != 1 ||
+      permutation.getElementType().getIntOrFloatBitWidth() > 64 ||
+      permutation.getNumElements() != input.getRank() || input.getRank() != output.getRank())
+    return unsupported(operation, "transpose requires a dense integer permutation matching "
+                                  "the input and output rank");
+
+  SmallVector<bool> seen(input.getRank(), false);
+  for (auto [axis, attribute] : llvm::enumerate(permutation.getValues<APInt>())) {
+    int64_t sourceAxis = attribute.getSExtValue();
+    if (sourceAxis < 0 || sourceAxis >= input.getRank() || seen[sourceAxis] ||
+        output.getDimSize(axis) != input.getDimSize(sourceAxis))
+      return unsupported(operation, "transpose permutation must bijectively map input axes "
+                                    "to the declared output shape");
+    seen[sourceAxis] = true;
+  }
+
+  return success();
+}
+
 LogicalResult validateConvolution(Operation *operation) {
   bool depthwise = isa<dwc::DepthwiseConvolutionOp>(operation);
   auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
@@ -247,10 +295,17 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
           (isa<tensor::PadOp>(operation) &&
            (name == "static_low" || name == "static_high" || name == "operandSegmentSizes" ||
             name == "nofold")) ||
+          (isa<dwc::TransposeOp>(operation) && name == "permutation") ||
           (isa<dwc::GenericConstantOp, arith::ConstantOp>(operation) &&
            (name == "value" || name == "darwinn.is_parameter"));
       if (!known)
         return unsupported(&operation, "unsupported semantic attribute " + name);
+    }
+
+    if (isa<dwc::ReshapeOp, dwc::TransposeOp>(operation)) {
+      if (failed(validateStructure(&operation)))
+        return failure();
+      continue;
     }
 
     if (isConvolution(&operation)) {
@@ -366,6 +421,35 @@ public:
 
       if (isa<dwc::ConstNoneOp>(operation))
         continue;
+
+      if (isa<dwc::ReshapeOp, dwc::TransposeOp>(operation)) {
+        auto type = tileType(operation.getResult(0).getType());
+        Value input = values.lookup(operation.getOperand(0));
+        Value result;
+        if (isa<dwc::ReshapeOp>(operation)) {
+          result = RedistributeOp::create(
+              builder, location, type, input, Value{}, MappingAttr{}, sliceBegins(type.getRank()),
+              builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()));
+        } else {
+          auto permutation = operation.getAttrOfType<DenseIntElementsAttr>("permutation");
+          SmallVector<AffineExpr> forward(type.getRank());
+          SmallVector<AffineExpr> reverse(type.getRank());
+          for (auto [axis, attribute] : llvm::enumerate(permutation.getValues<APInt>())) {
+            unsigned sourceAxis = attribute.getZExtValue();
+            forward[axis] = builder.getAffineDimExpr(sourceAxis);
+            reverse[sourceAxis] = builder.getAffineDimExpr(axis);
+          }
+
+          result = CopyOpOp::create(
+              builder, location, type, input, AffineMap::get(type.getRank(), 0, forward, context),
+              AffineMap::get(type.getRank(), 0, reverse, context), sliceBegins(type.getRank()),
+              builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()),
+              AffineMap::getMultiDimIdentityMap(type.getRank(), context));
+        }
+
+        values.map(operation.getResult(0), result);
+        continue;
+      }
 
       if (isa<dwc::GenericConstantOp, arith::ConstantOp>(operation)) {
         if (operation.getAttrOfType<FloatAttr>("value"))
@@ -675,7 +759,12 @@ public:
       return signalPassFailure();
     }
 
-    if (failed(verify(function)))
+    WalkResult structure = function.walk([&](Operation *operation) {
+      if (isa<dwc::ReshapeOp, dwc::TransposeOp>(operation) && failed(validateStructure(operation)))
+        return WalkResult::interrupt();
+      return WalkResult::advance();
+    });
+    if (structure.wasInterrupted() || failed(verify(function)))
       return signalPassFailure();
 
     auto boundary = validateFunction(function);
