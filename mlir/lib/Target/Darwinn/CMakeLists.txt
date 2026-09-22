@@ -6,6 +6,7 @@ add_mlir_library(MLIRDarwinnEncoding
   Encoding.cpp
   ExecutionPlan.cpp
   Memory.cpp
+  ParameterLayout.cpp
   Parameters.cpp
   Serialization.cpp
   Tensor.cpp
