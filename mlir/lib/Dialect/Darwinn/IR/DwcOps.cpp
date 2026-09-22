@@ -1371,6 +1371,65 @@ LogicalResult dwc::TransposedConvolutionOp::verify() {
     return (*this)->emitOpError("attribute 'y_out_dim' expects IntegerAttr");
   if (!llvm::isa<IntegerAttr>((*this)->getAttr("y_stride")))
     return (*this)->emitOpError("attribute 'y_stride' expects IntegerAttr");
+  if (getOutputs().size() != 1 || (getInputs().size() != 2 && getInputs().size() != 3))
+    return emitOpError("expects input, filter, optional bias, and one output");
+
+  auto input = dyn_cast<RankedTensorType>(getInputs()[0].getType());
+  auto filter = dyn_cast<RankedTensorType>(getInputs()[1].getType());
+  auto output = dyn_cast<RankedTensorType>(getOutputs()[0].getType());
+
+  if (!input || !filter || !output || input.getRank() != 4 || filter.getRank() != 4 ||
+      output.getRank() != 4 || !input.hasStaticShape() || !filter.hasStaticShape() ||
+      !output.hasStaticShape())
+    return emitOpError("expects static NHWC input/output and HWCF filter");
+
+  Type inputElement = input.getElementType();
+  Type outputElement = output.getElementType();
+  bool mixed = inputElement.isBF16();
+  Type arithmeticElement = mixed ? Float32Type::get(getContext()) : inputElement;
+
+  if (input.getDimSize(1) <= 0 || input.getDimSize(2) <= 0 ||
+      filter.getDimSize(0) <= 0 || filter.getDimSize(1) <= 0 ||
+      output.getDimSize(1) <= 0 || output.getDimSize(2) <= 0)
+    return emitOpError("expects positive spatial dimensions");
+  for (StringRef name : {"x_stride", "y_stride", "x_dilation_rate", "y_dilation_rate"})
+    if ((*this)->getAttrOfType<IntegerAttr>(name).getInt() <= 0)
+      return emitOpError("expects positive ") << name;
+  if ((*this)->getAttrOfType<IntegerAttr>("y_out_dim").getInt() != output.getDimSize(1) ||
+      (*this)->getAttrOfType<IntegerAttr>("x_out_dim").getInt() != output.getDimSize(2))
+    return emitOpError("expects output dimension attributes matching the output tensor");
+
+  if (!isa<FloatType>(inputElement) || inputElement != filter.getElementType() ||
+      (mixed ? !outputElement.isBF16() && !outputElement.isF32()
+             : inputElement != outputElement))
+    return emitOpError("expects matching floating-point input and filter types with "
+                       "the same output type or bf16 input and f32 output");
+  if (input.getDimSize(0) != output.getDimSize(0) ||
+      input.getDimSize(3) != filter.getDimSize(2) ||
+      filter.getDimSize(3) != output.getDimSize(3))
+    return emitOpError("expects matching batch and channel dimensions");
+
+  if (getInputs().size() == 3) {
+    auto bias = dyn_cast<RankedTensorType>(getInputs()[2].getType());
+
+    if (!bias || bias.getRank() != 1 || bias.getDimSize(0) != output.getDimSize(3) ||
+        bias.getElementType() != arithmeticElement)
+      return emitOpError("expects rank-one bias matching output channels and arithmetic element type");
+  }
+
+  auto clipMin = (*this)->getAttrOfType<FloatAttr>("activation_clip_min");
+  auto clipMax = (*this)->getAttrOfType<FloatAttr>("activation_clip_max");
+
+  if ((*this)->hasAttr("activation_clip_min") != static_cast<bool>(clipMin) ||
+      (*this)->hasAttr("activation_clip_max") != static_cast<bool>(clipMax) ||
+      static_cast<bool>(clipMin) != static_cast<bool>(clipMax))
+    return emitOpError("expects paired floating-point activation clip bounds");
+  if (clipMin && (clipMin.getType() != arithmeticElement ||
+                  clipMax.getType() != arithmeticElement ||
+                  clipMin.getValue().isNaN() || clipMax.getValue().isNaN() ||
+                  clipMin.getValue().compare(clipMax.getValue()) == APFloat::cmpGreaterThan))
+    return emitOpError("expects ordered, non-NaN activation bounds matching arithmetic type");
+
   return success();
 }
 
@@ -1569,8 +1628,9 @@ LogicalResult dwc::ImageInterpolationOp::verify() {
   if (input.getDimSize(1) <= 0 || input.getDimSize(2) <= 0 ||
       output.getDimSize(1) <= 0 || output.getDimSize(2) <= 0)
     return emitOpError("expects positive input and output spatial dimensions");
-  if (algorithm.getValue() == "BILINEAR" && !input.getElementType().isF32())
-    return emitOpError("expects f32 for bilinear interpolation");
+  if (algorithm.getValue() == "BILINEAR" && !input.getElementType().isF32() &&
+      !input.getElementType().isBF16())
+    return emitOpError("expects f32 or bf16 for bilinear interpolation");
 
   return success();
 }

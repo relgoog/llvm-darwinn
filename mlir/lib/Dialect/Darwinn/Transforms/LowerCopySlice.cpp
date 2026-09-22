@@ -16,6 +16,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "llvm/Support/MathExtras.h"
 #include <optional>
 
 namespace mlir {
@@ -1755,7 +1756,7 @@ struct TransposedConvLowering : public RewritePattern {
   TransposedConvLowering(MLIRContext *ctx) : RewritePattern("dwc.transposed_convolution", 1, ctx) {}
 
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    if (op->getNumResults() != 1 || op->getNumOperands() != 2)
+    if (op->getNumResults() != 1 || (op->getNumOperands() != 2 && op->getNumOperands() != 3))
       return failure();
     auto act = op->getAttrOfType<ActivationFunctionAttr>("activation_function");
     auto cell = op->getAttrOfType<CellOperationAttr>("cell_operation");
@@ -1784,8 +1785,14 @@ struct TransposedConvLowering : public RewritePattern {
       return failure();
     if (inRanked.getRank() != 4 || filtRanked.getRank() != 4 || dstRanked.getRank() != 4)
       return failure();
-    if (!isa<FloatType>(inRanked.getElementType()) || inRanked.getElementType() != filtRanked.getElementType() ||
-        filtRanked.getElementType() != dstRanked.getElementType())
+    Type inputElement = inRanked.getElementType();
+    Type outputElement = dstRanked.getElementType();
+    bool mixed = inputElement.isBF16();
+    Type arithmeticElement = mixed ? rewriter.getF32Type() : inputElement;
+
+    if (!isa<FloatType>(inputElement) || inputElement != filtRanked.getElementType() ||
+        (mixed ? !outputElement.isBF16() && !outputElement.isF32()
+               : inputElement != outputElement))
       return failure();
     if (inRanked.getDimSize(0) != dstRanked.getDimSize(0) || inRanked.getDimSize(3) != filtRanked.getDimSize(2) ||
         filtRanked.getDimSize(3) != dstRanked.getDimSize(3))
@@ -1794,20 +1801,55 @@ struct TransposedConvLowering : public RewritePattern {
         filtRanked.getDimSize(0) <= 0 || filtRanked.getDimSize(1) <= 0)
       return failure();
 
-    if (dstRanked.getDimSize(1) != (inRanked.getDimSize(1) - 1) * ys.getInt() +
-            (filtRanked.getDimSize(0) - 1) * yd.getInt() + 1 ||
-        dstRanked.getDimSize(2) != (inRanked.getDimSize(2) - 1) * xs.getInt() +
-            (filtRanked.getDimSize(1) - 1) * xd.getInt() + 1)
+    auto matchesExtent = [](int64_t inputSize, int64_t filterSize, int64_t stride,
+                            int64_t dilation, int64_t outputSize) {
+      int64_t inputSpan;
+      int64_t filterSpan;
+      int64_t extent;
+      return !llvm::MulOverflow(inputSize - 1, stride, inputSpan) &&
+             !llvm::MulOverflow(filterSize - 1, dilation, filterSpan) &&
+             !llvm::AddOverflow(inputSpan, filterSpan, extent) &&
+             !llvm::AddOverflow(extent, int64_t{1}, extent) && extent == outputSize;
+    };
+
+    if (!matchesExtent(inRanked.getDimSize(1), filtRanked.getDimSize(0),
+                       ys.getInt(), yd.getInt(), dstRanked.getDimSize(1)) ||
+        !matchesExtent(inRanked.getDimSize(2), filtRanked.getDimSize(1),
+                       xs.getInt(), xd.getInt(), dstRanked.getDimSize(2)))
       return failure();
     if (yOut.getInt() != dstRanked.getDimSize(1) || xOut.getInt() != dstRanked.getDimSize(2))
       return failure();
+    Value bias;
+
+    if (op->getNumOperands() == 3) {
+      bias = op->getOperand(2);
+      auto biasType = dyn_cast<RankedTensorType>(bias.getType());
+
+      if (!biasType || biasType.getRank() != 1 ||
+          biasType.getDimSize(0) != dstRanked.getDimSize(3) ||
+          biasType.getElementType() != arithmeticElement)
+        return failure();
+    }
+
+    auto clipMin = op->getAttrOfType<FloatAttr>("activation_clip_min");
+    auto clipMax = op->getAttrOfType<FloatAttr>("activation_clip_max");
+
+    if (op->hasAttr("activation_clip_min") != static_cast<bool>(clipMin) ||
+        op->hasAttr("activation_clip_max") != static_cast<bool>(clipMax) ||
+        static_cast<bool>(clipMin) != static_cast<bool>(clipMax) ||
+        (clipMin && (clipMin.getType() != arithmeticElement ||
+                     clipMax.getType() != arithmeticElement ||
+                     clipMin.getValue().isNaN() || clipMax.getValue().isNaN() ||
+                     clipMin.getValue().compare(clipMax.getValue()) == APFloat::cmpGreaterThan)))
+      return failure();
+
     Location loc = op->getLoc();
     int64_t hIn = inRanked.getDimSize(1);
     int64_t wIn = inRanked.getDimSize(2);
     int64_t kh = filtRanked.getDimSize(0);
     int64_t kw = filtRanked.getDimSize(1);
-    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), dstRanked.getElementType());
-    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(dstRanked.getElementType()));
+    Value empty = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), arithmeticElement);
+    Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(arithmeticElement));
     Value initial = rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{empty}).getResult(0);
     Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     Value c1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
@@ -1852,6 +1894,12 @@ struct TransposedConvLowering : public RewritePattern {
     Value wo = rewriter.create<arith::AddIOp>(loc, inputX, kernelX);
     Value a = rewriter.create<tensor::ExtractOp>(loc, input, ValueRange{bn, hi, wi, cii});
     Value f = rewriter.create<tensor::ExtractOp>(loc, filter, ValueRange{khi, kwi, cii, coi});
+
+    if (mixed) {
+      a = rewriter.create<arith::ExtFOp>(loc, arithmeticElement, a);
+      f = rewriter.create<arith::ExtFOp>(loc, arithmeticElement, f);
+    }
+
     Value old = rewriter.create<tensor::ExtractOp>(loc, cur, ValueRange{bn, ho, wo, coi});
     Value prod = rewriter.create<arith::MulFOp>(loc, a, f);
     Value sum = rewriter.create<arith::AddFOp>(loc, old, prod);
@@ -1870,8 +1918,23 @@ struct TransposedConvLowering : public RewritePattern {
     rewriter.setInsertionPointAfter(lh);
     rewriter.create<scf::YieldOp>(loc, ValueRange{lh->getResult(0)});
     rewriter.setInsertionPointAfter(ln);
-    rewriter.replaceOp(op, applyConvolutionActivation(
-        rewriter, loc, ln->getResult(0), act.getValue()));
+    Value result = applyConvolutionActivation(
+        rewriter, loc, ln->getResult(0), act.getValue(), bias, clipMin, clipMax);
+
+    if (arithmeticElement != outputElement) {
+      Value converted = rewriter.create<tensor::EmptyOp>(loc, dstRanked.getShape(), outputElement);
+      auto identity = rewriter.getMultiDimIdentityMap(dstRanked.getRank());
+      SmallVector<utils::IteratorType> iterators(dstRanked.getRank(), utils::IteratorType::parallel);
+      result = rewriter.create<linalg::GenericOp>(
+          loc, TypeRange{dstTy}, ValueRange{result}, ValueRange{converted},
+          ArrayRef<AffineMap>{identity, identity}, iterators,
+          [&](OpBuilder &nested, Location nestedLoc, ValueRange args) {
+            Value truncated = nested.create<arith::TruncFOp>(nestedLoc, outputElement, args[0]);
+            nested.create<linalg::YieldOp>(nestedLoc, truncated);
+          }).getResult(0);
+    }
+
+    rewriter.replaceOp(op, result);
     return success();
   }
 };
@@ -2236,7 +2299,8 @@ struct ImageInterpolationLowering : public RewritePattern {
     if (srcRanked.getRank() != 4 || dstRanked.getRank() != 4)
       return failure();
     if (srcRanked.getElementType() != dstRanked.getElementType() ||
-        (bilinear && !srcRanked.getElementType().isF32()))
+        (bilinear && !srcRanked.getElementType().isF32() &&
+         !srcRanked.getElementType().isBF16()))
       return failure();
     if (srcRanked.getDimSize(0) != dstRanked.getDimSize(0) || srcRanked.getDimSize(3) != dstRanked.getDimSize(3))
       return failure();
@@ -2320,6 +2384,9 @@ struct ImageInterpolationLowering : public RewritePattern {
           Value inverseY = nested.create<arith::SubFOp>(nloc, one, fractions[0]);
           Value inverseX = nested.create<arith::SubFOp>(nloc, one, fractions[1]);
           auto weighted = [&](Value sample, Value yWeight, Value xWeight) {
+            if (sample.getType().isBF16())
+              sample = nested.create<arith::ExtFOp>(nloc, nested.getF32Type(), sample);
+
             Value product = nested.create<arith::MulFOp>(nloc, sample, yWeight);
             return nested.create<arith::MulFOp>(nloc, product, xWeight).getResult();
           };
@@ -2330,6 +2397,9 @@ struct ImageInterpolationLowering : public RewritePattern {
               nloc, result, weighted(topRight, inverseY, fractions[1]));
           result = nested.create<arith::AddFOp>(
               nloc, result, weighted(bottomRight, fractions[0], fractions[1]));
+          if (dstRanked.getElementType().isBF16())
+            result = nested.create<arith::TruncFOp>(nloc, dstRanked.getElementType(), result);
+
           nested.create<linalg::YieldOp>(nloc, result);
         });
     rewriter.replaceOp(op, generic->getResult(0));
