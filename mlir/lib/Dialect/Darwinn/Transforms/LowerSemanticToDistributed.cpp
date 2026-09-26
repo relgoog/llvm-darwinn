@@ -38,8 +38,19 @@ bool isSupportedTensor(Type type, bool rankFour = false) {
   });
 }
 
+bool isZeroConstant(Value value) {
+  Operation *constant = value.getDefiningOp();
+  if (!constant || !isa<dwc::GenericConstantOp, arith::ConstantOp>(constant))
+    return false;
+
+  auto elements = constant->getAttrOfType<DenseFPElementsAttr>("value");
+  return elements && llvm::all_of(elements.getValues<APFloat>(),
+                                  [](const APFloat &element) { return element.isZero(); });
+}
+
 bool isConvolution(Operation *operation) {
-  return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp>(operation);
+  return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp, dwc::TransposedConvolutionOp>(
+      operation);
 }
 
 LogicalResult validateStructure(Operation *operation) {
@@ -116,12 +127,16 @@ LogicalResult validateConvolution(Operation *operation) {
       operation->getAttrOfType<IntegerAttr>("y_dilation_rate").getInt() != 1)
     return unsupported(operation, "convolution dilation must be one");
 
+  bool transposed = isa<dwc::TransposedConvolutionOp>(operation);
   for (unsigned axis = 1; axis <= 2; ++axis) {
     int64_t stride = operation->getAttrOfType<IntegerAttr>(axis == 1 ? "y_stride" : "x_stride")
                          .getInt();
     int64_t extent = input.getDimSize(axis);
     int64_t kernel = filter.getDimSize(axis - 1);
-    if (extent < kernel || output.getDimSize(axis) != (extent - kernel) / stride + 1)
+    if (transposed && (kernel != stride || output.getDimSize(axis) != extent * stride))
+      return unsupported(operation, "transposed convolution requires kernel extents equal to "
+                                    "their strides without overlap");
+    if (!transposed && (extent < kernel || output.getDimSize(axis) != (extent - kernel) / stride + 1))
       return unsupported(operation, "convolution output shape does not match filter and stride");
   }
 
@@ -411,7 +426,9 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
           (isConvolution(&operation) &&
            (name == "activation_function" || name == "cell_operation" || name == "pad" ||
             name == "x_dilation_rate" || name == "x_stride" || name == "y_dilation_rate" ||
-            name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max")) ||
+            name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max" ||
+            (isa<dwc::TransposedConvolutionOp>(operation) &&
+             (name == "x_out_dim" || name == "y_out_dim")))) ||
           (isa<dwc::ImageInterpolationOp>(operation) &&
            (name == "algorithm" || name == "stride_method")) ||
           (isa<dwc::ReductionOp>(operation) &&
@@ -601,7 +618,8 @@ public:
           unsigned role = ordinaryRole;
           if (isConvolution(use.getOwner()) && use.getOperandNumber() != 0)
             role = use.getOperandNumber();
-          roles[role] = true;
+          if (role != 2 || !isZeroConstant(source))
+            roles[role] = true;
         }
 
         if (source.use_empty())
@@ -727,6 +745,36 @@ public:
   }
 
 private:
+  Value lowerTransposedConvolution(Operation *operation, Value input, Value filter, Value bias) {
+    Location location = operation->getLoc();
+    SmallVector<AffineExpr> dimensions;
+    for (unsigned axis = 0; axis < 9; ++axis)
+      dimensions.push_back(builder.getAffineDimExpr(axis));
+
+    auto filterType = cast<DistributedTensorType>(filter.getType());
+    auto kernel = filterType.getShape();
+    auto split = DistributedTensorType::get(
+        context, {1, kernel[0], 1, kernel[1], kernel[2], kernel[3]},
+        filterType.getElementType(), DistributedMemorySpace::TileMemory);
+    filter = RedistributeOp::create(builder, location, split, filter, Value{}, MappingAttr{},
+                                    sliceBegins(6), builder.getI32ArrayAttr({1, 1}),
+                                    sliceEnds(split.getShape()));
+
+    int64_t yStride = operation->getAttrOfType<IntegerAttr>("y_stride").getInt();
+    int64_t xStride = operation->getAttrOfType<IntegerAttr>("x_stride").getInt();
+    auto map = [&](ArrayRef<AffineExpr> results) {
+      return AffineMap::get(9, 0, results, context);
+    };
+    auto traversal = map({dimensions[0], dimensions[1] * yStride + dimensions[5],
+                          dimensions[2] * xStride + dimensions[6], dimensions[8]});
+    Value inputView = view(input, map({dimensions[0], dimensions[1] + dimensions[3],
+                                       dimensions[2] + dimensions[4], dimensions[7]}));
+    Value filterView = view(filter, map({dimensions[3], dimensions[5], dimensions[4],
+                                         dimensions[6], dimensions[7], dimensions[8]}));
+    return lowerMultiplyAccumulate(operation, inputView, filterView, bias, traversal,
+                                   InnerOperationKind::Vmc, ComputeTypeHintKind::TransposedConv);
+  }
+
   Value lowerConvolution(Operation *operation) {
     bool depthwise = isa<dwc::DepthwiseConvolutionOp>(operation);
     Location location = operation->getLoc();
@@ -746,6 +794,13 @@ private:
 
     Value input = operandStorage(0);
     Value filter = operandStorage(1);
+    // SDK stage 113 drops biases whose elements are all positive or negative zero.
+    Value bias = operation->getNumOperands() == 3 && !isZeroConstant(operation->getOperand(2))
+                     ? operandStorage(2)
+                     : Value{};
+    if (isa<dwc::TransposedConvolutionOp>(operation))
+      return lowerTransposedConvolution(operation, input, filter, bias);
+
     if (depthwise) {
       auto type = cast<DistributedTensorType>(filter.getType());
       auto shape = type.getShape();
@@ -772,9 +827,19 @@ private:
                   dimensions[2] * xStride + dimensions[4], channel}, context));
     SmallVector<AffineExpr> filterCoordinates(dimensions.begin() + 3, dimensions.end());
     Value filterView = view(filter, AffineMap::get(rank, 0, filterCoordinates, context));
-    auto outputType = tileType(operation->getResult(0).getType());
     auto traversal = AffineMap::get(
         rank, 0, {dimensions[0], dimensions[1], dimensions[2], dimensions.back()}, context);
+    return lowerMultiplyAccumulate(operation, inputView, filterView, bias, traversal,
+                                   depthwise ? InnerOperationKind::Stencil : InnerOperationKind::Vmc,
+                                   depthwise ? std::nullopt
+                                             : std::optional(ComputeTypeHintKind::Conv));
+  }
+
+  Value lowerMultiplyAccumulate(Operation *operation, Value inputView, Value filterView,
+                                Value bias, AffineMap traversal, InnerOperationKind inner,
+                                std::optional<ComputeTypeHintKind> hint) {
+    Location location = operation->getLoc();
+    auto outputType = tileType(operation->getResult(0).getType());
     Value empty = CreateEmptyTensorOp::create(
         builder, location, outputType, sliceBegins(4), builder.getI32ArrayAttr({1, 1}),
         sliceEnds(outputType.getShape()));
@@ -782,9 +847,11 @@ private:
     SmallVector<Value> auxiliary;
     ArrayAttr auxiliaryKinds;
 
-    if (operation->getNumOperands() == 3) {
-      auxiliary.push_back(view(operandStorage(2),
-                               AffineMap::get(rank, 0, {dimensions.back()}, context)));
+    if (bias) {
+      auto extent = cast<DistributedTensorType>(bias.getType()).getShape().front();
+      AffineExpr channel = extent == 1 ? builder.getAffineConstantExpr(0)
+                                       : traversal.getResults().back();
+      auxiliary.push_back(view(bias, AffineMap::get(traversal.getNumDims(), 0, channel)));
       auxiliaryKinds = builder.getArrayAttr({AuxTensorTypeAttr::get(context, AuxTensorKind::Bias)});
     }
 
@@ -804,8 +871,8 @@ private:
 
     Value computed = StaticComputeOpOp::create(
         builder, location, outputType, inputView, filterView, destination, auxiliary,
-        computeOptions(depthwise ? InnerOperationKind::Stencil : InnerOperationKind::Vmc,
-                       LinearFunctionKind::Mac, lower, upper),
+        computeOptions(inner, LinearFunctionKind::Mac, lower, upper, NluFunctionKind::Linear, {},
+                       hint),
         traversal, auxiliaryKinds, CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
     return GetTensorOp::create(builder, location, outputType, computed);
   }
@@ -838,7 +905,7 @@ private:
     ComputeOpOptionsAttr options = computeOptions(
         InnerOperationKind::Unary, maximum ? LinearFunctionKind::Max : LinearFunctionKind::Add, {},
         {}, reciprocal ? NluFunctionKind::Reciprocal : NluFunctionKind::Linear,
-        builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), true);
+        builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), std::nullopt, true);
 
     return StaticUnaryComputeOpOp::create(
         builder, location, outputType, inputView, view(empty, traversal), ValueRange{}, options,
@@ -943,7 +1010,9 @@ private:
   ComputeOpOptionsAttr computeOptions(InnerOperationKind inner, LinearFunctionKind linear,
                                       FloatAttr lower = {}, FloatAttr upper = {},
                                       NluFunctionKind nlu = NluFunctionKind::Linear,
-                                      FloatAttr bias = {}, bool explicitHints = false) {
+                                      FloatAttr bias = {},
+                                      std::optional<ComputeTypeHintKind> type = std::nullopt,
+                                      bool reductionHints = false) {
     if (!lower) {
       lower = builder.getF32FloatAttr(-std::numeric_limits<float>::infinity());
       upper = builder.getF32FloatAttr(std::numeric_limits<float>::infinity());
@@ -951,8 +1020,7 @@ private:
 
     std::optional<NluE8M0RoundingKind> rounding;
     std::optional<ComputeLoweringHintKind> lowering;
-    std::optional<ComputeTypeHintKind> type;
-    if (explicitHints) {
+    if (reductionHints) {
       rounding = NluE8M0RoundingKind::None;
       lowering = ComputeLoweringHintKind::None;
       type = ComputeTypeHintKind::None;
