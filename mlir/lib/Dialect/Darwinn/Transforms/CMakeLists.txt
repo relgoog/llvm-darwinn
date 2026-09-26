@@ -15,7 +15,10 @@ add_mlir_dialect_library(MLIRDwcTransforms
   PlanSharding.cpp
   PlanTensorTraversals.cpp
   PropagateDistributedSlices.cpp
+  PropagatingSlicing.cpp
   ScheduledStorage.cpp
+  SlicingCost.cpp
+  SlicingModel.cpp
   TensorComputeConfiguration.cpp
 
   DEPENDS
