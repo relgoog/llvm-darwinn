@@ -266,6 +266,75 @@ LogicalResult validateReduction(dwc::ReductionOp operation) {
   return success();
 }
 
+struct InterpolationAxis {
+  int64_t startOffset;
+  int64_t stride;
+};
+
+int64_t floorDivide(int64_t numerator, int64_t denominator) {
+  int64_t quotient = numerator / denominator;
+  return quotient - (numerator % denominator != 0 && (numerator < 0) != (denominator < 0));
+}
+
+int64_t roundDivide(int64_t numerator, int64_t denominator) {
+  return floorDivide(2 * numerator + denominator, 2 * denominator);
+}
+
+// Reproduces all 34 SDK stage 240 resize probes whose spatial inputs exceed one, across both
+// algorithms and every stride method. Extent-one inputs follow rules the probes leave open.
+FailureOr<InterpolationAxis> interpolationAxis(int64_t input, int64_t output, bool nearest,
+                                               StringRef method) {
+  constexpr int64_t one = 1 << 16;
+  bool align = method == "TENSORFLOW_ALIGN_CORNERS";
+  bool half = method == "HALF_PIXEL_CENTERS";
+  if (input < 2 || output < 1 || (align && output < 2) ||
+      input > std::numeric_limits<int32_t>::max() / 4 ||
+      output > std::numeric_limits<int32_t>::max() / 4)
+    return failure();
+
+  int64_t numerator = align ? input - 1 : input;
+  int64_t denominator = align ? output - 1 : output;
+  int64_t stride = roundDivide(numerator * one, denominator);
+  int64_t start = half ? roundDivide((numerator - denominator) * (one / 2), denominator) : 0;
+
+  if (nearest) {
+    if (!half && !align)
+      start = -one / 2;
+    start += (std::max(input, output) + std::min(input, output) - 1) / std::min(input, output);
+  }
+
+  if (stride > std::numeric_limits<uint32_t>::max() ||
+      start < std::numeric_limits<int32_t>::min() || start > std::numeric_limits<int32_t>::max())
+    return failure();
+  return InterpolationAxis{start, stride};
+}
+
+LogicalResult validateInterpolation(dwc::ImageInterpolationOp operation) {
+  if (operation->getNumOperands() != 1 || operation->getNumResults() != 1 ||
+      !isSupportedTensor(operation->getOperand(0).getType(), true) ||
+      !isSupportedTensor(operation->getResult(0).getType(), true))
+    return unsupported(operation, "interpolation requires one positive static rank-four input "
+                                  "and result");
+
+  auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto output = cast<RankedTensorType>(operation->getResult(0).getType());
+  auto algorithm = operation->getAttrOfType<StringAttr>("algorithm");
+  auto method = operation->getAttrOfType<StringAttr>("stride_method");
+  if (!input.getElementType().isBF16() || output.getElementType() != input.getElementType() ||
+      input.getDimSize(0) != output.getDimSize(0) || input.getDimSize(3) != output.getDimSize(3))
+    return unsupported(operation, "interpolation requires bf16 NHWC tensors with matching batch "
+                                  "and channels");
+
+  for (unsigned axis = 1; axis <= 2; ++axis) {
+    if (failed(interpolationAxis(input.getDimSize(axis), output.getDimSize(axis),
+                                 algorithm.getValue() == "NEAREST_NEIGHBOR", method.getValue())))
+      return unsupported(operation, "interpolation requires spatial input extents above one "
+                                    "and a 16-bit fixed-point stride and start offset");
+  }
+
+  return success();
+}
+
 LogicalResult validateRescaling(dwc::RescalingOp operation) {
   if (operation->getNumOperands() != 2 || operation->getNumResults() != 1 ||
       !isSupportedTensor(operation->getOperand(0).getType(), true) ||
@@ -343,6 +412,8 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
            (name == "activation_function" || name == "cell_operation" || name == "pad" ||
             name == "x_dilation_rate" || name == "x_stride" || name == "y_dilation_rate" ||
             name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max")) ||
+          (isa<dwc::ImageInterpolationOp>(operation) &&
+           (name == "algorithm" || name == "stride_method")) ||
           (isa<dwc::ReductionOp>(operation) &&
            (name == "activation_function" || name == "dimensions" || name == "op_type")) ||
           (isa<tensor::PadOp>(operation) &&
@@ -375,6 +446,12 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
 
     if (auto cwise = dyn_cast<dwc::CwiseOp>(operation)) {
       if (failed(validateCwise(cwise)))
+        return failure();
+      continue;
+    }
+
+    if (auto interpolation = dyn_cast<dwc::ImageInterpolationOp>(operation)) {
+      if (failed(validateInterpolation(interpolation)))
         return failure();
       continue;
     }
@@ -596,6 +673,11 @@ public:
         continue;
       }
 
+      if (isa<dwc::ImageInterpolationOp>(operation)) {
+        values.map(operation.getResult(0), lowerInterpolation(&operation));
+        continue;
+      }
+
       auto outputType = tileType(operation.getResult(0).getType());
       auto traversal = AffineMap::getMultiDimIdentityMap(outputType.getRank(), context);
       SmallVector<Value> operands;
@@ -761,6 +843,50 @@ private:
     return StaticUnaryComputeOpOp::create(
         builder, location, outputType, inputView, view(empty, traversal), ValueRange{}, options,
         traversal, builder.getArrayAttr({}), CustomTilingOptionsAttr{}, ArrayAttr{}, VexInfoAttr{});
+  }
+
+  Value lowerInterpolation(Operation *operation) {
+    auto inputType = cast<ShapedType>(operation->getOperand(0).getType());
+    auto outputType = tileType(operation->getResult(0).getType());
+    bool nearest = operation->getAttrOfType<StringAttr>("algorithm").getValue() == "NEAREST_NEIGHBOR";
+    StringRef method = operation->getAttrOfType<StringAttr>("stride_method").getValue();
+    SmallVector<AffineExpr> dimensions;
+    for (unsigned axis = 0; axis < 6; ++axis)
+      dimensions.push_back(builder.getAffineDimExpr(axis));
+
+    SmallVector<StartOffsetAndStrideAttr, 2> coordinates;
+    SmallVector<AffineExpr> source{dimensions[0]};
+    for (unsigned axis = 1; axis <= 2; ++axis) {
+      InterpolationAxis parameters = *interpolationAxis(
+          inputType.getDimSize(axis), outputType.getShape()[axis], nearest, method);
+      coordinates.push_back(StartOffsetAndStrideAttr::get(
+          context, uint32_t(parameters.startOffset), uint32_t(parameters.stride), 16));
+      source.push_back((dimensions[axis] * parameters.stride + parameters.startOffset)
+                           .floorDiv(1 << 16) +
+                       dimensions[axis + 2]);
+    }
+    source.push_back(dimensions[5]);
+
+    auto domain = builder.getI32ArrayAttr({int32_t(outputType.getShape()[0]),
+                                           int32_t(outputType.getShape()[1]),
+                                           int32_t(outputType.getShape()[2]), 2, 2,
+                                           int32_t(outputType.getShape()[3])});
+    auto interpolation = InterpolateHardwareOp::create(
+        builder, operation->getLoc(), outputType,
+        redistribute(values.lookup(operation->getOperand(0)), DistributedMemorySpace::TileMemory),
+        InterpolateMethodAttr::get(context, nearest ? InterpolateMethodKind::NearestNeighbor
+                                                    : InterpolateMethodKind::Bilinear),
+        coordinates[1], coordinates[0], AffineMapAttr{}, ArrayAttr{}, AffineMapAttr{},
+        builder.getI32ArrayAttr({-1, -1, -1, 2, 2, -1}));
+    interpolation->setAttr("operand_traversals",
+                           builder.getArrayAttr(AffineMapAttr::get(
+                               AffineMap::get(6, 0, source, context))));
+    interpolation->setAttr(
+        "result_traversals",
+        builder.getArrayAttr(AffineMapAttr::get(AffineMap::get(
+            6, 0, {dimensions[0], dimensions[1], dimensions[2], dimensions[5]}, context))));
+    interpolation->setAttr("traversal_domain", domain);
+    return interpolation;
   }
 
   DistributedTensorType tileType(Type type) {
