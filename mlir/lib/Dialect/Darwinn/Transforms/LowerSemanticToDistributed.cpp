@@ -179,11 +179,14 @@ LogicalResult validateCwise(dwc::CwiseOp operation) {
   auto activation = operation->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
   auto kind = operation->getAttrOfType<dwc::CwiseOpTypeAttr>("op_type");
 
-  if (!activation || activation.getValue() != dwc::ActivationFunction::None || !kind ||
+  if (!activation || !kind ||
       (kind.getValue() != dwc::CwiseOpType::Add && kind.getValue() != dwc::CwiseOpType::Subtract &&
-       kind.getValue() != dwc::CwiseOpType::Multiply))
-    return unsupported(operation, "only ADD, SUBTRACT and MULTIPLY with NONE activation "
-                                  "have a supported binary lowering");
+       kind.getValue() != dwc::CwiseOpType::Multiply) ||
+      (activation.getValue() != dwc::ActivationFunction::None &&
+       (activation.getValue() != dwc::ActivationFunction::Exp ||
+        kind.getValue() != dwc::CwiseOpType::Subtract)))
+    return unsupported(operation, "only ADD, SUBTRACT and MULTIPLY with NONE activation, or "
+                                  "SUBTRACT with EXP, have a supported binary lowering");
 
   SmallVector<int64_t> joined(4, 1);
   unsigned maximumRank = 0;
@@ -211,6 +214,54 @@ LogicalResult validateCwise(dwc::CwiseOp operation) {
   auto output = cast<RankedTensorType>(operation->getResult(0).getType());
   if (maximumRank != 4 || ArrayRef<int64_t>(joined) != output.getShape())
     return unsupported(operation, "binary result shape must equal the broadcast input shape");
+
+  return success();
+}
+
+FailureOr<unsigned> reducedAxis(Operation *operation) {
+  auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto dimensions = operation->getAttrOfType<DenseIntElementsAttr>("dimensions");
+  if (!dimensions || dimensions.getNumElements() != 1)
+    return failure();
+
+  int64_t axis = (*dimensions.getValues<APInt>().begin()).getSExtValue();
+  if (axis < 0)
+    axis += input.getRank();
+  if (axis < 0 || axis >= input.getRank())
+    return failure();
+  return unsigned(axis);
+}
+
+LogicalResult validateReduction(dwc::ReductionOp operation) {
+  if (operation->getNumOperands() != 1 || operation->getNumResults() != 1 ||
+      !isSupportedTensor(operation->getOperand(0).getType(), true) ||
+      !isSupportedTensor(operation->getResult(0).getType(), true))
+    return unsupported(operation, "reduction requires one positive static rank-four input "
+                                  "and result");
+
+  auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto output = cast<RankedTensorType>(operation->getResult(0).getType());
+  auto kind = operation->getAttrOfType<dwc::ReductionTypeAttr>("op_type");
+  auto activation =
+      operation->getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function");
+  FailureOr<unsigned> axis = reducedAxis(operation);
+
+  if (failed(axis) || !kind || !activation || !input.getElementType().isBF16() ||
+      output.getElementType() != input.getElementType())
+    return unsupported(operation, "reduction requires one in-range axis and bf16 input and "
+                                  "result");
+
+  SmallVector<int64_t> reduced(input.getShape());
+  reduced[*axis] = 1;
+  if (output.getShape() != ArrayRef<int64_t>(reduced))
+    return unsupported(operation, "reduction result must keep the reduced axis with extent one");
+
+  if ((kind.getValue() != dwc::ReductionType::Max &&
+       kind.getValue() != dwc::ReductionType::Sum) ||
+      (activation.getValue() == dwc::SimpleActivationFunction::Reciprocal &&
+       kind.getValue() != dwc::ReductionType::Sum))
+    return unsupported(operation, "only MAX, SUM and reciprocal SUM reductions have a "
+                                  "supported lowering");
 
   return success();
 }
@@ -292,6 +343,8 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
            (name == "activation_function" || name == "cell_operation" || name == "pad" ||
             name == "x_dilation_rate" || name == "x_stride" || name == "y_dilation_rate" ||
             name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max")) ||
+          (isa<dwc::ReductionOp>(operation) &&
+           (name == "activation_function" || name == "dimensions" || name == "op_type")) ||
           (isa<tensor::PadOp>(operation) &&
            (name == "static_low" || name == "static_high" || name == "operandSegmentSizes" ||
             name == "nofold")) ||
@@ -322,6 +375,12 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
 
     if (auto cwise = dyn_cast<dwc::CwiseOp>(operation)) {
       if (failed(validateCwise(cwise)))
+        return failure();
+      continue;
+    }
+
+    if (auto reduction = dyn_cast<dwc::ReductionOp>(operation)) {
+      if (failed(validateReduction(reduction)))
         return failure();
       continue;
     }
@@ -532,6 +591,11 @@ public:
         continue;
       }
 
+      if (isa<dwc::ReductionOp>(operation)) {
+        values.map(operation.getResult(0), lowerReduction(&operation));
+        continue;
+      }
+
       auto outputType = tileType(operation.getResult(0).getType());
       auto traversal = AffineMap::getMultiDimIdentityMap(outputType.getRank(), context);
       SmallVector<Value> operands;
@@ -553,10 +617,21 @@ public:
         auto linear = kind == dwc::CwiseOpType::Multiply   ? LinearFunctionKind::Mac
                       : kind == dwc::CwiseOpType::Subtract ? LinearFunctionKind::Sub
                                                            : LinearFunctionKind::Add;
+        auto activation =
+            cwise->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function").getValue();
+        ComputeOpOptionsAttr options = computeOptions(InnerOperationKind::Elementwise, linear);
+
+        // SDK stage 238 clips every softmax exponent input to this range, across four probes
+        // with differing beta and shape. Its derivation in the SDK is not recovered.
+        if (activation == dwc::ActivationFunction::Exp)
+          options = computeOptions(InnerOperationKind::Elementwise, linear,
+                                   builder.getF32FloatAttr(-12.9571848f),
+                                   builder.getF32FloatAttr(0.0f), NluFunctionKind::Exp);
+
         Value computed = StaticComputeOpOp::create(
             builder, location, outputType, operands[0], operands[1], destination, ValueRange{},
-            computeOptions(InnerOperationKind::Elementwise, linear), traversal, ArrayAttr{},
-            CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
+            options, traversal, ArrayAttr{}, CustomTilingOptionsAttr{}, DtcInfoAttr{},
+            VexInfoAttr{});
         result = GetTensorOp::create(builder, location, outputType, computed);
       } else {
         result = StaticUnaryComputeOpOp::create(
@@ -653,6 +728,41 @@ private:
     return GetTensorOp::create(builder, location, outputType, computed);
   }
 
+  Value lowerReduction(Operation *operation) {
+    Location location = operation->getLoc();
+    unsigned axis = *reducedAxis(operation);
+    auto kind = operation->getAttrOfType<dwc::ReductionTypeAttr>("op_type").getValue();
+    auto activation =
+        operation->getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function");
+    auto inputType = cast<ShapedType>(operation->getOperand(0).getType());
+    auto outputType = tileType(operation->getResult(0).getType());
+    unsigned rank = inputType.getRank();
+    SmallVector<AffineExpr> coordinates;
+
+    for (unsigned dimension = 0; dimension < rank; ++dimension) {
+      coordinates.push_back(dimension == axis ? builder.getAffineConstantExpr(0)
+                                              : builder.getAffineDimExpr(dimension));
+    }
+
+    auto traversal = AffineMap::get(rank, 0, coordinates, context);
+    Value input = redistribute(values.lookup(operation->getOperand(0)),
+                               DistributedMemorySpace::TileMemory);
+    Value inputView = view(input, AffineMap::getMultiDimIdentityMap(rank, context));
+    Value empty = CreateEmptyTensorOp::create(
+        builder, location, outputType, sliceBegins(rank), builder.getI32ArrayAttr({1, 1}),
+        sliceEnds(outputType.getShape()));
+    bool maximum = kind == dwc::ReductionType::Max;
+    bool reciprocal = activation.getValue() == dwc::SimpleActivationFunction::Reciprocal;
+    ComputeOpOptionsAttr options = computeOptions(
+        InnerOperationKind::Unary, maximum ? LinearFunctionKind::Max : LinearFunctionKind::Add, {},
+        {}, reciprocal ? NluFunctionKind::Reciprocal : NluFunctionKind::Linear,
+        builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), true);
+
+    return StaticUnaryComputeOpOp::create(
+        builder, location, outputType, inputView, view(empty, traversal), ValueRange{}, options,
+        traversal, builder.getArrayAttr({}), CustomTilingOptionsAttr{}, ArrayAttr{}, VexInfoAttr{});
+  }
+
   DistributedTensorType tileType(Type type) {
     auto tensor = cast<ShapedType>(type);
     return DistributedTensorType::get(context, tensor.getShape(), tensor.getElementType(),
@@ -705,17 +815,28 @@ private:
   }
 
   ComputeOpOptionsAttr computeOptions(InnerOperationKind inner, LinearFunctionKind linear,
-                                      FloatAttr lower = {}, FloatAttr upper = {}) {
+                                      FloatAttr lower = {}, FloatAttr upper = {},
+                                      NluFunctionKind nlu = NluFunctionKind::Linear,
+                                      FloatAttr bias = {}, bool explicitHints = false) {
     if (!lower) {
       lower = builder.getF32FloatAttr(-std::numeric_limits<float>::infinity());
       upper = builder.getF32FloatAttr(std::numeric_limits<float>::infinity());
     }
 
+    std::optional<NluE8M0RoundingKind> rounding;
+    std::optional<ComputeLoweringHintKind> lowering;
+    std::optional<ComputeTypeHintKind> type;
+    if (explicitHints) {
+      rounding = NluE8M0RoundingKind::None;
+      lowering = ComputeLoweringHintKind::None;
+      type = ComputeTypeHintKind::None;
+    }
+
     return ComputeOpOptionsAttr::get(
-        context, inner, {}, {}, builder.getF32FloatAttr(1), {}, builder.getF32FloatAttr(0),
-        lower, upper, {}, linear, {}, {},
-        builder.getI32IntegerAttr(0), NluFunctionKind::Linear, NluPreprocessKind::None,
-        NluPredicateKind::None, NluPredicateKind::None, {}, false, {}, {}, {}, {}, {}, {}, {});
+        context, inner, {}, {}, builder.getF32FloatAttr(1), {},
+        bias ? bias : builder.getF32FloatAttr(0), lower, upper, {}, linear, {}, {},
+        builder.getI32IntegerAttr(0), nlu, NluPreprocessKind::None, NluPredicateKind::None,
+        NluPredicateKind::None, {}, false, {}, {}, {}, {}, rounding, lowering, type);
   }
 
   OpBuilder builder;

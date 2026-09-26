@@ -379,9 +379,11 @@ LogicalResult dwc::CwiseOp::verify() {
   case ActivationFunction::Relu:
   case ActivationFunction::Tanh:
   case ActivationFunction::ReciprocalSqrt:
+  case ActivationFunction::Exp:
     break;
   default:
-    return (*this)->emitOpError("attribute 'activation_function' expects NONE, RELU, TANH, or RECIPROCAL_SQRT");
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE, RELU, TANH, "
+                                "RECIPROCAL_SQRT, or EXP");
   }
   auto opType = llvm::cast<CwiseOpTypeAttr>((*this)->getAttr("op_type")).getValue();
   for (unsigned index = 0; index < 2; ++index) {
@@ -938,8 +940,13 @@ LogicalResult dwc::ReductionOp::verify() {
     return (*this)->emitOpError("attribute 'activation_function' expects SimpleActivationFunctionAttr");
   if (!llvm::isa<ReductionTypeAttr>((*this)->getAttr("op_type")))
     return (*this)->emitOpError("attribute 'op_type' expects ReductionTypeAttr");
-  if (llvm::cast<SimpleActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue() != SimpleActivationFunction::None)
-    return (*this)->emitOpError("attribute 'activation_function' expects NONE");
+  auto activation =
+      llvm::cast<SimpleActivationFunctionAttr>((*this)->getAttr("activation_function")).getValue();
+  auto kind = llvm::cast<ReductionTypeAttr>((*this)->getAttr("op_type")).getValue();
+  if (activation != SimpleActivationFunction::None &&
+      !(activation == SimpleActivationFunction::Reciprocal && kind == ReductionType::Sum))
+    return (*this)->emitOpError("attribute 'activation_function' expects NONE, or RECIPROCAL "
+                                "on SUM");
   {
     auto dims = llvm::cast<ElementsAttr>((*this)->getAttr("dimensions"));
     auto shaped = llvm::dyn_cast<ShapedType>(dims.getType());

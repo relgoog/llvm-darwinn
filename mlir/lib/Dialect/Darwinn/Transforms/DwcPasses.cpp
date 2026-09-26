@@ -28,6 +28,7 @@
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MathToLibm/MathToLibm.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Dialect/Darwinn/IR/DwcOps.h"
 #include "mlir/Dialect/Darwinn/Transforms/LowerRuntime.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -54,6 +55,9 @@
 #include "llvm/ADT/StringRef.h"
 #include <map>
 #include <string>
+
+#define GET_ATTRDEF_CLASSES
+#include "mlir/Dialect/Darwinn/IR/DwcAttributes.h.inc"
 
 namespace mlir {
 namespace darwinn {
@@ -3602,36 +3606,68 @@ struct DwcDwcPostTruncationTpuFitterPass
   using Base::Base;
 
   void runOnOperation() override {
-    // Binary packet layout is absent from all_pseudocode.json, group and order
-    // only.
-    func::FuncOp func = getOperation();
-    Operation *root = func.getOperation();
-    OpBuilder builder(root->getContext());
-    std::map<Operation *, unsigned> clusterOf;
-    unsigned nextCluster = 0;
-    root->walk([&](Operation *op) {
-      if (isa<func::FuncOp>(op) || op->mightHaveTrait<OpTrait::IsTerminator>())
-        return WalkResult::advance();
-      unsigned cluster = nextCluster;
-      bool joined = false;
-      for (Value operand : op->getOperands()) {
-        Operation *def = operand.getDefiningOp();
-        if (!def)
-          continue;
-        auto it = clusterOf.find(def);
-        if (it != clusterOf.end()) {
-          cluster = it->second;
-          joined = true;
-          break;
-        }
+    SmallVector<dwc::ClassifierOp> classifiers;
+    WalkResult walked = getOperation().walk([&](dwc::ClassifierOp classifier) {
+      auto type = dyn_cast<RankedTensorType>(classifier->getOperand(0).getType());
+      if (classifier->getNumOperands() != 1 || classifier->getNumResults() != 1 || !type ||
+          !type.hasStaticShape() || type.getRank() < 1 || !type.getElementType().isBF16() ||
+          classifier->getResult(0).getType() != type) {
+        classifier.emitOpError("softmax decomposition requires one static bf16 tensor of "
+                               "unchanged type");
+        return WalkResult::interrupt();
       }
-      if (!joined)
-        ++nextCluster;
-      clusterOf[op] = cluster;
-      op->setAttr("tpu.cluster_id", builder.getI64IntegerAttr(cluster));
+      classifiers.push_back(classifier);
       return WalkResult::advance();
     });
-    root->setAttr("tpu.cluster_count", builder.getI64IntegerAttr(nextCluster));
+    if (walked.wasInterrupted())
+      return signalPassFailure();
+
+    MLIRContext *context = &getContext();
+
+    for (dwc::ClassifierOp classifier : classifiers) {
+      OpBuilder builder(classifier);
+      Location location = classifier.getLoc();
+      Value input = classifier->getOperand(0);
+      auto type = cast<RankedTensorType>(input.getType());
+      SmallVector<int64_t> reducedShape(type.getShape());
+      reducedShape.back() = 1;
+      auto reducedType = RankedTensorType::get(reducedShape, type.getElementType());
+      auto create = [&](StringRef name, ValueRange operands, Type result,
+                        ArrayRef<NamedAttribute> attributes) {
+        OperationState state(location, name);
+        state.addOperands(operands);
+        state.addTypes(result);
+        state.addAttributes(attributes);
+        return builder.create(state)->getResult(0);
+      };
+      auto reduce = [&](Value operand, dwc::ReductionType kind,
+                        dwc::SimpleActivationFunction activation) {
+        return create(
+            dwc::ReductionOp::getOperationName(), operand, reducedType,
+            {builder.getNamedAttr("activation_function",
+                                  dwc::SimpleActivationFunctionAttr::get(context, activation)),
+             builder.getNamedAttr("dimensions", builder.getI32TensorAttr({-1})),
+             builder.getNamedAttr("op_type", dwc::ReductionTypeAttr::get(context, kind))});
+      };
+      auto cwise = [&](Value lhs, Value rhs, dwc::CwiseOpType kind,
+                       dwc::ActivationFunction activation) {
+        return create(
+            dwc::CwiseOp::getOperationName(), {lhs, rhs}, type,
+            {builder.getNamedAttr("activation_function",
+                                  dwc::ActivationFunctionAttr::get(context, activation)),
+             builder.getNamedAttr("op_type", dwc::CwiseOpTypeAttr::get(context, kind))});
+      };
+
+      Value maximum = reduce(input, dwc::ReductionType::Max, dwc::SimpleActivationFunction::None);
+      Value exponent =
+          cwise(input, maximum, dwc::CwiseOpType::Subtract, dwc::ActivationFunction::Exp);
+      Value reciprocal =
+          reduce(exponent, dwc::ReductionType::Sum, dwc::SimpleActivationFunction::Reciprocal);
+      Value result =
+          cwise(exponent, reciprocal, dwc::CwiseOpType::Multiply, dwc::ActivationFunction::None);
+      classifier->replaceAllUsesWith(ValueRange{result});
+      classifier.erase();
+    }
   }
 };
 

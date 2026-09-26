@@ -727,8 +727,8 @@ def DwcDwcLowerTopKPass : Pass<"dwc-lower-top-k", "func::FuncOp"> {
 def DwcDwcPostTruncationTpuFitterPass : Pass<"dwc-post-truncation-tpu-fitter", "func::FuncOp"> {
   let summary = "DWC pass dwc-post-truncation-tpu-fitter";
   let description = [{
-    Seen at 0xdab7fc in task3_passes.tsv, this pass walks ops in order and joins each op to the cluster
-    of its operand defining op, stamping tpu.cluster_id per op and tpu.cluster_count on the function.
+    Seen at 0xdab7fc in task3_passes.tsv. Decomposes last-axis bf16 softmax into a maximum
+    reduction, an exponentiated subtraction, a reciprocal sum reduction and a multiplication.
   }];
 }
 
