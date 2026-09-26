@@ -545,7 +545,7 @@ public:
             builder.getFloatAttr(builder.getBF16Type(), 0.0));
         Value input = converted(pad.getSource(), false);
         auto output = tensor::PadOp::create(builder, operation.getLoc(), type, input,
-            pad.getMixedLowPad(), pad.getMixedHighPad(), zero);
+            pad.getMixedLowPad(), pad.getMixedHighPad(), zero, pad.getNofold());
         values.map(pad.getResult(), output.getResult());
         continue;
       }

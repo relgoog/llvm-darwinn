@@ -40,8 +40,8 @@ def Darwinn_CopyOpOp : Darwinn_StorageOp<"copy_op"> {
   let arguments = (ins Darwinn_DistributedTensor:$input,
       AffineMapAttr:$forward_index_transformation,
       AffineMapAttr:$reverse_index_transformation,
-      AffineMapAttr:$slicing_begins, I32ArrayAttr:$slicing_domain,
-      AffineMapAttr:$slicing_ends, AffineMapAttr:$traversal);
+      OptionalAttr<AffineMapAttr>:$slicing_begins, OptionalAttr<I32ArrayAttr>:$slicing_domain,
+      OptionalAttr<AffineMapAttr>:$slicing_ends, AffineMapAttr:$traversal);
   let results = (outs Darwinn_DistributedTensor:$output);
 }
 

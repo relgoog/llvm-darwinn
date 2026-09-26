@@ -175,12 +175,13 @@ LogicalResult CopyOpOp::verify() {
   if (input.getElementType() != output.getElementType())
     return emitOpError("requires matching input and output element types");
 
+  bool sliced = getSlicingBeginsAttr() || getSlicingDomainAttr() || getSlicingEndsAttr();
   if (failed(verifyIndexTransformations(*this, input, output,
                                         getForwardIndexTransformationAttr(),
                                         getReverseIndexTransformationAttr())) ||
-      failed(verifySlicing(*this, "slicing", getSlicingBeginsAttr(),
-                           getSlicingDomainAttr(), getSlicingEndsAttr(),
-                           output)))
+      (sliced && failed(verifySlicing(*this, "slicing", getSlicingBeginsAttr(),
+                                      getSlicingDomainAttr(), getSlicingEndsAttr(),
+                                      output))))
     return failure();
 
   return verifyTraversal(*this, getTraversal(), output);

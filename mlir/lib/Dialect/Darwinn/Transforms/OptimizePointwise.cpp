@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Darwinn/Transforms/OptimizePointwise.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Darwinn/IR/DwcOps.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
@@ -82,7 +83,16 @@ LogicalResult compose(dwc::ConvolutionOp second) {
   if (!isLinearPointwise(second))
     return success();
 
-  auto first = second->getOperand(0).getDefiningOp<dwc::ConvolutionOp>();
+  // Zero SAME padding reaches this pass as a nofold pad, which a pointwise chain looks through.
+  Value middle = second->getOperand(0);
+  auto padding = middle.getDefiningOp<tensor::PadOp>();
+  if (padding && padding->hasOneUse() &&
+      llvm::all_of(llvm::concat<const int64_t>(padding.getStaticLow(), padding.getStaticHigh()),
+                   [](int64_t amount) { return amount == 0; }) &&
+      padding.getLow().empty() && padding.getHigh().empty())
+    middle = padding.getSource();
+
+  auto first = middle.getDefiningOp<dwc::ConvolutionOp>();
 
   if (!first || !first->hasOneUse() || first->getBlock() != second->getBlock() ||
       !isLinearPointwise(first))
@@ -178,6 +188,8 @@ LogicalResult compose(dwc::ConvolutionOp second) {
 
   second->setOperands({first->getOperand(0), filterConstant.getResult(), biasConstant.getResult()});
   second->setLoc(location);
+  if (padding)
+    padding.erase();
   first.erase();
 
   for (Operation *constant : constants) {

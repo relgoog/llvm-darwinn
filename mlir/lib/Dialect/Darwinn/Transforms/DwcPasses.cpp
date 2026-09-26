@@ -3609,11 +3609,15 @@ struct DwcDwcPostTruncationTpuFitterPass
     SmallVector<dwc::ClassifierOp> classifiers;
     WalkResult walked = getOperation().walk([&](dwc::ClassifierOp classifier) {
       auto type = dyn_cast<RankedTensorType>(classifier->getOperand(0).getType());
-      if (classifier->getNumOperands() != 1 || classifier->getNumResults() != 1 || !type ||
-          !type.hasStaticShape() || type.getRank() < 1 || !type.getElementType().isBF16() ||
-          classifier->getResult(0).getType() != type) {
-        classifier.emitOpError("softmax decomposition requires one static bf16 tensor of "
-                               "unchanged type");
+      auto result = classifier->getNumResults() == 1
+                        ? dyn_cast<RankedTensorType>(classifier->getResult(0).getType())
+                        : RankedTensorType{};
+      if (classifier->getNumOperands() != 1 || !result || !type || !type.hasStaticShape() ||
+          type.getRank() < 1 || !type.getElementType().isBF16() ||
+          result.getShape() != type.getShape() ||
+          (!result.getElementType().isBF16() && !result.getElementType().isF32())) {
+        classifier.emitOpError("softmax decomposition requires a static bf16 input and a bf16 "
+                               "or f32 result of the same shape");
         return WalkResult::interrupt();
       }
       classifiers.push_back(classifier);
@@ -3650,9 +3654,9 @@ struct DwcDwcPostTruncationTpuFitterPass
              builder.getNamedAttr("op_type", dwc::ReductionTypeAttr::get(context, kind))});
       };
       auto cwise = [&](Value lhs, Value rhs, dwc::CwiseOpType kind,
-                       dwc::ActivationFunction activation) {
+                       dwc::ActivationFunction activation, Type result) {
         return create(
-            dwc::CwiseOp::getOperationName(), {lhs, rhs}, type,
+            dwc::CwiseOp::getOperationName(), {lhs, rhs}, result,
             {builder.getNamedAttr("activation_function",
                                   dwc::ActivationFunctionAttr::get(context, activation)),
              builder.getNamedAttr("op_type", dwc::CwiseOpTypeAttr::get(context, kind))});
@@ -3660,12 +3664,12 @@ struct DwcDwcPostTruncationTpuFitterPass
 
       Value maximum = reduce(input, dwc::ReductionType::Max, dwc::SimpleActivationFunction::None);
       Value exponent =
-          cwise(input, maximum, dwc::CwiseOpType::Subtract, dwc::ActivationFunction::Exp);
+          cwise(input, maximum, dwc::CwiseOpType::Subtract, dwc::ActivationFunction::Exp, type);
       Value reciprocal =
           reduce(exponent, dwc::ReductionType::Sum, dwc::SimpleActivationFunction::Reciprocal);
-      Value result =
-          cwise(exponent, reciprocal, dwc::CwiseOpType::Multiply, dwc::ActivationFunction::None);
-      classifier->replaceAllUsesWith(ValueRange{result});
+      Value normalized = cwise(exponent, reciprocal, dwc::CwiseOpType::Multiply,
+                               dwc::ActivationFunction::None, classifier->getResult(0).getType());
+      classifier->replaceAllUsesWith(ValueRange{normalized});
       classifier.erase();
     }
   }

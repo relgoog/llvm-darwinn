@@ -5,6 +5,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/DialectResourceBlobManager.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
@@ -156,9 +157,9 @@ LogicalResult validatePadding(tensor::PadOp operation) {
   auto output = operation.getResultType();
   if (!isSupportedTensor(input, true) || !isSupportedTensor(output, true) ||
       !input.getElementType().isBF16() || !operation.getLow().empty() ||
-      !operation.getHigh().empty() || operation.getNofold())
+      !operation.getHigh().empty())
     return unsupported(operation, "padding requires static rank-four bf16 storage and static "
-                                  "spatial bounds without nofold");
+                                  "spatial bounds");
 
   Value paddingValue = operation.getConstantPaddingValue();
   auto constant = paddingValue ? paddingValue.getDefiningOp<arith::ConstantOp>() : arith::ConstantOp{};
@@ -594,10 +595,9 @@ public:
           }
 
           result = CopyOpOp::create(
-              builder, location, type, input, AffineMap::get(type.getRank(), 0, forward, context),
-              AffineMap::get(type.getRank(), 0, reverse, context), sliceBegins(type.getRank()),
-              builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()),
-              AffineMap::getMultiDimIdentityMap(type.getRank(), context));
+              builder, location, type, tileOperand(input), AffineMap::get(type.getRank(), 0, forward, context),
+              AffineMap::get(type.getRank(), 0, reverse, context), AffineMapAttr{}, ArrayAttr{},
+              AffineMapAttr{}, AffineMap::getMultiDimIdentityMap(type.getRank(), context));
         }
 
         values.map(operation.getResult(0), result);
@@ -633,9 +633,16 @@ public:
           if (role != 0)
             kind = ConstTypeAttr::get(context,
                                       role == 1 ? ConstKind::Parameter : ConstKind::BiasOrScale);
-          fills[role] = FillOp::create(builder, location, type, value, kind,
-                                       sliceBegins(type.getRank()), builder.getI32ArrayAttr({1, 1}),
-                                       sliceEnds(type.getShape()));
+          ElementsAttr contents = value;
+          auto fillType = type;
+          if (role == 1) {
+            contents = parameterContents(source, value);
+            fillType = tileType(contents.getType());
+          }
+          fills[role] = FillOp::create(builder, location, fillType, contents, kind,
+                                       sliceBegins(fillType.getRank()),
+                                       builder.getI32ArrayAttr({1, 1}),
+                                       sliceEnds(fillType.getShape()));
         }
 
         if (fills[ordinaryRole])
@@ -702,8 +709,7 @@ public:
       unsigned count = isa<dwc::CwiseOp>(operation) ? 2 : 1;
 
       for (Value operand : operation.getOperands().take_front(count)) {
-        Value storage = redistribute(values.lookup(operand), DistributedMemorySpace::TileMemory);
-        operands.push_back(view(storage, outputType.getShape()));
+        operands.push_back(view(tileOperand(values.lookup(operand)), outputType.getShape()));
       }
 
       Value empty = CreateEmptyTensorOp::create(
@@ -732,7 +738,7 @@ public:
             builder, location, outputType, operands[0], operands[1], destination, ValueRange{},
             options, traversal, ArrayAttr{}, CustomTilingOptionsAttr{}, DtcInfoAttr{},
             VexInfoAttr{});
-        result = GetTensorOp::create(builder, location, outputType, computed);
+        result = computed;
       } else {
         result = StaticUnaryComputeOpOp::create(
             builder, location, outputType, operands[0], destination, ValueRange{},
@@ -742,23 +748,42 @@ public:
 
       values.map(operation.getResult(0), result);
     }
+
+    // Chained tile redistributes collapse into the later one when the earlier carries no mapping,
+    // so a reshape followed by padding becomes one mapped redistribute as in SDK stage 248.
+    SmallVector<RedistributeOp> chained;
+    output.walk([&](RedistributeOp later) {
+      auto earlier = later.getInput().getDefiningOp<RedistributeOp>();
+      if (earlier && earlier->hasOneUse() && !earlier.getMappingAttr() &&
+          cast<DistributedTensorType>(earlier.getInput().getType()).getMemorySpace() ==
+              DistributedMemorySpace::TileMemory)
+        chained.push_back(later);
+    });
+    for (RedistributeOp later : chained) {
+      Operation *earlier = later.getInput().getDefiningOp();
+      later->setOperand(0, earlier->getOperand(0));
+      earlier->erase();
+    }
+
+    // A redistributed tensor read by more than one consumer gets a private tile copy per view,
+    // as SDK stage 255 shows for multiply-used reshapes.
+    SmallVector<DistributedCreateViewOp> shared;
+    output.walk([&](DistributedCreateViewOp created) {
+      Value storage = created.getInput();
+      if (storage.getDefiningOp<RedistributeOp>() && !storage.hasOneUse())
+        shared.push_back(created);
+    });
+    for (DistributedCreateViewOp created : shared) {
+      builder.setInsertionPoint(created);
+      created->setOperand(0, redistribute(created.getInput(), DistributedMemorySpace::TileMemory));
+    }
   }
 
 private:
   Value lowerTransposedConvolution(Operation *operation, Value input, Value filter, Value bias) {
-    Location location = operation->getLoc();
     SmallVector<AffineExpr> dimensions;
     for (unsigned axis = 0; axis < 9; ++axis)
       dimensions.push_back(builder.getAffineDimExpr(axis));
-
-    auto filterType = cast<DistributedTensorType>(filter.getType());
-    auto kernel = filterType.getShape();
-    auto split = DistributedTensorType::get(
-        context, {1, kernel[0], 1, kernel[1], kernel[2], kernel[3]},
-        filterType.getElementType(), DistributedMemorySpace::TileMemory);
-    filter = RedistributeOp::create(builder, location, split, filter, Value{}, MappingAttr{},
-                                    sliceBegins(6), builder.getI32ArrayAttr({1, 1}),
-                                    sliceEnds(split.getShape()));
 
     int64_t yStride = operation->getAttrOfType<IntegerAttr>("y_stride").getInt();
     int64_t xStride = operation->getAttrOfType<IntegerAttr>("x_stride").getInt();
@@ -771,13 +796,23 @@ private:
                                        dimensions[2] + dimensions[4], dimensions[7]}));
     Value filterView = view(filter, map({dimensions[3], dimensions[5], dimensions[4],
                                          dimensions[6], dimensions[7], dimensions[8]}));
-    return lowerMultiplyAccumulate(operation, inputView, filterView, bias, traversal,
-                                   InnerOperationKind::Vmc, ComputeTypeHintKind::TransposedConv);
+    Value computed =
+        lowerMultiplyAccumulate(operation, inputView, filterView, bias, traversal,
+                                InnerOperationKind::Vmc, ComputeTypeHintKind::TransposedConv);
+
+    // SDK stage 248 reads a transposed convolution result through an identity output view.
+    Value moved = redistribute(computed, DistributedMemorySpace::TileMemory);
+    auto type = cast<DistributedTensorType>(moved.getType());
+    auto identity = AffineMapAttr::get(AffineMap::getMultiDimIdentityMap(type.getRank(), context));
+    return DistributedCreateViewOp::create(
+        builder, moved.getLoc(),
+        DistributedViewType::get(context, type.getShape(), type.getElementType(),
+                                 type.getMemorySpace()),
+        moved, identity, identity);
   }
 
   Value lowerConvolution(Operation *operation) {
     bool depthwise = isa<dwc::DepthwiseConvolutionOp>(operation);
-    Location location = operation->getLoc();
     unsigned rank = depthwise ? 8 : 7;
     SmallVector<AffineExpr> dimensions;
     for (unsigned axis = 0; axis < rank; ++axis)
@@ -789,7 +824,7 @@ private:
       Value storage = index != 0 && found != constantValues.end()
                           ? found->second[index]
                           : values.lookup(source);
-      return redistribute(storage, DistributedMemorySpace::TileMemory);
+      return tileOperand(storage);
     };
 
     Value input = operandStorage(0);
@@ -800,24 +835,6 @@ private:
                      : Value{};
     if (isa<dwc::TransposedConvolutionOp>(operation))
       return lowerTransposedConvolution(operation, input, filter, bias);
-
-    if (depthwise) {
-      auto type = cast<DistributedTensorType>(filter.getType());
-      auto shape = type.getShape();
-      auto expanded = DistributedTensorType::get(
-          context, {shape[0], shape[1], 1, 1, shape[2]}, type.getElementType(),
-          DistributedMemorySpace::TileMemory);
-      auto zero = builder.getAffineConstantExpr(0);
-      auto mapping = MappingAttr::get(
-          context,
-          AffineMapAttr::get(AffineMap::get(
-              3, 0, {dimensions[0], dimensions[1], zero, zero, dimensions[2]}, context)),
-          AffineMapAttr::get(AffineMap::get(
-              5, 0, {dimensions[0], dimensions[1], dimensions[4]}, context)));
-      filter = RedistributeOp::create(
-          builder, location, expanded, filter, Value{}, mapping, sliceBegins(5),
-          builder.getI32ArrayAttr({1, 1}), sliceEnds(expanded.getShape()));
-    }
 
     int64_t xStride = operation->getAttrOfType<IntegerAttr>("x_stride").getInt();
     int64_t yStride = operation->getAttrOfType<IntegerAttr>("y_stride").getInt();
@@ -874,42 +891,135 @@ private:
         computeOptions(inner, LinearFunctionKind::Mac, lower, upper, NluFunctionKind::Linear, {},
                        hint),
         traversal, auxiliaryKinds, CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
-    return GetTensorOp::create(builder, location, outputType, computed);
+    return computed;
   }
 
+  // Mirrors SDK stage 255. A reduction over the minor axis becomes a two-stage tree over lanes, the
+  // largest divisor of the extent that is at most eight and below it. Other axes are traversed
+  // just before the minor axis.
   Value lowerReduction(Operation *operation) {
-    Location location = operation->getLoc();
     unsigned axis = *reducedAxis(operation);
     auto kind = operation->getAttrOfType<dwc::ReductionTypeAttr>("op_type").getValue();
-    auto activation =
-        operation->getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function");
+    bool maximum = kind == dwc::ReductionType::Max;
+    bool reciprocal =
+        operation->getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function")
+            .getValue() == dwc::SimpleActivationFunction::Reciprocal;
     auto inputType = cast<ShapedType>(operation->getOperand(0).getType());
     auto outputType = tileType(operation->getResult(0).getType());
     unsigned rank = inputType.getRank();
-    SmallVector<AffineExpr> coordinates;
+    Value source = values.lookup(operation->getOperand(0));
+    auto finalOptions = [&] {
+      return reductionOptions(maximum, reciprocal, builder.getF32FloatAttr(maximum ? -0.0f : 0.0f));
+    };
 
-    for (unsigned dimension = 0; dimension < rank; ++dimension) {
-      coordinates.push_back(dimension == axis ? builder.getAffineConstantExpr(0)
-                                              : builder.getAffineDimExpr(dimension));
+    if (axis != rank - 1) {
+      SmallVector<unsigned> order;
+      for (unsigned dimension = 0; dimension + 1 < rank; ++dimension) {
+        if (dimension != axis)
+          order.push_back(dimension);
+      }
+      order.append({axis, rank - 1});
+
+      SmallVector<AffineExpr> inputCoordinates(rank);
+      for (auto [position, dimension] : llvm::enumerate(order))
+        inputCoordinates[dimension] = builder.getAffineDimExpr(position);
+      SmallVector<AffineExpr> outputCoordinates(inputCoordinates);
+      outputCoordinates[axis] = builder.getAffineConstantExpr(0);
+
+      auto traversal = AffineMap::get(rank, 0, outputCoordinates, context);
+      Value inputView =
+          view(tileOperand(source), AffineMap::get(rank, 0, inputCoordinates, context));
+      return reduce(inputView, outputType, traversal, finalOptions());
     }
 
-    auto traversal = AffineMap::get(rank, 0, coordinates, context);
-    Value input = redistribute(values.lookup(operation->getOperand(0)),
-                               DistributedMemorySpace::TileMemory);
-    Value inputView = view(input, AffineMap::getMultiDimIdentityMap(rank, context));
-    Value empty = CreateEmptyTensorOp::create(
-        builder, location, outputType, sliceBegins(rank), builder.getI32ArrayAttr({1, 1}),
-        sliceEnds(outputType.getShape()));
-    bool maximum = kind == dwc::ReductionType::Max;
-    bool reciprocal = activation.getValue() == dwc::SimpleActivationFunction::Reciprocal;
-    ComputeOpOptionsAttr options = computeOptions(
-        InnerOperationKind::Unary, maximum ? LinearFunctionKind::Max : LinearFunctionKind::Add, {},
-        {}, reciprocal ? NluFunctionKind::Reciprocal : NluFunctionKind::Linear,
-        builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), std::nullopt, true);
+    int64_t extent = inputType.getDimSize(axis);
+    int64_t lanes = 1;
+    for (int64_t candidate = std::min<int64_t>(8, extent - 1); candidate > 1; --candidate) {
+      if (extent % candidate == 0) {
+        lanes = candidate;
+        break;
+      }
+    }
 
+    auto shapeWith = [&](ArrayRef<int64_t> minor, Type element) {
+      SmallVector<int64_t> shape(inputType.getShape().drop_back());
+      shape.append(minor.begin(), minor.end());
+      return DistributedTensorType::get(context, shape, element,
+                                        DistributedMemorySpace::TileMemory);
+    };
+    SmallVector<AffineExpr> minorZero;
+    for (unsigned dimension = 0; dimension <= rank; ++dimension) {
+      minorZero.push_back(dimension == rank - 1 ? builder.getAffineConstantExpr(0)
+                                                : builder.getAffineDimExpr(dimension));
+    }
+
+    auto traversal = AffineMap::get(rank + 1, 0, minorZero, context);
+    auto identity = AffineMap::getMultiDimIdentityMap(rank + 1, context);
+    Type element = outputType.getElementType();
+    Value split;
+
+    if (lanes == 1) {
+      split = reshape(tileOperand(source), shapeWith({extent, 1}, inputType.getElementType()));
+    } else {
+      auto splitType = shapeWith({extent / lanes, lanes}, inputType.getElementType());
+      split = RedistributeOp::create(builder, operation->getLoc(), splitType, source, Value{},
+                                     MappingAttr{}, sliceBegins(rank + 1),
+                                     builder.getI32ArrayAttr({1, 1}),
+                                     sliceEnds(splitType.getShape()));
+      Type partial = maximum ? inputType.getElementType() : builder.getF32Type();
+      Value lanesFirst = reduce(view(split, identity), shapeWith({1, lanes}, partial), traversal,
+                                reductionOptions(maximum, false, builder.getF32FloatAttr(-0.0f)));
+      split = redistribute(reshape(lanesFirst, shapeWith({lanes, 1}, partial)),
+                           DistributedMemorySpace::TileMemory);
+    }
+
+    Value reduced =
+        reduce(view(split, identity), shapeWith({1, 1}, element), traversal, finalOptions());
+    return reshape(reduced, outputType);
+  }
+
+  ComputeOpOptionsAttr reductionOptions(bool maximum, bool reciprocal, FloatAttr bias) {
+    return computeOptions(InnerOperationKind::Unary,
+                          maximum ? LinearFunctionKind::Max : LinearFunctionKind::Add, {}, {},
+                          reciprocal ? NluFunctionKind::Reciprocal : NluFunctionKind::Linear, bias,
+                          std::nullopt, true);
+  }
+
+  Value reduce(Value inputView, DistributedTensorType outputType, AffineMap traversal,
+               ComputeOpOptionsAttr options) {
+    unsigned rank = outputType.getRank();
+    Value empty = CreateEmptyTensorOp::create(builder, inputView.getLoc(), outputType,
+                                              sliceBegins(rank), builder.getI32ArrayAttr({1, 1}),
+                                              sliceEnds(outputType.getShape()));
     return StaticUnaryComputeOpOp::create(
-        builder, location, outputType, inputView, view(empty, traversal), ValueRange{}, options,
-        traversal, builder.getArrayAttr({}), CustomTilingOptionsAttr{}, ArrayAttr{}, VexInfoAttr{});
+        builder, inputView.getLoc(), outputType, inputView, view(empty, traversal), ValueRange{},
+        options, traversal, builder.getArrayAttr({}), CustomTilingOptionsAttr{}, ArrayAttr{},
+        VexInfoAttr{});
+  }
+
+  // Only unit extents move, so non-unit dimensions correspond in order and unit coordinates are
+  // pinned to zero in both directions.
+  Value reshape(Value input, DistributedTensorType outputType) {
+    auto inputShape = cast<DistributedTensorType>(input.getType()).getShape();
+    auto outputShape = outputType.getShape();
+    auto pinned = [&](ArrayRef<int64_t> from, ArrayRef<int64_t> to) {
+      SmallVector<unsigned> sources;
+      for (auto [dimension, extent] : llvm::enumerate(from)) {
+        if (extent != 1)
+          sources.push_back(dimension);
+      }
+
+      SmallVector<AffineExpr> results;
+      unsigned next = 0;
+      for (int64_t extent : to) {
+        results.push_back(extent == 1 ? builder.getAffineConstantExpr(0)
+                                      : builder.getAffineDimExpr(sources[next++]));
+      }
+      return AffineMapAttr::get(AffineMap::get(from.size(), 0, results, context));
+    };
+
+    return ReshapeOpOp::create(builder, input.getLoc(), outputType, input,
+                               pinned(inputShape, outputShape), pinned(outputShape, inputShape));
   }
 
   Value lowerInterpolation(Operation *operation) {
@@ -974,8 +1084,37 @@ private:
     return AffineMap::get(2, 0, ends, context);
   }
 
+  // Depthwise and transposed filters are stored in the rank their compute traversal reads, a
+  // pure reshape of the semantic HWC and HWCF layouts.
+  ElementsAttr parameterContents(Value source, ElementsAttr value) {
+    auto shape = cast<ShapedType>(value.getType()).getShape();
+    SmallVector<int64_t> reshaped;
+    for (Operation *user : source.getUsers()) {
+      if (isa<dwc::DepthwiseConvolutionOp>(user))
+        reshaped = {shape[0], shape[1], 1, 1, shape[2]};
+      if (isa<dwc::TransposedConvolutionOp>(user))
+        reshaped = {1, shape[0], 1, shape[1], shape[2], shape[3]};
+    }
+
+    if (reshaped.empty())
+      return value;
+    auto type = RankedTensorType::get(reshaped, cast<ShapedType>(value.getType()).getElementType());
+    if (auto dense = dyn_cast<DenseElementsAttr>(value))
+      return dense.reshape(type);
+    auto resource = cast<DenseResourceElementsAttr>(value);
+    return DenseResourceElementsAttr::get(type, resource.getRawHandle());
+  }
+
+  // SDK stage 255 reads parameters and redistributed tensors in place. Every other tile tensor
+  // is redistributed again before a compute reads it.
+  Value tileOperand(Value storage) {
+    if (isa_and_present<FillOp, RedistributeOp>(storage.getDefiningOp()))
+      return storage;
+    return redistribute(storage, DistributedMemorySpace::TileMemory);
+  }
+
   Value redistribute(Value input, DistributedMemorySpace memory) {
-    auto inputType = cast<DistributedTensorType>(input.getType());
+    auto inputType = cast<ShapedType>(input.getType());
     auto outputType = DistributedTensorType::get(context, inputType.getShape(),
                                                  inputType.getElementType(), memory);
     return RedistributeOp::create(builder, input.getLoc(), outputType, input, Value{},
