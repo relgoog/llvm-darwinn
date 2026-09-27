@@ -16,6 +16,8 @@ std::unique_ptr<Pass> createNodePartitionPass();
 void registerNodePartitionPass();
 std::unique_ptr<Pass> createTransferCanonicalizationPass();
 void registerTransferCanonicalizationPass();
+std::unique_ptr<Pass> createRedistributeOptimizationPass();
+void registerRedistributeOptimizationPass();
 
 }
 }

@@ -83,6 +83,7 @@ void mlir::registerAllPasses() {
   darwinn::registerMoveRedistributeToHostPass();
   darwinn::registerNodePartitionPass();
   darwinn::registerTransferCanonicalizationPass();
+  darwinn::registerRedistributeOptimizationPass();
   darwinn::registerOptimizePointwisePass();
   darwinn::registerPlanTensorTraversalsPass();
   func::registerFuncPasses();
