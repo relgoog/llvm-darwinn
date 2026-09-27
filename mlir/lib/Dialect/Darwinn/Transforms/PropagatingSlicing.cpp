@@ -1,4 +1,4 @@
-#include "mlir/Dialect/Darwinn/Transforms/PropagatingSlicing.h"
+#include "mlir/Dialect/Darwinn/Transforms/DistributedPasses.h"
 #include "SlicingModel.h"
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
