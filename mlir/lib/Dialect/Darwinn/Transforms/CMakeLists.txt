@@ -12,6 +12,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   LowerRuntime.cpp
   LowerSemanticToDistributed.cpp
   MoveRedistributeToHost.cpp
+  NodePartition.cpp
   OptimizePointwise.cpp
   PlanSharding.cpp
   PlanTensorTraversals.cpp
