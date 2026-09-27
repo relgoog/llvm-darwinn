@@ -1,6 +1,6 @@
-#include "mlir/Dialect/Darwinn/Transforms/DistributedPasses.h"
 #include "SlicingModel.h"
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
+#include "mlir/Dialect/Darwinn/Transforms/DistributedPasses.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
@@ -107,6 +107,16 @@ std::vector<const void *> Solver::signature(unsigned block) const {
 LogicalResult Solver::visit(unsigned block, std::optional<unsigned> parent) {
   if (sliced.test(block))
     return success();
+  if (model.isShared(block)) {
+    if (parent)
+      return success();
+    auto code = model.sharedCode(block, state);
+    if (failed(code))
+      return failure();
+    state[block] = *code;
+    sliced.set(block);
+    return success();
+  }
   std::vector<const void *> key = signature(block);
   SmallVector<unsigned> choices;
   auto remembered = memo.find(key);
@@ -163,6 +173,10 @@ LogicalResult Solver::run() {
   llvm::BitVector everything(blocks, true);
   SmallVector<std::pair<int64_t, unsigned>> ranking;
   for (unsigned block = 0; block < blocks; ++block) {
+    if (model.isShared(block)) {
+      ranking.push_back({0, block});
+      continue;
+    }
     auto value = cost(block, state[block], everything);
     if (failed(value))
       return failure();

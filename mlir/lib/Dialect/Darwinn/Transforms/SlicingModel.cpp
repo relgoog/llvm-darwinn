@@ -3,6 +3,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
 
@@ -20,15 +21,25 @@ unsigned nonReturnUses(Operation *operation) {
   return count;
 }
 
+bool producesHost(Operation *operation) {
+  return llvm::any_of(operation->getResults(), [](Value result) {
+    return memorySpaceOf(result) == DistributedMemorySpace::HostMemory;
+  });
+}
+
 bool isAnchor(Operation *operation) {
   if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp,
           InterpolateHardwareOp>(operation))
     return true;
-  if (auto view = dyn_cast<DistributedCreateViewOp>(operation))
-    return view.getForwardIndexTransformation().has_value();
+  if (isa<DistributedCreateViewOp>(operation))
+    return !operation->hasAttr("traversal");
   if (isa<RedistributeOp>(operation))
-    return nonReturnUses(operation) != 1;
+    return nonReturnUses(operation) != 1 || producesHost(operation);
   return false;
+}
+
+bool outsideBlocks(Operation *operation) {
+  return !isa<RedistributeOp>(operation) && producesHost(operation);
 }
 
 AffineMap wholeMap(MLIRContext *context, unsigned dims, ArrayRef<int64_t> shape,
@@ -87,7 +98,7 @@ LogicalResult SlicingModel::build() {
 LogicalResult SlicingModel::partition() {
   SmallVector<Operation *> operations;
   for (Operation &operation : function.getBody().front())
-    if (!isa<func::ReturnOp>(operation))
+    if (!isa<func::ReturnOp>(operation) && !outsideBlocks(&operation))
       operations.push_back(&operation);
 
   for (Operation *operation : operations) {
@@ -147,6 +158,9 @@ LogicalResult SlicingModel::partition() {
 void SlicingModel::buildGraph() {
   preds.assign(blocks.size(), {});
   succs.assign(blocks.size(), {});
+  DenseMap<Operation *, unsigned> position;
+  for (Operation &operation : function.getBody().front())
+    position[&operation] = position.size();
   for (Operation &operation : function.getBody().front()) {
     std::optional<unsigned> to = blockOf(&operation);
     if (!to)
@@ -159,13 +173,45 @@ void SlicingModel::buildGraph() {
         continue;
       if (!llvm::is_contained(preds[*to], *from))
         preds[*to].push_back(*from);
-      if (!llvm::is_contained(succs[*from], *to))
-        succs[*from].push_back(*to);
       SmallVector<Operation *> &list = edges[{*from, *to}];
       if (!llvm::is_contained(list, &operation))
         list.push_back(&operation);
     }
+    // The SDK walks use lists, which hold the most recently created use
+    // first, so successors of one operation appear in reverse IR order.
+    SmallVector<Operation *> users(operation.getUsers());
+    llvm::sort(users, [&](Operation *left, Operation *right) {
+      return position.lookup(left) > position.lookup(right);
+    });
+    for (Operation *user : users) {
+      std::optional<unsigned> next = blockOf(user);
+      if (next && *next != *to && !llvm::is_contained(succs[*to], *next))
+        succs[*to].push_back(*next);
+    }
   }
+}
+
+bool SlicingModel::isShared(unsigned block) const {
+  return blocks[block].anchor->hasAttr("tensor_shared_by_users");
+}
+
+FailureOr<unsigned> SlicingModel::sharedCode(unsigned block,
+                                             ArrayRef<unsigned> state) {
+  Operation *anchor = blocks[block].anchor;
+  Operation *user = nullptr;
+  for (Operation *candidate : anchor->getUsers())
+    if (!user || candidate->isBeforeInBlock(user))
+      user = candidate;
+  std::optional<unsigned> userBlock = user ? blockOf(user) : std::nullopt;
+  if (!userBlock)
+    return anchor->emitOpError("shares its tensor without a sliced user");
+  auto derived = derive(*userBlock, state[*userBlock]);
+  if (failed(derived))
+    return failure();
+  auto found = (*derived)->find(user->getResult(0));
+  if (found == (*derived)->end())
+    return user->emitOpError("has no derived slicing");
+  return intern({codes[state[*userBlock]].domain, found->second});
 }
 
 unsigned SlicingModel::intern(Code code) {
@@ -261,12 +307,7 @@ LogicalResult SlicingModel::generateCodes() {
 
   for (auto [index, block] : llvm::enumerate(blocks)) {
     SmallVector<unsigned> &list = candidateLists[index];
-    auto memory = [&](Value value) {
-      if (auto tensor = dyn_cast<DistributedTensorType>(value.getType()))
-        return tensor.getMemorySpace();
-      return DistributedMemorySpace::TileMemory;
-    };
-    if (memory(block.key) == DistributedMemorySpace::HostMemory) {
+    if (memorySpaceOf(block.key) == DistributedMemorySpace::HostMemory) {
       list.push_back(unsliced[index]);
       continue;
     }
@@ -645,6 +686,14 @@ LogicalResult SlicingModel::emit(ArrayRef<unsigned> state) {
 
 ArrayRef<int64_t> mlir::darwinn::slicing::shapeOf(Value value) {
   return cast<ShapedType>(value.getType()).getShape();
+}
+
+DistributedMemorySpace mlir::darwinn::slicing::memorySpaceOf(Value value) {
+  return llvm::TypeSwitch<Type, DistributedMemorySpace>(value.getType())
+      .Case<DistributedTensorType, DistributedViewType, EmptyTensorType,
+            WriteViewType, FilledViewType>(
+          [](auto type) { return type.getMemorySpace(); })
+      .Default([](Type) { return DistributedMemorySpace::TileMemory; });
 }
 
 std::optional<LinearForm>

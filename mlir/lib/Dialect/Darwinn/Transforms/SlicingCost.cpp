@@ -3,6 +3,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
+#include <cmath>
 #include <set>
 
 using namespace mlir;
@@ -15,6 +16,7 @@ constexpr int64_t kTileBandwidth = 32;
 constexpr int64_t kRingLatency = 30;
 constexpr int64_t kTransferOverhead = 6;
 constexpr int64_t kRingLength = 16;
+constexpr double kHostStrideFactor = 1.1;
 
 int64_t product(ArrayRef<int64_t> values) {
   int64_t result = 1;
@@ -32,14 +34,6 @@ FailureOr<int64_t> elementBits(Type type) {
   if (auto integer = dyn_cast<IntegerType>(element))
     return integer.getWidth();
   return failure();
-}
-
-DistributedMemorySpace memoryOf(Value value) {
-  if (auto tensor = dyn_cast<DistributedTensorType>(value.getType()))
-    return tensor.getMemorySpace();
-  if (auto view = dyn_cast<DistributedViewType>(value.getType()))
-    return view.getMemorySpace();
-  return DistributedMemorySpace::TileMemory;
 }
 
 SmallVector<bool> usedDims(AffineMap map) {
@@ -318,7 +312,15 @@ struct RingCost {
   int64_t totalBytes;
 };
 
-RingCost ringCost(const Transfers &transfers, int64_t bits) {
+struct RingShape {
+  int64_t overhead = kTransferOverhead;
+  int64_t length = kRingLength;
+  int64_t hopScale = 2;
+  int64_t wrapScale = 2;
+};
+
+RingCost ringCost(const Transfers &transfers, int64_t bits,
+                  RingShape shape = {}) {
   int64_t repeat = std::max<int64_t>(transfers.outer, 1);
   llvm::MapVector<int64_t, SmallVector<std::tuple<int64_t, int64_t, int64_t>>>
       groups;
@@ -329,7 +331,7 @@ RingCost ringCost(const Transfers &transfers, int64_t bits) {
     int64_t weight = repeat * times;
     cost.totalBytes += weight * bytes;
     cost.transfer += weight * llvm::divideCeilSigned(bytes, kTileBandwidth);
-    cost.overhead += kTransferOverhead * weight;
+    cost.overhead += shape.overhead * weight;
     groups[transfers.keys[index]].push_back(
         {times, transfers.counts[index], transfers.order[index]});
   }
@@ -352,7 +354,7 @@ RingCost ringCost(const Transfers &transfers, int64_t bits) {
         if (first == -1)
           first = position;
         else if (position < previous) {
-          wrap = position + carried + kRingLength - previous;
+          wrap = position + carried + shape.length - previous;
           carried = wrap;
         }
         ++active;
@@ -366,8 +368,8 @@ RingCost ringCost(const Transfers &transfers, int64_t bits) {
       done = next;
     }
   }
-  hops *= 2;
-  wraps *= 2;
+  hops *= shape.hopScale;
+  wraps *= shape.wrapScale;
   cost.order = spans * repeat * kRingLatency + repeat * (hops + wraps);
   return cost;
 }
@@ -650,16 +652,19 @@ SlicingModel::estimateRedistribute(RedistributeOp redistribute,
     return estimate;
   };
 
-  if (memoryOf(input) == DistributedMemorySpace::HostMemory) {
+  if (memorySpaceOf(input) == DistributedMemorySpace::HostMemory) {
     int64_t blocks =
-        llvm::divideCeilSigned(product(from) * *bits / 8, kTileBandwidth);
-    estimate.resources = {{1, blocks}, {11, blocks}, {2, kRingLatency}};
+        llvm::divideCeilSigned(product(to) * *bits / 8, kTileBandwidth);
+    int64_t reads = isa<DistributedViewType>(input.getType())
+                        ? std::lround(kHostStrideFactor * blocks)
+                        : blocks;
+    estimate.resources = {{1, reads}, {11, blocks}, {2, kRingLatency}};
     return finish();
   }
 
   bool sourceSliced = sourceBlock && !codes[sourceCode].isUnsliced();
   bool destinationSliced = !codes[destinationCode].isUnsliced();
-  bool toHost = memoryOf(output) == DistributedMemorySpace::HostMemory;
+  bool toHost = memorySpaceOf(output) == DistributedMemorySpace::HostMemory;
 
   if (!sourceSliced && !destinationSliced && !toHost) {
     if (product(from) == product(to))
@@ -707,5 +712,13 @@ SlicingModel::estimateRedistribute(RedistributeOp redistribute,
   if (toHost)
     estimate.resources[12] =
         llvm::divideCeilSigned(ring.totalBytes, kTileBandwidth);
+  if (isa<FilledViewType>(output.getType())) {
+    Transfers whole{{0}, {1}, {product(to)}, {0}, 1};
+    RingCost write = ringCost(whole, *bits, {0, 1, 0, 2});
+    int64_t written =
+        std::lround(kHostStrideFactor * write.transfer) + write.order;
+    if (ring.transfer + ring.order + ring.overhead < written)
+      estimate.resources[1] = written;
+  }
   return finish();
 }

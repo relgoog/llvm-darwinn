@@ -52,6 +52,7 @@ struct LinearForm {
 
 std::optional<LinearForm> linearize(AffineExpr expression, unsigned dims);
 ArrayRef<int64_t> shapeOf(Value value);
+DistributedMemorySpace memorySpaceOf(Value value);
 AffineMap traversalOf(Operation *operation);
 FailureOr<SmallVector<int64_t>> iterationExtents(unsigned dims,
                                                  ArrayRef<Value> views);
@@ -83,6 +84,8 @@ public:
   ArrayRef<unsigned> candidates(unsigned block) const {
     return candidateLists[block];
   }
+  bool isShared(unsigned block) const;
+  FailureOr<unsigned> sharedCode(unsigned block, ArrayRef<unsigned> state);
 
   FailureOr<const DenseMap<Value, SliceMaps> *> derive(unsigned block,
                                                        unsigned code);
