@@ -1,4 +1,5 @@
 #include "mlir/Dialect/Darwinn/Transforms/LowerSemanticToDistributed.h"
+#include "SlicingModel.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/Dialect/Darwinn/IR/DwcOps.h"
@@ -997,29 +998,13 @@ private:
         VexInfoAttr{});
   }
 
-  // Only unit extents move, so non-unit dimensions correspond in order and unit coordinates are
-  // pinned to zero in both directions.
   Value reshape(Value input, DistributedTensorType outputType) {
     auto inputShape = cast<DistributedTensorType>(input.getType()).getShape();
     auto outputShape = outputType.getShape();
-    auto pinned = [&](ArrayRef<int64_t> from, ArrayRef<int64_t> to) {
-      SmallVector<unsigned> sources;
-      for (auto [dimension, extent] : llvm::enumerate(from)) {
-        if (extent != 1)
-          sources.push_back(dimension);
-      }
-
-      SmallVector<AffineExpr> results;
-      unsigned next = 0;
-      for (int64_t extent : to) {
-        results.push_back(extent == 1 ? builder.getAffineConstantExpr(0)
-                                      : builder.getAffineDimExpr(sources[next++]));
-      }
-      return AffineMapAttr::get(AffineMap::get(from.size(), 0, results, context));
-    };
-
-    return ReshapeOpOp::create(builder, input.getLoc(), outputType, input,
-                               pinned(inputShape, outputShape), pinned(outputShape, inputShape));
+    return ReshapeOpOp::create(
+        builder, input.getLoc(), outputType, input,
+        AffineMapAttr::get(slicing::unitReshapeMap(inputShape, outputShape, context)),
+        AffineMapAttr::get(slicing::unitReshapeMap(outputShape, inputShape, context)));
   }
 
   Value lowerInterpolation(Operation *operation) {

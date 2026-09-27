@@ -21,6 +21,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   ScheduledStorage.cpp
   SlicingCost.cpp
   SlicingModel.cpp
+  TransferCanonicalization.cpp
   TensorComputeConfiguration.cpp
 
   DEPENDS

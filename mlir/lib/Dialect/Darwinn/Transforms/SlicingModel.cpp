@@ -835,3 +835,20 @@ Tile mlir::darwinn::slicing::reshapeTile(ArrayRef<int64_t> from,
   }
   return result;
 }
+
+// Only unit extents move, so non-unit dimensions correspond in order and unit
+// coordinates are pinned to zero in both directions.
+AffineMap mlir::darwinn::slicing::unitReshapeMap(ArrayRef<int64_t> from,
+                                                 ArrayRef<int64_t> to,
+                                                 MLIRContext *context) {
+  SmallVector<unsigned> sources;
+  for (auto [dimension, extent] : llvm::enumerate(from))
+    if (extent != 1)
+      sources.push_back(dimension);
+  SmallVector<AffineExpr> results;
+  unsigned next = 0;
+  for (int64_t extent : to)
+    results.push_back(extent == 1 ? getAffineConstantExpr(0, context)
+                                  : getAffineDimExpr(sources[next++], context));
+  return AffineMap::get(from.size(), 0, results, context);
+}
