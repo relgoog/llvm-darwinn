@@ -28,6 +28,8 @@ std::unique_ptr<Pass> createPreemptionPointsInsertionPass();
 void registerPreemptionPointsInsertionPass();
 std::unique_ptr<Pass> createScalarCoreStdOpsLoweringPass();
 void registerScalarCoreStdOpsLoweringPass();
+std::unique_ptr<Pass> createLegalizeThreadObliviousOpPass();
+void registerLegalizeThreadObliviousOpPass();
 
 }
 }

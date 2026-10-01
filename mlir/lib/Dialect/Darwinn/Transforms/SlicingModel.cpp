@@ -777,6 +777,14 @@ LogicalResult SlicingModel::emit(ArrayRef<unsigned> state) {
   return success();
 }
 
+AffineMap mlir::darwinn::slicing::mergeThreads(AffineMap map, int64_t thread) {
+  MLIRContext *context = map.getContext();
+  SmallVector<AffineExpr> replacements{getAffineDimExpr(0, context),
+                                       getAffineDimExpr(1, context),
+                                       getAffineConstantExpr(thread, context)};
+  return map.replaceDimsAndSymbols(replacements, {}, 2, 0);
+}
+
 ArrayRef<int64_t> mlir::darwinn::slicing::shapeOf(Value value) {
   return cast<ShapedType>(value.getType()).getShape();
 }

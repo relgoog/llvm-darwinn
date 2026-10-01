@@ -59,14 +59,6 @@ bool isNoOp(RedistributeOp redistribute) {
   return source && source == slicingOf(redistribute.getOperation());
 }
 
-AffineMap mergeThreads(AffineMap map, int64_t threads) {
-  MLIRContext *context = map.getContext();
-  SmallVector<AffineExpr> replacements{getAffineDimExpr(0, context),
-                                       getAffineDimExpr(1, context),
-                                       getAffineConstantExpr(threads, context)};
-  return map.replaceDimsAndSymbols(replacements, {}, 2, 0);
-}
-
 LogicalResult mergeSharedSlicing(Operation *source) {
   std::optional<Slicing> slicing = slicingOf(source);
   if (!slicing || slicing->domain.size() != 3)

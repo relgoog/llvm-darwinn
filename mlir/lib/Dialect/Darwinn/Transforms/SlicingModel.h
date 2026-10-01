@@ -63,6 +63,7 @@ FailureOr<SmallVector<int64_t>> iterationExtents(unsigned dims,
                                                  ArrayRef<Value> views);
 Tile reshapeTile(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
                  const Tile &tile);
+AffineMap mergeThreads(AffineMap map, int64_t thread);
 AffineMap unitReshapeMap(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
                          MLIRContext *context);
 
