@@ -1097,15 +1097,6 @@ LogicalResult darwinn::SwizzlingOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::SynchronizedComputeOpOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult darwinn::SynchronizedCopyOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 2);
-}
-
 LogicalResult darwinn::SynchronizedSparseComputeOpOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -1113,10 +1104,6 @@ LogicalResult darwinn::SynchronizedSparseComputeOpOp::verify() {
 
 LogicalResult darwinn::SynchronizedSparseCopyOpOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 2);
-}
-
-LogicalResult darwinn::SynchronizedUnaryComputeOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
 LogicalResult darwinn::TerminateOp::verify() {

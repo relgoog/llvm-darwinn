@@ -1692,32 +1692,6 @@ def Darwinn_SwizzlingOp : Darwinn_Op<"swizzling"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: synchronized_compute_op
-def Darwinn_SynchronizedComputeOpOp : Darwinn_Op<"synchronized_compute_op"> {
-  let summary = "Darwinn synchronized_compute_op operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: synchronized_copy_op
-def Darwinn_SynchronizedCopyOpOp : Darwinn_Op<"synchronized_copy_op"> {
-  let summary = "Darwinn synchronized_copy_op operation.";
-  let description = [{
-    Takes two operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: synchronized_sparse_compute_op
 def Darwinn_SynchronizedSparseComputeOpOp : Darwinn_Op<"synchronized_sparse_compute_op"> {
   let summary = "Darwinn synchronized_sparse_compute_op operation.";
@@ -1736,19 +1710,6 @@ def Darwinn_SynchronizedSparseCopyOpOp : Darwinn_Op<"synchronized_sparse_copy_op
   let summary = "Darwinn synchronized_sparse_copy_op operation.";
   let description = [{
     Takes two operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: synchronized_unary_compute_op
-def Darwinn_SynchronizedUnaryComputeOpOp : Darwinn_Op<"synchronized_unary_compute_op"> {
-  let summary = "Darwinn synchronized_unary_compute_op operation.";
-  let description = [{
-    Takes one operand.
     No kernel shape is evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);

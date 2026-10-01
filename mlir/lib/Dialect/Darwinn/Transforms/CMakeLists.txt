@@ -28,6 +28,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   SlicingModel.cpp
   SpillFillOptimization.cpp
   StaticToStreaming.cpp
+  StreamingToSynchronization.cpp
   TransferCanonicalization.cpp
   Vectorization.cpp
   TensorComputeConfiguration.cpp

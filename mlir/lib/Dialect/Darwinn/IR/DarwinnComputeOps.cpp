@@ -224,6 +224,14 @@ LogicalResult StreamingUnaryComputeOpOp::verify() {
   return verifyComputeOperation(*this);
 }
 
+LogicalResult SynchronizedComputeOpOp::verify() {
+  return verifyComputeOperation(*this);
+}
+
+LogicalResult SynchronizedUnaryComputeOpOp::verify() {
+  return verifyComputeOperation(*this);
+}
+
 LogicalResult TensorOpOp::verify() { return verifyComputeOperation(*this); }
 
 LogicalResult UnaryTensorOpOp::verify() {

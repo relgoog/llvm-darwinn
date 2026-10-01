@@ -32,6 +32,8 @@ std::unique_ptr<Pass> createLegalizeThreadObliviousOpPass();
 void registerLegalizeThreadObliviousOpPass();
 std::unique_ptr<Pass> createVectorizationPass();
 void registerVectorizationPass();
+std::unique_ptr<Pass> createStreamingToSynchronizationPass();
+void registerStreamingToSynchronizationPass();
 
 }
 }

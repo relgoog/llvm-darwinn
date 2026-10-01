@@ -102,6 +102,42 @@ def Darwinn_StreamingCopyOpOp : Darwinn_Op<"streaming_copy_op"> {
       "operands attr-dict `:` functional-type(operands, results)";
 }
 
+def Darwinn_SynchronizedComputeOpOp
+    : Darwinn_Op<"synchronized_compute_op"> {
+  let arguments = (ins Darwinn_DistributedView:$lhs,
+      Darwinn_DistributedView:$rhs, Darwinn_DistributedView:$destination,
+      Variadic<Darwinn_ComputeTensorOrView>:$auxiliary_tensors,
+      Darwinn_ComputeOpOptionsAttr:$compute, AffineMapAttr:$traversal,
+      OptionalAttr<Darwinn_ComputeAuxiliaryKinds>:$auxiliary_tensor_types);
+  let results = (outs Darwinn_DistributedTensor:$output);
+  let hasVerifier = 1;
+  let assemblyFormat =
+      "operands attr-dict `:` functional-type(operands, results)";
+}
+
+def Darwinn_SynchronizedUnaryComputeOpOp
+    : Darwinn_Op<"synchronized_unary_compute_op"> {
+  let arguments = (ins Darwinn_DistributedView:$input,
+      Darwinn_DistributedView:$destination,
+      Variadic<Darwinn_ComputeTensorOrView>:$auxiliary_tensors,
+      Darwinn_ComputeOpOptionsAttr:$compute, AffineMapAttr:$traversal,
+      OptionalAttr<Darwinn_ComputeAuxiliaryKinds>:$auxiliary_tensor_types,
+      OptionalAttr<I32ArrayAttr>:$custom_constraints);
+  let results = (outs Darwinn_ComputeTensorOrView:$output);
+  let hasVerifier = 1;
+  let assemblyFormat =
+      "operands attr-dict `:` functional-type(operands, results)";
+}
+
+def Darwinn_SynchronizedCopyOpOp : Darwinn_Op<"synchronized_copy_op"> {
+  let arguments = (ins Darwinn_ComputeTensorOrView:$input,
+      AffineMapAttr:$traversal,
+      OptionalAttr<AffineMapAttr>:$forward_index_transformation);
+  let results = (outs Darwinn_ComputeTensorOrView:$output);
+  let assemblyFormat =
+      "operands attr-dict `:` functional-type(operands, results)";
+}
+
 def Darwinn_TensorOpOp : Darwinn_Op<"tensor_op"> {
   let arguments = (ins Darwinn_DistributedView:$lhs,
       Darwinn_DistributedView:$rhs, Darwinn_DistributedView:$destination,
