@@ -12,6 +12,8 @@ namespace {
 constexpr int64_t kWideRows = 64;
 constexpr int64_t kOutLanes = 32;
 constexpr int64_t kPartialSumPixels = 32;
+constexpr int64_t kSingleRows = 32;
+constexpr int64_t kGroupedPairs = 8;
 constexpr int64_t kStencilLanes = 8;
 constexpr int32_t kWatcherBase = (int32_t(1) << 25) - 1;
 
@@ -180,7 +182,8 @@ SmallVector<int64_t> weightLoops(const VmcPlan &plan) {
   else if (plan.single)
     loops = {plan.outBlocks};
   else
-    loops = {plan.chunks * plan.taps, plan.outer, plan.outBlocks};
+    loops = {plan.chunks * plan.taps / plan.tapGroup, plan.outer,
+             plan.outBlocks};
   SmallVector<int64_t> out;
   for (int64_t count : ArrayRef(loops).drop_back())
     if (count > 1)
@@ -194,7 +197,7 @@ int64_t loadsPerBlock(const VmcPlan &plan) {
     return plan.chunks * plan.outer;
   if (plan.single)
     return plan.outBlocks > 1 ? 1 : 0;
-  return plan.chunks * plan.taps * plan.outer;
+  return plan.chunks * plan.taps / plan.tapGroup * plan.outer;
 }
 
 FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
@@ -205,7 +208,8 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
   if (failed(wide))
     return unsupported(op, "unplaced convolution weights");
   int64_t bufferRows =
-      plan.chunk / 2 * (plan.single || plan.transposed ? plan.taps : 1);
+      plan.chunk / 2 *
+      (plan.single || plan.transposed ? plan.taps : plan.tapGroup);
   SmallVector<int64_t> loops = weightLoops(plan);
   SmallVector<Counter> items{counter(bufferRows - 1, 1)};
   for (auto [index, count] : llvm::enumerate(loops))
@@ -334,22 +338,46 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   } else {
     pixelOuter = {colStep, rowStep};
   }
-  SmallVector<Strided> tapLoops{{kw, g.col, 0}, {kh, g.row, 0}};
+  int64_t group = plan.tapGroup;
+  bool pairs = !single && plan.chunks == 1;
+  SmallVector<Strided> groupLoops, tapLoops{{kw, g.col, 0}, {kh, g.row, 0}};
+  if (group > 1) {
+    groupLoops = {tapLoops.front()};
+    tapLoops.erase(tapLoops.begin());
+  }
   SmallVector<Strided> chunkLoops{{plan.chunks, plan.chunk * g.elem, 0}};
   int64_t inner = countOf(pixelInner), outer = countOf(pixelOuter);
 
-  SmallVector<int64_t> main{cycles};
-  if (!single)
-    main.push_back(inner);
-  main.push_back(plan.chunks);
-  main.push_back(taps);
+  SmallVector<int64_t> main;
+  SmallVector<bool> reduction;
+  auto loop = [&](int64_t count, bool reduces) {
+    main.push_back(count);
+    reduction.push_back(reduces);
+  };
+  std::optional<int64_t> tapIndex;
+  if (pairs) {
+    loop(1, true);
+    loop(cycles, true);
+    if (group > 1)
+      loop(group, true);
+    loop(inner, false);
+    tapIndex = main.size();
+    loop(taps / group, true);
+  } else {
+    loop(cycles, true);
+    if (!single)
+      loop(inner, false);
+    loop(plan.chunks, true);
+    loop(taps, true);
+  }
   if (single || outer > 1)
-    main.push_back(outer);
-  main.push_back(plan.outBlocks);
+    loop(outer, false);
+  loop(plan.outBlocks, false);
 
   TensorOp tensor;
   tensor.mainOperation.counter = mainCounters(main);
   SmallVector<std::pair<int64_t, int64_t>> read{{cycles, 4}};
+  llvm::append_range(read, mergeStream(groupLoops, &Strided::lhs));
   llvm::append_range(read, mergeStream(pixelInner, &Strided::lhs));
   llvm::append_range(read, mergeStream(chunkLoops, &Strided::lhs));
   llvm::append_range(read, mergeStream(tapLoops, &Strided::lhs));
@@ -379,7 +407,7 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   FailureOr<int64_t> wide = context.wideAddress(op);
   if (failed(wide))
     return unsupported(op, "unplaced convolution weights");
-  int64_t bufferUnits = cycles * 4 * (single ? taps : 1);
+  int64_t bufferUnits = cycles * 4 * (single ? taps : group);
   SmallVector<std::pair<int64_t, int64_t>> parameters;
   if (single) {
     parameters.push_back({cycles, 4});
@@ -389,7 +417,8 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
     if (plan.outBlocks > 1)
       parameters.push_back({plan.outBlocks, 0});
   } else {
-    parameters = {{cycles, 4}, {inner, 0}, {plan.chunks * taps, 0}};
+    parameters = {
+        {cycles * group, 4}, {inner, 0}, {plan.chunks * taps / group, 0}};
     if (outer > 1)
       parameters.push_back({outer, 0});
     parameters.push_back({plan.outBlocks, 0});
@@ -417,7 +446,8 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
     sums.doubleBufferLoop = 1 + (taps > 1);
     sums.secondBufferOffset = 4;
   } else {
-    sumLoops = {{cycles, 0}, {inner, 4}, {plan.chunks * taps, 0}};
+    sumLoops = {
+        {cycles * group, 0}, {inner, 4}, {plan.chunks * taps / group, 0}};
     if (outer > 1)
       sumLoops.push_back({outer, 0});
     sumLoops.push_back({plan.outBlocks, 0});
@@ -427,7 +457,7 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
 
   int64_t outIndex = main.size() - 1;
   int64_t blockDepth = plan.outBlocks > 1 ? outIndex : int64_t(main.size());
-  int64_t reload = !single ? 2 : blockDepth;
+  int64_t reload = single ? blockDepth : tapIndex.value_or(2);
   uint32_t stride = single && plan.outBlocks == 1 ? 0 : 1;
   tensor.syncWatchers.push_back(
       tileWatcher(TileSyncFlag::RingBusReadA, 1, stride, reload));
@@ -448,7 +478,11 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   tensor.control.zOutBlockLoopDepth = outIndex;
   tensor.control.lastZOutBlockValidCount = plan.lanes;
   tensor.control.defaultZOutBlockValidCount = plan.lanes;
-  tensor.control.partialSumReuseMap = single ? 7 : 13;
+  uint8_t reuse = 0;
+  for (auto [index, reduces] : llvm::enumerate(reduction))
+    if (reduces)
+      reuse |= 1u << index;
+  tensor.control.partialSumReuseMap = reuse;
   return tensor;
 }
 
@@ -772,7 +806,9 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   plan.pixels = pixels;
   plan.cin = cinPadded;
   int64_t singleRows = cinPadded / 2 * taps * (plan.outBlocks > 1 ? 2 : 1) + 1;
-  if (singleRows + plan.biasRows <= kWideRows) {
+  if (singleRows + plan.biasRows <= kWideRows &&
+      (pixels > kPartialSumPixels ||
+       cinPadded / 2 * taps + 1 + plan.biasRows <= kSingleRows)) {
     plan.single = true;
     plan.chunk = cinPadded;
     plan.chunks = 1;
@@ -794,7 +830,9 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   plan.chunks = cinPadded / chunk;
   plan.inner = inner;
   plan.outer = pixels / inner;
-  plan.weightsRows = chunk;
+  if (plan.chunks == 1 && chunk / 2 < kGroupedPairs && shape.size() == 4)
+    plan.tapGroup = shape[1];
+  plan.weightsRows = chunk * plan.tapGroup;
   plan.sumsRows = inner;
   return plan;
 }

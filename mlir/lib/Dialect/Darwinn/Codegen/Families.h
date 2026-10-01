@@ -80,6 +80,7 @@ struct VmcPlan {
   int64_t weightsRows = 0;
   int64_t sumsRows = 0;
   int64_t biasRows = 0;
+  int64_t tapGroup = 1;
 };
 
 FailureOr<VmcPlan> vmcPlan(Operation *op);
