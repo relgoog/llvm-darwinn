@@ -44,6 +44,9 @@ TileBoxes clampedBoxes(Operation *op) {
   return out;
 }
 
+// Measured on SDK probes: 29440 source bytes per tile gather, 29696 broadcast.
+constexpr int64_t kBroadcastBytes = 29696;
+
 GroupKind movement(Operation *input, Operation *op) {
   TileBoxes from = clampedBoxes(input), to = clampedBoxes(op);
   for (auto &[tile, box] : from)
@@ -78,8 +81,12 @@ GroupKind movement(Operation *input, Operation *op) {
   }
   const Box &first = from.at(0);
   int64_t rows = first.hi[1] - first.lo[1] + 1;
-  return rows >= 4 && !padded ? GroupKind::RingReshapeIdentity
-                              : GroupKind::Gather;
+  if (padded)
+    return product(extent(first)) * operandInfo(op, 0).elementBytes >=
+                   kBroadcastBytes
+               ? GroupKind::RingReshapeIdentity
+               : GroupKind::Gather;
+  return rows >= 4 ? GroupKind::RingReshapeIdentity : GroupKind::Gather;
 }
 
 bool isPadded(Operation *op) {

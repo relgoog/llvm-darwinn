@@ -214,7 +214,7 @@ Body codegen::scatter(Operation *op, Context &context) {
 
 Body codegen::ringReshape(Operation *op, Context &context) {
   Operation *owner = storage(producer(op, 0));
-  TensorInfo info = resultInfo(op);
+  TensorInfo info = operandInfo(op, 0);
   SmallVector<TileBox> sources = clampedTiles(owner);
   llvm::sort(sources, [](const TileBox &a, const TileBox &b) {
     return a.tile < b.tile;
@@ -253,6 +253,52 @@ Body codegen::ringReshape(Operation *op, Context &context) {
   llvm::sort(destinations, [](const TileBox &a, const TileBox &b) {
     return a.tile < b.tile;
   });
+  if (cast<RedistributeOp>(op).getMappingAttr()) {
+    size_t rank = info.shape.size();
+    Index low = applyForward(op, Index(rank, 0));
+    Index last;
+    for (int64_t size : info.shape)
+      last.push_back(size - 1);
+    Index high = applyForward(op, last);
+    Index blockStrides = strides(
+        tail(extent(unionBox(*slicingOf(op), 0, 0)), rank), info.elementBytes);
+    int64_t rowBytes =
+        product(ArrayRef(info.shape).drop_front(2)) * info.elementBytes;
+    for (const TileBox &destination : destinations) {
+      Index lo, hi;
+      for (size_t dim = 0; dim < rank; ++dim) {
+        lo.push_back(std::max(destination.box.lo[dim], low[dim]));
+        hi.push_back(std::min(destination.box.hi[dim], high[dim]));
+        if (dim != 1 && (lo[dim] != low[dim] || hi[dim] != high[dim]))
+          return unsupported(op, "a padded ring reshape that splits rows "
+                                 "across tiles");
+      }
+      int64_t rows = hi[1] - lo[1] + 1;
+      if (rows <= 0)
+        return unsupported(op, "a padded ring reshape with an empty tile");
+      int64_t start = (lo[1] - low[1]) * rowBytes;
+      Index offset;
+      for (size_t dim = 0; dim < rank; ++dim)
+        offset.push_back(lo[dim] - destination.box.lo[dim]);
+      RingConsumer consumer;
+      consumer.traversal.baseAddress =
+          *destinationBase + dot(offset, blockStrides);
+      consumer.traversal.counter =
+          padded({counter(rowBytes - kAccess, kAccess),
+                  counter((rows - 1) * blockStrides[1], blockStrides[1])},
+                 4);
+      consumer.traversal.syncProducer = {producerSync(true, 1)};
+      consumer.traversal.byteAddressMode = access(kAccess);
+      consumer.virtualChannelSubscription = channels;
+      consumer.threadMulticastBitmap = bits<4>("1000");
+      consumer.filter.firstDiscardByteLoopMap = 3;
+      consumer.filter.firstDiscardByteCount = start;
+      consumer.filter.lastDiscardByteCount = total - start - rows * rowBytes;
+      out.push_back(dma(consumer, tileBit(destination.tile)));
+    }
+    llvm::append_range(out, groupFences());
+    return out;
+  }
   for (const TileBox &destination : destinations) {
     auto range = linearRange(destination.box, info.shape, info.elementBytes);
     if (failed(range))
