@@ -34,6 +34,8 @@ std::unique_ptr<Pass> createVectorizationPass();
 void registerVectorizationPass();
 std::unique_ptr<Pass> createStreamingToSynchronizationPass();
 void registerStreamingToSynchronizationPass();
+std::unique_ptr<Pass> createLowerSynchronizedOpsToTensorOpPass();
+void registerLowerSynchronizedOpsToTensorOpPass();
 
 }
 }

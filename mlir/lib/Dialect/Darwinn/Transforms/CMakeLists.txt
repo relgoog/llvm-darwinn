@@ -12,6 +12,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   LowerPutBits.cpp
   LowerRuntime.cpp
   LowerSemanticToDistributed.cpp
+  LowerSynchronizedOpsToTensorOp.cpp
   MoveRedistributeToHost.cpp
   NodePartition.cpp
   OpReorderingForStreaming.cpp

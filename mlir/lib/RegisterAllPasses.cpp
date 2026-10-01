@@ -92,6 +92,7 @@ void mlir::registerAllPasses() {
   darwinn::registerLegalizeThreadObliviousOpPass();
   darwinn::registerVectorizationPass();
   darwinn::registerStreamingToSynchronizationPass();
+  darwinn::registerLowerSynchronizedOpsToTensorOpPass();
   darwinn::registerOptimizePointwisePass();
   darwinn::registerPlanTensorTraversalsPass();
   func::registerFuncPasses();
