@@ -438,13 +438,8 @@ FailureOr<Estimate> SlicingModel::estimate(Operation *operation,
                                            ArrayRef<unsigned> state) {
   if (isa<CreateEmptyTensorOp, DistributedCreateViewOp, ReshapeOpOp>(operation))
     return Estimate{};
-  if (auto fill = dyn_cast<FillOp>(operation)) {
-    auto bits = elementBits(fill.getOutput().getType());
-    if (failed(bits))
-      return failure();
-    int64_t bytes = product(shapeOf(fill.getOutput())) * *bits / 8;
-    return Estimate{0, {{11, llvm::divideCeilSigned(bytes, kTileBandwidth)}}};
-  }
+  if (auto fill = dyn_cast<FillOp>(operation))
+    return estimateFill(fill);
   std::optional<unsigned> blockId = blockOf(operation);
   if (!blockId)
     return failure();
@@ -453,23 +448,31 @@ FailureOr<Estimate> SlicingModel::estimate(Operation *operation,
     auto found = computeCache.find({operation, codeId});
     if (found != computeCache.end())
       return found->second;
-    auto result = estimateCompute(operation, codeId);
+    auto result = estimateCompute(operation, codes[codeId]);
     if (succeeded(result))
       computeCache[{operation, codeId}] = *result;
     return result;
   }
   if (auto copy = dyn_cast<CopyOpOp>(operation))
-    return estimateCopy(copy, codeId);
+    return estimateCopy(copy, codes[codeId]);
   if (auto interpolate = dyn_cast<InterpolateHardwareOp>(operation))
-    return estimateInterpolate(interpolate, codeId);
+    return estimateInterpolate(interpolate, codes[codeId]);
   if (auto redistribute = dyn_cast<RedistributeOp>(operation))
     return estimateRedistribute(redistribute, state);
   return operation->emitOpError("has no slicing cost model");
 }
 
-FailureOr<Estimate> SlicingModel::estimateCompute(Operation *operation,
-                                                  unsigned codeId) {
-  const Code &code = codes[codeId];
+FailureOr<Estimate> mlir::darwinn::slicing::estimateFill(FillOp fill) {
+  auto bits = elementBits(fill.getOutput().getType());
+  if (failed(bits))
+    return failure();
+  int64_t bytes = product(shapeOf(fill.getOutput())) * *bits / 8;
+  return Estimate{0, {{11, llvm::divideCeilSigned(bytes, kTileBandwidth)}}};
+}
+
+FailureOr<Estimate>
+mlir::darwinn::slicing::estimateCompute(Operation *operation,
+                                        const Code &code) {
   AffineMap traversal = traversalOf(operation);
   SmallVector<Value> views(operation->getOperands());
   auto extents = iterationExtents(traversal.getNumDims(), views);
@@ -569,8 +572,8 @@ FailureOr<Estimate> SlicingModel::estimateCompute(Operation *operation,
   return estimate;
 }
 
-FailureOr<Estimate> SlicingModel::estimateCopy(CopyOpOp copy, unsigned codeId) {
-  const Code &code = codes[codeId];
+FailureOr<Estimate> mlir::darwinn::slicing::estimateCopy(CopyOpOp copy,
+                                                         const Code &code) {
   ArrayRef<int64_t> shape = shapeOf(copy.getOutput());
   SmallVector<int64_t> extent(shape);
   if (!code.isUnsliced()) {
@@ -588,10 +591,9 @@ FailureOr<Estimate> SlicingModel::estimateCopy(CopyOpOp copy, unsigned codeId) {
 }
 
 FailureOr<Estimate>
-SlicingModel::estimateInterpolate(InterpolateHardwareOp interpolate,
-                                  unsigned codeId) {
+mlir::darwinn::slicing::estimateInterpolate(InterpolateHardwareOp interpolate,
+                                            const Code &code) {
   Operation *operation = interpolate.getOperation();
-  const Code &code = codes[codeId];
   auto results = operation->getAttrOfType<ArrayAttr>("result_traversals");
   auto domainAttr = operation->getAttrOfType<ArrayAttr>("traversal_domain");
   if (!results || !domainAttr)
@@ -628,9 +630,7 @@ FailureOr<Estimate>
 SlicingModel::estimateRedistribute(RedistributeOp redistribute,
                                    ArrayRef<unsigned> state) {
   Operation *operation = redistribute.getOperation();
-  Value input = redistribute.getInput();
-  Value output = redistribute.getOutput();
-  Operation *producer = input.getDefiningOp();
+  Operation *producer = redistribute.getInput().getDefiningOp();
   std::optional<unsigned> sourceBlock =
       producer ? blockOf(producer) : std::nullopt;
   unsigned sourceCode = sourceBlock ? state[*sourceBlock] : ~0u;
@@ -640,17 +640,37 @@ SlicingModel::estimateRedistribute(RedistributeOp redistribute,
   if (cached != redistributeCache.end())
     return cached->second;
 
+  SlicedValue source, destination{&codes[destinationCode], nullptr};
+  if (sourceBlock && !codes[sourceCode].isUnsliced()) {
+    auto found = tiles(redistribute.getInput(), sourceCode);
+    if (failed(found))
+      return operation->emitOpError("has no source tiles");
+    source = {&codes[sourceCode], *found};
+  }
+  if (source.code && !destination.code->isUnsliced()) {
+    auto found = tiles(redistribute.getOutput(), destinationCode);
+    if (failed(found))
+      return operation->emitOpError("has no destination tiles");
+    destination.tiles = *found;
+  }
+  auto result =
+      slicing::estimateRedistribute(redistribute, source, destination);
+  if (succeeded(result))
+    redistributeCache[key] = *result;
+  return result;
+}
+
+FailureOr<Estimate> mlir::darwinn::slicing::estimateRedistribute(
+    RedistributeOp redistribute, SlicedValue source, SlicedValue destination) {
+  Operation *operation = redistribute.getOperation();
+  Value input = redistribute.getInput();
+  Value output = redistribute.getOutput();
   auto bits = elementBits(input.getType());
   if (failed(bits))
     return failure();
   ArrayRef<int64_t> from = shapeOf(input);
   ArrayRef<int64_t> to = shapeOf(output);
   Estimate estimate;
-
-  auto finish = [&]() {
-    redistributeCache[key] = estimate;
-    return estimate;
-  };
 
   if (memorySpaceOf(input) == DistributedMemorySpace::HostMemory) {
     int64_t blocks =
@@ -659,16 +679,16 @@ SlicingModel::estimateRedistribute(RedistributeOp redistribute,
                         ? std::lround(kHostStrideFactor * blocks)
                         : blocks;
     estimate.resources = {{1, reads}, {11, blocks}, {2, kRingLatency}};
-    return finish();
+    return estimate;
   }
 
-  bool sourceSliced = sourceBlock && !codes[sourceCode].isUnsliced();
-  bool destinationSliced = !codes[destinationCode].isUnsliced();
+  bool sourceSliced = source.code && !source.code->isUnsliced();
+  bool destinationSliced = !destination.code->isUnsliced();
   bool toHost = memorySpaceOf(output) == DistributedMemorySpace::HostMemory;
 
   if (!sourceSliced && !destinationSliced && !toHost) {
     if (product(from) == product(to))
-      return finish();
+      return estimate;
     int64_t lines = llvm::divideCeilSigned(from.back() * *bits, 128);
     int64_t pad = to[1] - from[1];
     if (to[2] - from[2] != pad)
@@ -677,28 +697,17 @@ SlicingModel::estimateRedistribute(RedistributeOp redistribute,
     estimate.resources = {{0, (from[1] + pad) * width * lines},
                           {3, (4 * pad + 2) * width * lines},
                           {4, (pad + 1) * width * lines}};
-    return finish();
+    return estimate;
   }
 
-  const SmallVector<Tile> *sourceTiles = nullptr;
-  if (sourceSliced) {
-    auto found = tiles(input, sourceCode);
-    if (failed(found))
-      return operation->emitOpError("has no source tiles");
-    sourceTiles = *found;
-  }
-  if (sourceSliced && destinationSliced) {
-    auto destinationTiles = tiles(output, destinationCode);
-    if (failed(destinationTiles))
-      return operation->emitOpError("has no destination tiles");
-    if (samePlacement(from, to, *sourceTiles, codes[sourceCode].domain,
-                      **destinationTiles, codes[destinationCode].domain))
-      return finish();
-  }
+  if (sourceSliced && destinationSliced &&
+      samePlacement(from, to, *source.tiles, source.code->domain,
+                    *destination.tiles, destination.code->domain))
+    return estimate;
 
   auto transfers =
-      ringTransfers(from, sourceTiles,
-                    sourceSliced ? ArrayRef<int64_t>(codes[sourceCode].domain)
+      ringTransfers(from, sourceSliced ? source.tiles : nullptr,
+                    sourceSliced ? ArrayRef<int64_t>(source.code->domain)
                                  : ArrayRef<int64_t>());
   if (failed(transfers))
     return operation->emitOpError("has a transfer with more than two strides");
@@ -720,5 +729,5 @@ SlicingModel::estimateRedistribute(RedistributeOp redistribute,
     if (ring.transfer + ring.order + ring.overhead < written)
       estimate.resources[1] = written;
   }
-  return finish();
+  return estimate;
 }

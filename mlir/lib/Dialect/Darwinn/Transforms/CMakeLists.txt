@@ -17,6 +17,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   OptimizePointwise.cpp
   PlanSharding.cpp
   PlanTensorTraversals.cpp
+  PreemptionPointsInsertion.cpp
   PropagateDistributedSlices.cpp
   PropagatingSlicing.cpp
   RedistributeOptimization.cpp

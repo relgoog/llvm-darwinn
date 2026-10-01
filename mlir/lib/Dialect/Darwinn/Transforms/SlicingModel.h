@@ -45,6 +45,11 @@ struct Estimate {
 
 int64_t cycles(const Estimate &estimate);
 
+struct SlicedValue {
+  const Code *code = nullptr;
+  const SmallVector<Tile> *tiles = nullptr;
+};
+
 struct LinearForm {
   SmallVector<int64_t> coefficients;
   int64_t constant = 0;
@@ -60,6 +65,25 @@ Tile reshapeTile(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
                  const Tile &tile);
 AffineMap unitReshapeMap(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
                          MLIRContext *context);
+
+FailureOr<Estimate> estimateFill(FillOp fill);
+FailureOr<Estimate> estimateCompute(Operation *operation, const Code &code);
+FailureOr<Estimate> estimateCopy(CopyOpOp copy, const Code &code);
+FailureOr<Estimate> estimateInterpolate(InterpolateHardwareOp interpolate,
+                                        const Code &code);
+FailureOr<Estimate> estimateRedistribute(RedistributeOp redistribute,
+                                         SlicedValue source,
+                                         SlicedValue destination);
+
+class MaterializedSlicing {
+public:
+  FailureOr<Estimate> estimate(Operation *operation);
+
+private:
+  FailureOr<SlicedValue> slicingOf(Value value);
+
+  std::map<const void *, std::pair<Code, SmallVector<Tile>>> slicings;
+};
 
 struct SlicingBlock {
   SmallVector<Operation *> members;
@@ -105,10 +129,6 @@ private:
   LogicalResult generateCodes();
   unsigned intern(Code code);
 
-  FailureOr<Estimate> estimateCompute(Operation *operation, unsigned code);
-  FailureOr<Estimate> estimateCopy(CopyOpOp copy, unsigned code);
-  FailureOr<Estimate> estimateInterpolate(InterpolateHardwareOp interpolate,
-                                          unsigned code);
   FailureOr<Estimate> estimateRedistribute(RedistributeOp redistribute,
                                            ArrayRef<unsigned> state);
 

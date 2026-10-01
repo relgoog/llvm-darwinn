@@ -50,7 +50,7 @@ AffineMap wholeMap(MLIRContext *context, unsigned dims, ArrayRef<int64_t> shape,
   return AffineMap::get(dims, 0, results, context);
 }
 
-}
+} // namespace
 
 int64_t mlir::darwinn::slicing::cycles(const Estimate &estimate) {
   auto get = [&](int key) {
@@ -291,7 +291,7 @@ bool hasRankOneOperand(Operation *operation) {
   });
 }
 
-}
+} // namespace
 
 LogicalResult SlicingModel::generateCodes() {
   MLIRContext *context = function.getContext();
@@ -440,7 +440,7 @@ AffineExpr substitute(AffineExpr expression, ArrayRef<AffineExpr> values) {
   return expression.replaceDims(values);
 }
 
-}
+} // namespace
 
 FailureOr<const DenseMap<Value, SliceMaps> *>
 SlicingModel::derive(unsigned blockId, unsigned codeId) {
@@ -624,7 +624,7 @@ SmallVector<Tile> evaluate(const SliceMaps &maps, ArrayRef<int64_t> domain) {
   }
 }
 
-}
+} // namespace
 
 FailureOr<const SmallVector<Tile> *> SlicingModel::tiles(Value value,
                                                          unsigned codeId) {
@@ -656,6 +656,99 @@ FailureOr<const SmallVector<Tile> *> SlicingModel::tiles(Value value,
   }
   auto [inserted, unused] = tileCache.try_emplace(key, std::move(result));
   return &inserted->second;
+}
+
+FailureOr<SlicedValue> MaterializedSlicing::slicingOf(Value value) {
+  Operation *producer = value.getDefiningOp();
+  if (!producer)
+    return SlicedValue{};
+  auto found = slicings.find(value.getAsOpaquePointer());
+  if (found != slicings.end())
+    return SlicedValue{&found->second.first, &found->second.second};
+
+  std::pair<Code, SmallVector<Tile>> slicing;
+  auto begins = producer->getAttrOfType<AffineMapAttr>("slicing_begins");
+  auto domain = producer->getAttrOfType<ArrayAttr>("slicing_domain");
+  auto ends = producer->getAttrOfType<AffineMapAttr>("slicing_ends");
+  if (begins && domain && ends) {
+    for (Attribute extent : domain)
+      slicing.first.domain.push_back(cast<IntegerAttr>(extent).getInt());
+    slicing.first.maps = {begins.getValue(), ends.getValue()};
+    slicing.second = evaluate(slicing.first.maps, slicing.first.domain);
+  } else {
+    Value source;
+    if (auto view = dyn_cast<DistributedCreateViewOp>(producer)) {
+      auto forward = view.getForwardIndexTransformationAttr();
+      if (forward && !forward.getValue().isIdentity())
+        return view.emitOpError("reindexes a sliced tensor without a cost "
+                                "model");
+      source = view.getInput();
+    } else if (isa<ReshapeOpOp>(producer)) {
+      source = producer->getOperand(0);
+    } else if (auto compute = dyn_cast<StaticComputeOpOp>(producer)) {
+      source = compute.getDestination();
+    } else if (auto unary = dyn_cast<StaticUnaryComputeOpOp>(producer)) {
+      source = unary.getDestination();
+    } else if (auto compute = dyn_cast<StreamingComputeOpOp>(producer)) {
+      source = compute.getDestination();
+    } else if (auto unary = dyn_cast<StreamingUnaryComputeOpOp>(producer)) {
+      source = unary.getDestination();
+    } else {
+      return producer->emitOpError("has no materialized slicing");
+    }
+    FailureOr<SlicedValue> inner = slicingOf(source);
+    if (failed(inner) || !inner->code)
+      return producer->emitOpError("has no materialized slicing");
+    slicing.first = *inner->code;
+    for (const Tile &tile : *inner->tiles)
+      slicing.second.push_back(
+          isa<ReshapeOpOp>(producer)
+              ? reshapeTile(shapeOf(source), shapeOf(value), tile)
+              : tile);
+  }
+  auto [inserted, unused] =
+      slicings.try_emplace(value.getAsOpaquePointer(), std::move(slicing));
+  return SlicedValue{&inserted->second.first, &inserted->second.second};
+}
+
+FailureOr<Estimate> MaterializedSlicing::estimate(Operation *operation) {
+  if (auto fill = dyn_cast<FillOp>(operation))
+    return estimateFill(fill);
+  if (auto redistribute = dyn_cast<RedistributeOp>(operation)) {
+    bool fromHost = memorySpaceOf(redistribute.getInput()) ==
+                    DistributedMemorySpace::HostMemory;
+    FailureOr<SlicedValue> source =
+        fromHost ? SlicedValue{} : slicingOf(redistribute.getInput());
+    FailureOr<SlicedValue> destination = slicingOf(redistribute.getOutput());
+    if (failed(source) || failed(destination))
+      return failure();
+    return estimateRedistribute(redistribute, *source, *destination);
+  }
+  if (auto copy = dyn_cast<CopyOpOp>(operation)) {
+    FailureOr<SlicedValue> own = slicingOf(copy.getOutput());
+    if (failed(own))
+      return failure();
+    return estimateCopy(copy, *own->code);
+  }
+  if (auto interpolate = dyn_cast<InterpolateHardwareOp>(operation)) {
+    FailureOr<SlicedValue> own = slicingOf(interpolate.getOutput());
+    if (failed(own))
+      return failure();
+    return estimateInterpolate(interpolate, *own->code);
+  }
+  if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp, StreamingComputeOpOp,
+          StreamingUnaryComputeOpOp>(operation)) {
+    FailureOr<SlicedValue> own = slicingOf(operation->getResult(0));
+    if (failed(own))
+      return failure();
+    return estimateCompute(operation, *own->code);
+  }
+  if (isa<CreateEmptyTensorOp, DistributedCreateViewOp, ReshapeOpOp,
+          GetTensorOp, StreamingCopyOpOp, CommunicatedCreateEmptyTensorOp,
+          CommunicatedCreateWriteViewOp, CommunicatedJoinViewsOp,
+          PreemptionPointOp>(operation))
+    return Estimate{};
+  return operation->emitOpError("has no slicing cost model");
 }
 
 LogicalResult SlicingModel::emit(ArrayRef<unsigned> state) {
