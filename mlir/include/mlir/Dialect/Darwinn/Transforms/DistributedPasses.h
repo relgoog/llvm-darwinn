@@ -26,6 +26,8 @@ std::unique_ptr<Pass> createOpReorderingForStreamingPass();
 void registerOpReorderingForStreamingPass();
 std::unique_ptr<Pass> createPreemptionPointsInsertionPass();
 void registerPreemptionPointsInsertionPass();
+std::unique_ptr<Pass> createScalarCoreStdOpsLoweringPass();
+void registerScalarCoreStdOpsLoweringPass();
 
 }
 }
