@@ -574,9 +574,10 @@ Body codegen::padding(Operation *op, Context &context) {
   for (int64_t size : sourceShape)
     lastPoint.push_back(size - 1);
   Index high = applyForward(op, lastPoint);
-  FailureOr<int64_t> base = context.narrowAddress(
-      op, sourceSpace(op) == DistributedMemorySpace::TileMemory ? Suffix::Dest
-                                                                : Suffix::None);
+  FailureOr<int64_t> base =
+      sourceSpace(op) == DistributedMemorySpace::TileMemory
+          ? context.storageAddress(op)
+          : context.narrowAddress(op);
   if (failed(base))
     return unsupported(op, "padding of an unplaced narrow block");
   SmallVector<TileBox> boxes = tiles(*slicingOf(op));

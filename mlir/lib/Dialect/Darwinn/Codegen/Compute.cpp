@@ -187,15 +187,20 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     else
       linear = baseLinear(LinearOperation::PartialSumAdd, OperandType::Half);
   } else {
+    SmallVector<Stream> pixels;
+    for (int64_t dim = vector - 1; dim >= 0; --dim)
+      pixels.push_back({size[dim], inStrides[dim], outStrides[dim], 0});
+    pixels = mergeStreams(pixels);
+    if (pixels.empty())
+      pixels.push_back({1, blocks * readBytes, blocks * writeBytes, 0});
     int64_t count = 1;
-    for (int64_t dim = 0; dim < rank; ++dim)
-      if (dim != vector && !llvm::is_contained(reduced, dim) && size[dim] > 1)
-        count *= size[dim];
-    int64_t readPixel = blocks * readBytes, writePixel = blocks * writeBytes;
+    SmallVector<Counter> read, write{counter(0, writeBytes)};
+    for (const Stream &loop : pixels) {
+      count *= loop.count;
+      read.push_back(counter((loop.count - 1) * loop.lhs, loop.lhs));
+      write.push_back(counter((loop.count - 1) * loop.out, loop.out));
+    }
     SmallVector<int64_t> main{count - 1};
-    SmallVector<Counter> read{counter((count - 1) * readPixel, readPixel)};
-    SmallVector<Counter> write{counter(0, writeBytes),
-                               counter((count - 1) * writePixel, writePixel)};
     SmallVector<Counter> sums{counter(count - 1, 1, false)};
     if (blocks > 1) {
       main.push_back(blocks - 1);
@@ -208,7 +213,7 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     tensor.narrowMemoryRead.byteAddressMode = access(readBytes, 2);
     tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
     tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
-        producerSync(true, 2)};
+        producerSync(true, pixels.size() + 1)};
     tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(writeBytes);
     tensor.wideMemoryReadForSums.counter = padded(sums, 8);
     tensor.wideMemoryReadForSums.secondBufferOffset = 4;

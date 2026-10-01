@@ -252,13 +252,16 @@ FailureOr<StorageProblems> codegen::storageProblems(ArrayRef<Group> groups) {
                                  4 * narrowBytes(producer(op, 0), true),
                                  {},
                                  0});
-      problems.narrow.push_back({op,
-                                 Suffix::Dest,
-                                 group.step + 1,
-                                 group.step + 2,
-                                 narrowBytes(op, false),
-                                 {},
-                                 0});
+      SmallVector<Operation *> readers;
+      consumers(op, readers);
+      problems.narrow.push_back(
+          {op,
+           Suffix::Dest,
+           group.step + 1,
+           std::max(group.step + 2, latest(readers).value_or(group.step + 2)),
+           narrowBytes(op, false),
+           {},
+           0});
       continue;
     }
     bool kept = group.kind == GroupKind::Op ||

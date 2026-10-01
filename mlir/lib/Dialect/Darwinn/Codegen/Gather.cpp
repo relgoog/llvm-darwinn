@@ -23,6 +23,10 @@ struct Flow {
 struct GatherGeometry {
   int64_t rowBytes = 0;
   int64_t channels = 0;
+  int64_t destinationRowBytes = 0;
+  int64_t columnOffset = 0;
+  bool columnFirst = false;
+  std::map<int64_t, int64_t> origin;
   SmallVector<std::pair<int64_t, Rows>> sources;
   SmallVector<std::pair<int64_t, Rows>> destinations;
   std::map<int64_t, Rows> staging;
@@ -47,29 +51,42 @@ const Rows &rowsOf(ArrayRef<std::pair<int64_t, Rows>> entries, int64_t tile) {
 }
 
 FailureOr<GatherGeometry> geometry(Operation *op) {
-  TensorInfo info = resultInfo(op);
+  TensorInfo source = operandInfo(op, 0), info = resultInfo(op);
+  Index shift = applyForward(op, Index(info.shape.size(), 0));
   GatherGeometry g;
-  g.rowBytes = info.shape[2] * info.shape[3] * info.elementBytes;
-  g.channels = info.shape[3];
+  g.rowBytes = source.shape[2] * source.shape[3] * source.elementBytes;
+  g.channels = source.shape[3];
+  g.destinationRowBytes = info.shape[2] * info.shape[3] * info.elementBytes;
+  g.columnOffset = shift[2] * info.shape[3] * info.elementBytes;
   for (const TileBox &entry : clampedTiles(producer(op, 0)))
     g.sources.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
-  for (const TileBox &entry : clampedTiles(op))
-    g.destinations.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
+  g.columnFirst = llvm::all_of(g.sources, [&](const auto &entry) {
+    return entry.first / kGrid == g.sources.front().first / kGrid;
+  });
+  for (const TileBox &entry : clampedTiles(op)) {
+    int64_t first = entry.box.lo[1] - shift[1];
+    g.origin[entry.tile] = first;
+    g.destinations.push_back(
+        {entry.tile,
+         {std::max<int64_t>(first, 0),
+          std::min(entry.box.hi[1] - shift[1], source.shape[1] - 1)}});
+  }
+  auto line = [&](int64_t tile) {
+    return g.columnFirst ? tile % kGrid : tile / kGrid;
+  };
   std::map<int64_t, int64_t> owner;
   std::map<int64_t, std::set<int64_t>> held;
   for (auto [tile, rows] : g.sources)
-    for (int64_t row = rows.first; row <= rows.second; ++row) {
+    for (int64_t row = rows.first; row <= rows.second; ++row)
       owner[row] = tile;
-      held[tile].insert(row);
-    }
   for (auto [d, rows] : g.destinations) {
     for (int64_t row = rows.first; row <= rows.second; ++row) {
       auto found = owner.find(row);
       if (found == owner.end())
         return failure();
       int64_t s = found->second;
-      int64_t holder =
-          s / kGrid == d / kGrid ? d : s / kGrid * kGrid + d % kGrid;
+      int64_t holder = g.columnFirst ? d / kGrid * kGrid + s % kGrid
+                                     : s / kGrid * kGrid + d % kGrid;
       held[holder].insert(row);
       if (holder == d)
         continue;
@@ -86,7 +103,7 @@ FailureOr<GatherGeometry> geometry(Operation *op) {
     g.staging[tile] = {*rows.begin(), *rows.rbegin()};
   for (auto [h, rows] : g.staging)
     for (auto [s, sourceRows] : g.sources) {
-      if (s == h || s / kGrid != h / kGrid)
+      if (s == h || line(s) != line(h))
         continue;
       int64_t first = std::max(rows.first, sourceRows.first);
       int64_t last = std::min(rows.second, sourceRows.second);
@@ -106,6 +123,8 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   FailureOr<GatherGeometry> g = geometry(op);
   if (failed(g))
     return unsupported(op, "a gather whose rows are not contiguous");
+  if (g->channels * 2 < 128)
+    return unsupported(op, "a gather of pixels narrower than 128 bytes");
   SmallVector<const StorageBlock *> blocks;
   for (const StorageBlock &block : context.narrow())
     if (block.value == op && block.suffix == Suffix::Dest)
@@ -329,8 +348,16 @@ Groups byLastTile(Groups groups) {
   return groups;
 }
 
+Groups byFirstTileDescending(Groups groups) {
+  llvm::stable_sort(groups, [](const auto &a, const auto &b) {
+    return *llvm::min_element(a.second) > *llvm::min_element(b.second);
+  });
+  return groups;
+}
+
 SmallVector<Emitted, 0> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
-                                         const GatherPlan &p) {
+                                         const GatherPlan &p,
+                                         int64_t receiveStride) {
   SmallVector<Emitted, 0> out;
   for (const auto &members : merged) {
     const MeshOp *sample = members.front();
@@ -346,9 +373,15 @@ SmallVector<Emitted, 0> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
           std::make_tuple(Part::Receive, &Mesh::write, uint8_t(1))}) {
       if (!sample->parts.count(role))
         continue;
-      int64_t size = sample->parts.at(role)->size * p.rowBytes;
+      int64_t rows = sample->parts.at(role)->size;
       Traversal &target = mesh.*traversal;
-      target.counter = padded({counter(size - kFlit, kFlit)}, 5);
+      if (role == Part::Receive && rows > 1 && receiveStride != p.rowBytes)
+        target.counter =
+            padded({counter(p.rowBytes - kFlit, kFlit),
+                    counter((rows - 1) * receiveStride, receiveStride)},
+                   5);
+      else
+        target.counter = padded({counter(rows * p.rowBytes - kFlit, kFlit)}, 5);
       target.syncProducer = {producerSync(true)};
       target.byteAddressMode = access(kFlit);
       TileValues addresses;
@@ -394,11 +427,13 @@ struct Copy {
   int64_t source;
   int64_t destination;
   int64_t rows;
+  int64_t stride;
 };
 
 FailureOr<SmallVector<Emitted, 0>>
 localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
-            const GatherPlan &p, const Order &order) {
+            const GatherPlan &p, const Order &sourceOrder,
+            const Order &destinationOrder) {
   SmallVector<std::pair<int64_t, std::map<int64_t, Copy>>> groups;
   for (const auto &item : copies) {
     const auto &[tile, copy] = item;
@@ -431,6 +466,26 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
     SmallVector<Counter> wideItems{counter(inner - 1, 1)};
     if (outer > 1)
       wideItems.push_back(counter(outer - 1, 1, false));
+    int64_t stride = members.begin()->second.stride;
+    SmallVector<std::pair<int64_t, int64_t>> wideLoops;
+    if (stride == p.rowBytes) {
+      wideLoops.push_back({wideRows, 128});
+    } else {
+      if (wideRows / rows > 1)
+        wideLoops.push_back({wideRows / rows, 128});
+      if (rows > 1)
+        wideLoops.push_back({rows, stride / 4});
+    }
+    std::optional<int64_t> syncLoop;
+    int64_t covered = 1, perIncrement = 1;
+    for (auto [index, loop] : llvm::enumerate(wideLoops)) {
+      if (covered * loop.first > inner) {
+        syncLoop = index;
+        perIncrement = covered;
+        break;
+      }
+      covered *= loop.first;
+    }
     for (int64_t thread = 0; thread < kThreads; ++thread) {
       std::array<bool, 4> bitmap = threadBit(thread);
       SmallVector<Counter> readItems;
@@ -449,7 +504,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       std::array<bool, 8> gatherRegisters{};
       SmallVector<Emitted, 0> loads;
       if (distinctSources.size() > 1) {
-        loads = registerLoads(sources, 0, order, thread);
+        loads = registerLoads(sources, 0, sourceOrder, thread);
         gatherRegisters = bits<8>("10000000");
       } else {
         gather.read.baseAddress = sources.front().second;
@@ -463,7 +518,8 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
         gather.write.secondBufferOffset = inner;
         gather.writeWatchers = {
             dmaWatcher(tileWatcher(TileSyncFlag::WideToNarrowWrite,
-                                   (int32_t(1) << 25) - inner, inner, 1, true),
+                                   (int32_t(1) << 25) - inner / perIncrement,
+                                   inner / perIncrement, 1, true),
                        true)};
       }
       gather.threadMulticastBitmap = bitmap;
@@ -487,9 +543,12 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       if (thread)
         scatterItems.push_back(counter(0, 8));
       scatterItems.push_back(counter(96, 32));
-      scatterItems.push_back(counter((wideRows - 1) * 128, 128));
+      int64_t first = scatterItems.size();
+      for (auto [count, step] : wideLoops)
+        scatterItems.push_back(counter((count - 1) * step, step));
       scatter.write.counter = padded(scatterItems, 6);
-      scatter.write.syncProducer = {producerSync(true, thread ? 2 : 1)};
+      scatter.write.syncProducer = {producerSync(
+          true, syncLoop ? first + *syncLoop : scatterItems.size() - 1)};
       TileValues destinations;
       std::set<int64_t> distinctDestinations;
       for (const auto &[tile, copy] : members) {
@@ -500,7 +559,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       std::array<bool, 8> scatterRegisters{};
       loads.clear();
       if (distinctDestinations.size() > 1) {
-        loads = registerLoads(destinations, 1, order, thread);
+        loads = registerLoads(destinations, 1, destinationOrder, thread);
         scatterRegisters = bits<8>("01000000");
       } else {
         scatter.write.baseAddress = destinations.front().second;
@@ -519,7 +578,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
 
 SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
                                   const Address &read, const Address &write,
-                                  const GatherPlan &p) {
+                                  const GatherPlan &p, int64_t receiveStride) {
   std::map<int64_t, SmallVector<Flow>> lines;
   for (const Flow &flow : flows)
     lines[horizontal ? flow.from / kGrid : flow.from % kGrid].push_back(flow);
@@ -537,7 +596,8 @@ SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
           selected.push_back(flow);
       sequences.push_back(lineOps(selected, horizontal, read, write, storage));
     }
-    llvm::append_range(out, meshInstructions(mergeLines(sequences), p));
+    llvm::append_range(
+        out, meshInstructions(mergeLines(sequences), p, receiveStride));
   }
   return out;
 }
@@ -549,9 +609,9 @@ int64_t codegen::gatherWideRows(Operation *op) {
   if (failed(g))
     return 0;
   int64_t width = g->rowBytes / (g->channels * 2);
-  int64_t largest = 0;
+  SmallVector<int64_t> copies;
   for (auto [tile, rows] : g->sources)
-    largest = std::max(largest, rows.second - rows.first + 1);
+    copies.push_back(rows.second - rows.first + 1);
   for (auto [d, rows] : g->destinations) {
     std::set<int64_t> moved;
     for (const auto &[key, columnRows] : g->columns)
@@ -560,10 +620,15 @@ int64_t codegen::gatherWideRows(Operation *op) {
     int64_t local = 0;
     for (int64_t row = rows.first; row <= rows.second; ++row)
       local += !moved.count(row);
-    largest = std::max(largest, local);
+    copies.push_back(local);
   }
-  int64_t wideRows = largest * width * kSlice / 128;
-  return wideRows <= 16 ? wideRows : 8;
+  int64_t capacity = 0;
+  for (int64_t rows : copies) {
+    int64_t wideRows = rows * width * kSlice / 128;
+    if (wideRows < 16)
+      capacity = std::max(capacity, wideRows);
+  }
+  return capacity ? capacity : 8;
 }
 
 Body codegen::gatherRows(Operation *op, Context &context) {
@@ -572,11 +637,19 @@ Body codegen::gatherRows(Operation *op, Context &context) {
     return failure();
   const GatherPlan &p = *planned;
   std::map<int64_t, Copy> copies;
-  for (auto [tile, rows] : p.sources)
-    copies[tile] = Copy{
-        p.sourceBase,
-        p.stagingBase + (rows.first - p.staging.at(tile).first) * p.rowBytes,
-        rows.second - rows.first + 1};
+  for (auto [tile, rows] : p.sources) {
+    auto staged = p.staging.find(tile);
+    if (staged == p.staging.end())
+      continue;
+    int64_t first = std::max(rows.first, staged->second.first);
+    int64_t last = std::min(rows.second, staged->second.second);
+    if (first > last)
+      continue;
+    copies[tile] =
+        Copy{p.sourceBase + (first - rows.first) * p.rowBytes,
+             p.stagingBase + (first - staged->second.first) * p.rowBytes,
+             last - first + 1, p.rowBytes};
+  }
   Address read = [&](int64_t s, int64_t first, int64_t) {
     return p.sourceBase + (first - rowsOf(p.sources, s).first) * p.rowBytes;
   };
@@ -584,10 +657,11 @@ Body codegen::gatherRows(Operation *op, Context &context) {
     return p.stagingBase + (first - p.staging.at(h).first) * p.rowBytes;
   };
   FailureOr<SmallVector<Emitted, 0>> out =
-      localCopies(op, copies, p, byRotatedColumn);
+      localCopies(op, copies, p, byRotatedColumn, byRotatedColumn);
   if (failed(out))
     return failure();
-  llvm::append_range(*out, meshStage(p.rowsFlows, true, read, write, p));
+  llvm::append_range(
+      *out, meshStage(p.rowsFlows, !p.columnFirst, read, write, p, p.rowBytes));
   return out;
 }
 
@@ -609,22 +683,27 @@ Body codegen::gatherColumns(Operation *op, Context &context) {
       if (row != local.front() + static_cast<int64_t>(index))
         return unsupported(op, "a gather destination with non contiguous "
                                "local rows");
+    if (local.empty())
+      continue;
     copies[d] = Copy{
         p.stagingBase + (local.front() - p.staging.at(d).first) * p.rowBytes,
-        p.destinationBase + (local.front() - rows.first) * p.rowBytes,
-        static_cast<int64_t>(local.size())};
+        p.destinationBase +
+            (local.front() - p.origin.at(d)) * p.destinationRowBytes +
+            p.columnOffset,
+        static_cast<int64_t>(local.size()), p.destinationRowBytes};
   }
   Address read = [&](int64_t h, int64_t first, int64_t) {
     return p.stagingBase + (first - p.staging.at(h).first) * p.rowBytes;
   };
   Address write = [&](int64_t d, int64_t first, int64_t) {
     return p.destinationBase +
-           (first - rowsOf(p.destinations, d).first) * p.rowBytes;
+           (first - p.origin.at(d)) * p.destinationRowBytes + p.columnOffset;
   };
   FailureOr<SmallVector<Emitted, 0>> out =
-      localCopies(op, copies, p, byLastTile);
+      localCopies(op, copies, p, byLastTile, byFirstTileDescending);
   if (failed(out))
     return failure();
-  llvm::append_range(*out, meshStage(p.columnFlows, false, read, write, p));
+  llvm::append_range(*out, meshStage(p.columnFlows, p.columnFirst, read, write,
+                                     p, p.destinationRowBytes));
   return out;
 }
