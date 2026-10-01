@@ -380,10 +380,13 @@ struct Evaluator {
 
   FailureOr<Evaluation> level(ArrayRef<Operation *> operations,
                               ArrayRef<std::pair<int64_t, int64_t>> ranges,
-                              int64_t shards) const {
+                              int64_t shards, unsigned trial,
+                              bool channelTrial) const {
     Evaluation result;
     for (Operation *operation : operations) {
       Value value = operation->getResult(0);
+      if (isa<RedistributeOp>(operation) && onHost(value))
+        continue;
       ArrayRef<int64_t> shape = shapeOf(value);
       float ratio = 1.0f;
       int64_t last = 1;
@@ -404,7 +407,7 @@ struct Evaluator {
       float factor = 1.0f;
       if (transfer && onHost(operation->getOperand(0)))
         whole = static_cast<int64_t>(whole * 1.05);
-      else if (transfer)
+      else if (transfer && mentions(group.coordinates.lookup(operation), trial))
         factor = 1.05f;
       int64_t tile = constant ? 0
                               : static_cast<int64_t>(static_cast<float>(whole) *
@@ -417,7 +420,9 @@ struct Evaluator {
         result.cost += ceilDiv(tile, row) * shards;
       if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp>(operation))
         result.cost +=
-            ceilDiv(work.lookup(operation), kComputeUnits * shards) * shards;
+            ceilDiv(work.lookup(operation) * (channelTrial ? kTiles : 1),
+                    kComputeUnits * shards) *
+            shards;
     }
     return result;
   }
@@ -430,14 +435,22 @@ struct Evaluator {
     if (shard)
       ranges[shard->symbol] = {0, shard->extent - 1};
     unsigned trial = outputs[config];
-    ranges[trial] = {0, ceilDiv(ranges[trial].second + 1, kTiles) - 1};
+    bool channelTrial = matrix && trial == channel;
+    int64_t extent = ranges[trial].second + 1;
+    int64_t slice = ceilDiv(extent, kTiles);
+    // The SDK tiling solver aligns a matrix op's channel slice to 32
+    // channels, and costs that trial at the whole op's work on every tile.
+    if (channelTrial)
+      slice = std::min(extent, ceilDiv(slice, 32) * 32);
+    ranges[trial] = {0, slice - 1};
 
     SmallVector<Operation *> outer, inner;
     for (Operation *operation : group.operations)
       (sharded(operation, shard) ? inner : outer).push_back(operation);
-    FailureOr<Evaluation> outside = level(outer, ranges, 1);
+    FailureOr<Evaluation> outside =
+        level(outer, ranges, 1, trial, channelTrial);
     FailureOr<Evaluation> inside =
-        level(inner, ranges, shard ? shard->factor : 1);
+        level(inner, ranges, shard ? shard->factor : 1, trial, channelTrial);
     if (failed(outside) || failed(inside))
       return failure();
     return Evaluation{outside->peak + inside->peak,
@@ -450,25 +463,6 @@ struct Evaluator {
   FailureOr<Evaluation> best(std::optional<Shard> shard, int64_t budget) const {
     std::optional<Evaluation> kept;
     for (unsigned config = 0; config < outputs.size(); ++config) {
-      if (matrix && outputs[config] == channel) {
-        // Channel trial slicing of a matrix or stencil op is aligned by an
-        // SDK tiling solver this port lacks, but its compute term alone is
-        // sixteen times the spatial one, which settles the comparison when
-        // the kept config fits.
-        int64_t bound = 0;
-        for (Operation *operation : group.operations) {
-          auto cycles = work.find(operation);
-          if (cycles == work.end())
-            continue;
-          int64_t shards = sharded(operation, shard) ? shard->factor : 1;
-          bound +=
-              ceilDiv(cycles->second, kComputeUnits * shards) * shards * kTiles;
-        }
-        if (kept && kept->peak < budget && bound >= kept->cost)
-          continue;
-        return group.anchor->emitOpError(
-            "needs channel trial slicing of a matrix operation");
-      }
       FailureOr<Evaluation> current = evaluate(shard, config);
       if (failed(current))
         return failure();
@@ -490,7 +484,7 @@ struct Evaluator {
 
 // Each output symbol is tried at factor 2, growing by half while the shard
 // still exceeds the budget, and the cheapest fitting candidate wins with the
-// first one kept on ties. Reduction symbols are only tried by the SDK after
+// later one taken on ties. Reduction symbols are only tried by the SDK after
 // these, and never win on the models this port has seen.
 LogicalResult chooseShard(Group &group,
                           const DenseMap<Operation *, int64_t> &work,
@@ -507,7 +501,7 @@ LogicalResult chooseShard(Group &group,
       if (failed(evaluation))
         return failure();
       if (evaluation->peak < budget) {
-        if (!chosen || evaluation->cost < chosen->second.cost)
+        if (!chosen || evaluation->cost <= chosen->second.cost)
           chosen = {shard, *evaluation};
         break;
       }

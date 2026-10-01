@@ -250,8 +250,9 @@ LogicalResult partitionShardedGroup(affine::AffineParallelOp group) {
         auto view = value.getDefiningOp<DistributedCreateViewOp>();
         if (view && !inner->isAncestor(view.getOperation())) {
           Operation *shared = view.getInput().getDefiningOp();
-          shared->setDiscardableAttr("tensor_shared_by_users",
-                                     builder.getBoolAttr(true));
+          if (!isa<FillOp>(shared))
+            shared->setDiscardableAttr("tensor_shared_by_users",
+                                       builder.getBoolAttr(true));
           auto copy = unslicedRedistribute(
               builder, location, view.getInput(),
               cast<DistributedTensorType>(view.getInput().getType()));
@@ -291,7 +292,10 @@ LogicalResult partitionShardedGroup(affine::AffineParallelOp group) {
                                                   type.getElementType(),
                                                   memorySpaceOf(result)));
         else
-          result.setType(inMemory(type.clone(shape), memorySpaceOf(result)));
+          result.setType(inMemory(type.clone(shape),
+                                  &operation == producer
+                                      ? DistributedMemorySpace::TileMemory
+                                      : memorySpaceOf(result)));
       }
       if (clone->hasAttr("slicing_domain"))
         setUnsliced(clone, shape, /*discardable=*/false);

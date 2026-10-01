@@ -147,6 +147,10 @@ LogicalResult SlicingModel::partition() {
   }
 
   for (Operation *operation : operations) {
+    if (isa<FillOp>(operation) && !blockIndex.contains(operation)) {
+      blockIndex[operation] = blocks.size();
+      blocks.push_back({{}, operation, operation->getResult(0)});
+    }
     auto found = blockIndex.find(operation);
     if (found == blockIndex.end())
       return operation->emitOpError("is not covered by a slicing block");
@@ -192,7 +196,8 @@ void SlicingModel::buildGraph() {
 }
 
 bool SlicingModel::isShared(unsigned block) const {
-  return blocks[block].anchor->hasAttr("tensor_shared_by_users");
+  Operation *anchor = blocks[block].anchor;
+  return anchor->hasAttr("tensor_shared_by_users") || isa<FillOp>(anchor);
 }
 
 FailureOr<unsigned> SlicingModel::sharedCode(unsigned block,

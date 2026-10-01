@@ -22,6 +22,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   PropagateDistributedSlices.cpp
   PropagatingSlicing.cpp
   RedistributeOptimization.cpp
+  RemoveParameterRedistributes.cpp
   ScalarCoreStdOpsLowering.cpp
   ScheduledStorage.cpp
   Sharding.cpp

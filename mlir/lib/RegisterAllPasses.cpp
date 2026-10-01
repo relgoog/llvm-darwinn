@@ -86,6 +86,7 @@ void mlir::registerAllPasses() {
   darwinn::registerNodePartitionPass();
   darwinn::registerTransferCanonicalizationPass();
   darwinn::registerRedistributeOptimizationPass();
+  darwinn::registerRemoveParameterRedistributesPass();
   darwinn::registerSpillFillOptimizationPass();
   darwinn::registerStaticToStreamingPass();
   darwinn::registerOpReorderingForStreamingPass();
