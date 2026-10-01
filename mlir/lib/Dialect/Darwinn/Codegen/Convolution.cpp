@@ -409,10 +409,15 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
     return unsupported(op, "unplaced convolution weights");
   int64_t bufferUnits = cycles * 4 * (single ? taps : group);
   SmallVector<std::pair<int64_t, int64_t>> parameters;
+  bool merged = single && last == 4;
   if (single) {
-    parameters.push_back({cycles, 4});
-    if (taps > 1)
-      parameters.push_back({taps, cycles * 4});
+    if (merged) {
+      parameters.push_back({cycles * taps, 4});
+    } else {
+      parameters.push_back({cycles, 4});
+      if (taps > 1)
+        parameters.push_back({taps, cycles * 4});
+    }
     parameters.push_back({outer, 0});
     if (plan.outBlocks > 1)
       parameters.push_back({plan.outBlocks, 0});
@@ -425,7 +430,8 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   }
   Traversal &weights = tensor.wideMemoryReadForParameters;
   weights.counter = padded(masked(parameters), 8);
-  weights.syncProducer = {producerSync(true, 2 + (single && taps > 1))};
+  weights.syncProducer = {
+      producerSync(true, 2 + (single && !merged && taps > 1))};
   weights.baseAddress = *wide * 4;
   if (!single || plan.outBlocks > 1) {
     weights.doubleBufferLoop = single ? parameters.size() - 1 : 2;
@@ -436,14 +442,15 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   sums.baseAddress = (*wide + plan.weightsRows) * 4;
   SmallVector<std::pair<int64_t, int64_t>> sumLoops;
   if (single) {
-    sumLoops.push_back({cycles * (taps == 1 ? taps : 1), 0});
-    if (taps > 1)
+    bool split = !merged && taps > 1;
+    sumLoops.push_back({split ? cycles : cycles * taps, 0});
+    if (split)
       sumLoops.push_back({taps, 0});
     sumLoops.push_back({outer, 0});
     if (plan.outBlocks > 1)
       sumLoops.push_back({plan.outBlocks, 0});
-    sums.syncProducer = {producerSync(true, 2 + (taps > 1))};
-    sums.doubleBufferLoop = 1 + (taps > 1);
+    sums.syncProducer = {producerSync(true, 2 + split)};
+    sums.doubleBufferLoop = 1 + split;
     sums.secondBufferOffset = 4;
   } else {
     sumLoops = {

@@ -137,6 +137,7 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
   int64_t blocks = ceilDiv(size[vector], laneLimit);
   int64_t readBytes = std::max<int64_t>(lanes * inElem, 4);
   int64_t writeBytes = lanes * outElem;
+  int64_t lastLanes = lanes;
 
   TensorOp tensor;
   Linear linear;
@@ -212,10 +213,18 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     tensor.mainOperation.counter = mainCounters(main);
     tensor.narrowMemoryRead.counter = padded(read, 8);
     tensor.narrowMemoryRead.byteAddressMode = access(readBytes, 2);
+    if (int64_t rest = size[vector] % laneLimit; blocks > 1 && rest) {
+      tensor.narrowMemoryRead.byteAddressMode =
+          access(rest * inElem, readBytes, 1u << pixels.size());
+      lastLanes = rest;
+    }
     tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
     tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
         producerSync(true, pixels.size() + 1)};
-    tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(writeBytes);
+    tensor.narrowMemoryWriteFromNonLinear.byteAddressMode =
+        lastLanes == lanes ? access(writeBytes)
+                           : access(lastLanes * outElem, writeBytes,
+                                    1u << (pixels.size() + 1));
     tensor.wideMemoryReadForSums.counter = padded(sums, 8);
     tensor.wideMemoryReadForSums.secondBufferOffset = 4;
     linear = baseLinear(LinearOperation::PartialSumAdd, OperandType::Half);
@@ -240,7 +249,7 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
   }
   tensor.control.threadMulticastBitmap = bits<4>("1111");
   tensor.control.zOutBlockLoopDepth = 1;
-  tensor.control.lastZOutBlockValidCount = lanes;
+  tensor.control.lastZOutBlockValidCount = lastLanes;
   tensor.control.defaultZOutBlockValidCount = lanes;
   return tensor;
 }
