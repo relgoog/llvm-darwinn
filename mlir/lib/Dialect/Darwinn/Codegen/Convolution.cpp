@@ -211,7 +211,10 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
       plan.chunk / 2 *
       (plan.single || plan.transposed ? plan.taps : plan.tapGroup);
   SmallVector<int64_t> loops = weightLoops(plan);
-  SmallVector<Counter> items{counter(bufferRows - 1, 1)};
+  bool rows = bufferRows > 1 || plan.single || plan.transposed;
+  SmallVector<Counter> items;
+  if (rows)
+    items.push_back(counter(bufferRows - 1, 1));
   for (auto [index, count] : llvm::enumerate(loops))
     if (!(count == 1 && index == loops.size() - 1 && loops.size() > 1))
       items.push_back(counter(count - 1, 1, false));
@@ -220,11 +223,11 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
   consumer.traversal.baseAddress = *wide;
   consumer.traversal.counter = padded(items, 4);
   consumer.traversal.syncProducer = {
-      producerSync(true, items.size() > 1 ? 1 : 0)};
+      producerSync(true, rows && items.size() > 1 ? 1 : 0)};
   consumer.traversal.byteAddressMode = access(row, 1);
   bool doubled = plan.outBlocks > 1 || !plan.single;
   if (doubled) {
-    consumer.traversal.doubleBufferLoop = 1;
+    consumer.traversal.doubleBufferLoop = rows;
     consumer.traversal.secondBufferOffset = bufferRows;
   }
   if (plan.biasRows) {
@@ -246,7 +249,7 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
     for (uint8_t thread = 0; thread < kThreads; ++thread)
       consumer.watchers.push_back(
           dmaWatcher(tileWatcher(TileSyncFlag::ParameterRead, kWatcherBase, 1,
-                                 1, false, thread),
+                                 rows, false, thread),
                      true));
   consumer.destination = RingDestination::WideMemory;
   consumer.threadMulticastBitmap = bits<4>("1111");
@@ -376,7 +379,10 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
 
   TensorOp tensor;
   tensor.mainOperation.counter = mainCounters(main);
-  SmallVector<std::pair<int64_t, int64_t>> read{{cycles, 4}};
+  bool unitCycles = !single && !pairs && cycles * group == 1;
+  SmallVector<std::pair<int64_t, int64_t>> read;
+  if (!unitCycles)
+    read.push_back({cycles, 4});
   llvm::append_range(read, mergeStream(groupLoops, &Strided::lhs));
   llvm::append_range(read, mergeStream(pixelInner, &Strided::lhs));
   llvm::append_range(read, mergeStream(chunkLoops, &Strided::lhs));
@@ -422,8 +428,13 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
     if (plan.outBlocks > 1)
       parameters.push_back({plan.outBlocks, 0});
   } else {
-    parameters = {
-        {cycles * group, 4}, {inner, 0}, {plan.chunks * taps / group, 0}};
+    if (!unitCycles)
+      parameters.push_back({cycles * group, 4});
+    parameters.push_back({inner, 0});
+    if (plan.lastChunk != plan.chunk)
+      parameters.append({{plan.chunks, 0}, {taps / group, 0}});
+    else
+      parameters.push_back({plan.chunks * taps / group, 0});
     if (outer > 1)
       parameters.push_back({outer, 0});
     parameters.push_back({plan.outBlocks, 0});
@@ -431,11 +442,22 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   Traversal &weights = tensor.wideMemoryReadForParameters;
   weights.counter = padded(masked(parameters), 8);
   weights.syncProducer = {
-      producerSync(true, 2 + (single && !merged && taps > 1))};
+      producerSync(true, 2 + (single && !merged && taps > 1) - unitCycles)};
   weights.baseAddress = *wide * 4;
   if (!single || plan.outBlocks > 1) {
-    weights.doubleBufferLoop = single ? parameters.size() - 1 : 2;
+    weights.doubleBufferLoop = single ? parameters.size() - 1 : 2 - unitCycles;
     weights.secondBufferOffset = bufferUnits;
+  }
+  int64_t lastCycles = plan.lastChunk / 2;
+  bool shortLast = !single && lastCycles != cycles;
+  if (shortLast) {
+    tensor.mainOperation.alternateInnerLimit = lastCycles - 1;
+    tensor.mainOperation.alternateLimitLoopId = 2;
+    tensor.narrowMemoryRead.alternateInnerLimit = (lastCycles - 1) * 4;
+    tensor.narrowMemoryRead.alternateLimitLoopId =
+        1 + mergeStream(pixelInner, &Strided::lhs).size();
+    weights.alternateInnerLimit = (lastCycles - 1) * 4;
+    weights.alternateLimitLoopId = 2;
   }
 
   Traversal &sums = tensor.wideMemoryReadForSums;
@@ -453,14 +475,21 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
     sums.doubleBufferLoop = 1 + split;
     sums.secondBufferOffset = 4;
   } else {
-    sumLoops = {
-        {cycles * group, 0}, {inner, 4}, {plan.chunks * taps / group, 0}};
+    sumLoops = {{cycles * group, 0}, {inner, 4}};
+    if (plan.lastChunk != plan.chunk)
+      sumLoops.append({{plan.chunks, 0}, {taps / group, 0}});
+    else
+      sumLoops.push_back({plan.chunks * taps / group, 0});
     if (outer > 1)
       sumLoops.push_back({outer, 0});
     sumLoops.push_back({plan.outBlocks, 0});
     sums.syncProducer = {producerSync(true, 2)};
   }
   sums.counter = padded(masked(sumLoops), 8);
+  if (shortLast) {
+    sums.alternateInnerLimit = lastCycles - 1;
+    sums.alternateLimitLoopId = 2;
+  }
 
   int64_t outIndex = main.size() - 1;
   int64_t blockDepth = plan.outBlocks > 1 ? outIndex : int64_t(main.size());
@@ -738,6 +767,35 @@ SmallVector<int64_t> activeList(const std::array<bool, 16> &tiles) {
   return out;
 }
 
+// Fitted to SDK probes: the partial sum block is the largest divisor of a
+// thread's columns that leaves wide rows for 7 channel pairs, or for one pair
+// when there are at most 8.
+FailureOr<VmcPlan> tiledPlan(Operation *op, VmcPlan plan, int64_t cols) {
+  int64_t pairs = plan.cin / 2;
+  int64_t inner = std::min(cols, kWideRows - plan.biasRows -
+                                     (pairs <= kGroupedPairs ? 2 : 14));
+  if (inner < 1)
+    return unsupported(op, "a convolution whose partial sums exceed wide "
+                           "memory");
+  while (cols % inner)
+    --inner;
+  int64_t most = (kWideRows - inner - plan.biasRows) / 2;
+  int64_t per = most;
+  if (pairs <= 2 * most)
+    per = ceilDiv(pairs, 2);
+  else if (most >= kGroupedPairs)
+    while (pairs % per)
+      --per;
+  plan.chunk = 2 * per;
+  plan.chunks = ceilDiv(pairs, per);
+  plan.lastChunk = plan.cin - plan.chunk * (plan.chunks - 1);
+  plan.inner = inner;
+  plan.outer = plan.pixels / inner;
+  plan.weightsRows = plan.chunk;
+  plan.sumsRows = inner;
+  return plan;
+}
+
 } // namespace
 
 Operation *codegen::weightsView(Operation *op) {
@@ -825,22 +883,24 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
     plan.sumsRows = 1;
     return plan;
   }
-  int64_t inner = std::min(pixels, kPartialSumPixels);
+  if (pixels > kPartialSumPixels)
+    return tiledPlan(op, plan, size[2]);
   int64_t chunk = 0;
-  for (int64_t c = 2; c <= (pixels > inner ? cinPadded / 2 : cinPadded); c += 2)
-    if (cinPadded % c == 0 && c + inner + plan.biasRows <= kWideRows)
+  for (int64_t c = 2; c <= cinPadded; c += 2)
+    if (cinPadded % c == 0 && c + pixels + plan.biasRows <= kWideRows)
       chunk = c;
   if (!chunk)
     return unsupported(op, "a convolution whose partial sums exceed wide "
                            "memory");
   plan.chunk = chunk;
   plan.chunks = cinPadded / chunk;
-  plan.inner = inner;
-  plan.outer = pixels / inner;
+  plan.lastChunk = chunk;
+  plan.inner = pixels;
+  plan.outer = 1;
   if (plan.chunks == 1 && chunk / 2 < kGroupedPairs && shape.size() == 4)
     plan.tapGroup = shape[1];
   plan.weightsRows = chunk * plan.tapGroup;
-  plan.sumsRows = inner;
+  plan.sumsRows = pixels;
   return plan;
 }
 

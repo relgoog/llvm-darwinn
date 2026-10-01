@@ -68,7 +68,8 @@ llvm::Expected<SmallVector<uint8_t>> packVmc(Operation *op) {
   if (*bias)
     biasRef = ArrayRef<float>(**bias);
   return packConvolution(*convolution, ohwi, biasRef,
-                         plan->transposed ? plan->chunk : plan->cin);
+                         plan->transposed ? plan->chunk
+                                          : plan->chunk * plan->chunks);
 }
 
 llvm::Expected<SmallVector<uint8_t>> packStencil(Operation *op) {
