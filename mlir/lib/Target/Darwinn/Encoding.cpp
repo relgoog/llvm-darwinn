@@ -16,10 +16,10 @@ llvm::Expected<Predicate> Predicate::create(uint8_t registerId, bool polarity) {
 
 llvm::Error BitWriter::write(uint64_t value, unsigned width) {
   if (width > 64 || (width < 64 && value >= (uint64_t{1} << width)))
-    return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "Instruction value " + llvm::Twine(value) +
-                                       " does not fit in " +
-                                       llvm::Twine(width) + " bits");
+    return llvm::createStringError(
+        llvm::inconvertibleErrorCode(),
+        "Instruction value " + llvm::Twine(value) + " does not fit in " +
+            llvm::Twine(width) + " bits at bit " + llvm::Twine(bitLength));
   if (width > std::numeric_limits<size_t>::max() - bitLength)
     return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                    "Instruction bit count overflows");
