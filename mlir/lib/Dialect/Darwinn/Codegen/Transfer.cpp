@@ -531,7 +531,7 @@ Body codegen::fill(Operation *op, Context &context) {
   SmallVector<Emitted, 0> out = groupFences();
   out.push_back(hibGather(
       info.shape, info.shape, info.elementBytes, DmaQueue::Parameter,
-      context.hib(DmaQueue::Parameter, HibRoot::ParameterFill, 0, total)));
+      context.hib(DmaQueue::Parameter, HibRoot::ParameterFill, 0, total, op)));
   llvm::append_range(out, infeed(total, channels, targets(every, false),
                                  InputFifo::Parameter));
   FailureOr<int64_t> base = context.narrowAddress(op);

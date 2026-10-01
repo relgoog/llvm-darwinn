@@ -83,6 +83,7 @@ struct VmcPlan {
 };
 
 FailureOr<VmcPlan> vmcPlan(Operation *op);
+Operation *weightsView(Operation *op);
 int64_t stencilTaps(Operation *op);
 bool hasBias(Operation *op);
 Body vmc(Operation *op, Context &context);

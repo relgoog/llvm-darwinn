@@ -271,6 +271,20 @@ public:
     FailureOr<GeneratedProgram> program = buildProgram(*segments, *context);
     if (failed(program))
       return signalPassFailure();
+    if (!parametersOutput.empty()) {
+      FailureOr<SmallVector<uint8_t, 0>> parameters =
+          packParameters(program->hibs);
+      if (failed(parameters))
+        return signalPassFailure();
+      std::error_code error;
+      llvm::raw_fd_ostream stream(parametersOutput, error);
+      if (error) {
+        function.emitError() << "cannot write " << parametersOutput;
+        return signalPassFailure();
+      }
+      stream.write(reinterpret_cast<const char *>(parameters->data()),
+                   parameters->size());
+    }
     if (chunksOutput.empty() && hostOutput.empty())
       return;
     auto scalar = ScalarEncoder::create(16, false);
@@ -311,6 +325,9 @@ public:
   Option<std::string> scheduleOutput{
       *this, "schedule-output",
       llvm::cl::desc("Write the tensor groups and storage placements as JSON")};
+  Option<std::string> parametersOutput{
+      *this, "parameters-output",
+      llvm::cl::desc("Write the packed parameter region")};
   Option<std::string> hostOutput{
       *this, "host-output",
       llvm::cl::desc("Write the host program as an LLVM dialect module")};

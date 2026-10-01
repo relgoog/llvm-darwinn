@@ -10,6 +10,7 @@ add_mlir_dialect_library(MLIRDarwinnCodegen
   Interpolate.cpp
   LegalizeDwc.cpp
   Movement.cpp
+  ParameterPacking.cpp
   Permute.cpp
   Program.cpp
   Schedule.cpp

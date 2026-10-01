@@ -140,6 +140,7 @@ struct Hib {
   HibRoot root = HibRoot::Scratch;
   int64_t offset = 0;
   int64_t size = 0;
+  Operation *source = nullptr;
 };
 
 enum class Role {
@@ -169,7 +170,8 @@ public:
   FailureOr<int64_t> wideSize(Operation *value,
                               Suffix suffix = Suffix::None) const;
   FailureOr<int64_t> hostOffset(Operation *writer) const;
-  int64_t hib(DmaQueue queue, HibRoot root, int64_t offset, int64_t size = 0);
+  int64_t hib(DmaQueue queue, HibRoot root, int64_t offset, int64_t size = 0,
+              Operation *source = nullptr);
   SmallVector<Hib> resolvedHibs() const;
 
   ArrayRef<StorageBlock> narrow() const { return narrowBlocks; }
@@ -210,6 +212,7 @@ struct GeneratedProgram {
 
 FailureOr<GeneratedProgram> buildProgram(ArrayRef<Segment> segments,
                                          const Context &context);
+FailureOr<SmallVector<uint8_t, 0>> packParameters(ArrayRef<Hib> hibs);
 
 struct HostEvent {
   enum class Kind { Dispatch, Root, Copy, Add, Put, Wait };

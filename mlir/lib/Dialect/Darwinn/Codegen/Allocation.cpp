@@ -440,9 +440,9 @@ FailureOr<int64_t> Context::hostOffset(Operation *writer) const {
   return failure();
 }
 
-int64_t Context::hib(DmaQueue queue, HibRoot root, int64_t offset,
-                     int64_t size) {
-  hibs.push_back({queue, root, offset, size});
+int64_t Context::hib(DmaQueue queue, HibRoot root, int64_t offset, int64_t size,
+                     Operation *source) {
+  hibs.push_back({queue, root, offset, size, source});
   return static_cast<int64_t>(hibs.size()) - 1;
 }
 

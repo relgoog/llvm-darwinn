@@ -15,13 +15,6 @@ constexpr int64_t kPartialSumPixels = 32;
 constexpr int64_t kStencilLanes = 8;
 constexpr int32_t kWatcherBase = (int32_t(1) << 25) - 1;
 
-Operation *weightsView(Operation *op) {
-  Operation *weights = producer(op, 1);
-  while (isa<NarrowToWideOp, DistributedCreateViewOp, GetTensorOp>(weights))
-    weights = producer(weights, 0);
-  return weights;
-}
-
 bool isTransposed(Operation *op) {
   return computeOptions(op).getComputeTypeHint() ==
          ComputeTypeHintKind::TransposedConv;
@@ -706,6 +699,13 @@ SmallVector<int64_t> activeList(const std::array<bool, 16> &tiles) {
 
 } // namespace
 
+Operation *codegen::weightsView(Operation *op) {
+  Operation *weights = producer(op, 1);
+  while (isa<NarrowToWideOp, DistributedCreateViewOp, GetTensorOp>(weights))
+    weights = producer(weights, 0);
+  return weights;
+}
+
 bool codegen::hasBias(Operation *op) {
   return hasAuxiliary(op, AuxTensorKind::Bias);
 }
@@ -807,7 +807,7 @@ Body codegen::vmc(Operation *op, Context &context) {
   SmallVector<Emitted, 0> out = groupFences();
   out.push_back(hibGather(
       {total}, {total}, 1, DmaQueue::Parameter,
-      context.hib(DmaQueue::Parameter, HibRoot::Parameter, 0, total)));
+      context.hib(DmaQueue::Parameter, HibRoot::Parameter, 0, total, op)));
   llvm::append_range(out, parameterInfeed(*plan));
   std::array<bool, 16> active = activeTiles(op);
   SmallVector<int64_t> tiles = activeList(active);
@@ -857,7 +857,7 @@ Body codegen::stencil(Operation *op, Context &context) {
   SmallVector<Emitted, 0> out = groupFences();
   out.push_back(hibGather(
       {total}, {total}, 1, DmaQueue::Parameter,
-      context.hib(DmaQueue::Parameter, HibRoot::Parameter, 0, total)));
+      context.hib(DmaQueue::Parameter, HibRoot::Parameter, 0, total, op)));
   llvm::append_range(out, infeed(total, bits<8>("01000000"),
                                  targets(bits<16>("1111111111111111"), false),
                                  InputFifo::Parameter));
