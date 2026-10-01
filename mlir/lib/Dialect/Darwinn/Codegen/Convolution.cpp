@@ -261,7 +261,7 @@ FailureOr<Emitted> biasMove(Operation *op, const VmcPlan &plan,
   FailureOr<int64_t> bias = context.wideAddress(op, Suffix::Bias);
   if (failed(bias))
     return unsupported(op, "an unplaced convolution bias");
-  int64_t lanesWords = plan.lanesPadded / 4;
+  int64_t lanesWords = ceilDiv(plan.lanes, 4);
   int64_t blocks = plan.outBlocks;
   WideToNarrow move;
   move.read.baseAddress = *bias;
@@ -920,6 +920,7 @@ Body codegen::stencil(Operation *op, Context &context) {
       stencilConsumer(op, plan, context, tileBit(tiles.front()), false);
   VmcPlan biasPlan;
   biasPlan.lanesPadded = kStencilLanes;
+  biasPlan.lanes = kStencilLanes;
   biasPlan.outBlocks = plan.blocks;
   biasPlan.chunks = 1;
   biasPlan.taps = 1;
