@@ -508,19 +508,21 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
             .second;
     std::array<bool, 16> multicast = tileSet(tiles);
     int64_t wideRows = rows * segmentPixels * element / 128;
+    int64_t stride = members.begin()->second.stride;
+    bool aligned =
+        stride % kSlice == 0 && llvm::all_of(members, [](const auto &entry) {
+          return entry.second.destination % kSlice == 0;
+        });
     FailureOr<std::pair<int64_t, int64_t>> split =
-        wideSplit(wideRows, p.capacity);
+        !aligned && rows > 1 ? FailureOr<std::pair<int64_t, int64_t>>(
+                                   std::make_pair(wideRows / rows, rows))
+                             : wideSplit(wideRows, p.capacity);
     if (failed(split))
       return unsupported(op, "a gather copy larger than its wide block");
     auto [inner, outer] = *split;
     SmallVector<Counter> wideItems{counter(inner - 1, 1)};
     if (outer > 1)
       wideItems.push_back(counter(outer - 1, 1, false));
-    int64_t stride = members.begin()->second.stride;
-    bool aligned =
-        stride % kSlice == 0 && llvm::all_of(members, [](const auto &entry) {
-          return entry.second.destination % kSlice == 0;
-        });
     int64_t writeElement = aligned ? kSlice : element;
     for (int64_t thread = 0; thread < kThreads; ++thread) {
       std::array<bool, 4> bitmap = threadBit(thread);
