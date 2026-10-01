@@ -1163,6 +1163,93 @@ private:
   llvm::DenseMap<Value, std::array<Value, 3>> constantValues;
 };
 
+// SDK stage 255 orders each compute anchor's operand producers just before
+// it: parameter fills first, then the operand chains as lhs, rhs, auxiliary
+// operands and destination, each depth first. Tile reshapes of a result, and
+// the identity output view of a transposed convolution, follow their
+// producer directly.
+void orderLikeSdk(Block &block) {
+  auto anchor = [](Operation *operation) {
+    return isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp, InterpolateHardwareOp>(
+        operation);
+  };
+  auto parameter = [](Operation *operation) {
+    auto fill = dyn_cast_if_present<FillOp>(operation);
+    return fill && fill.getConstTypeAttr() &&
+           fill.getConstTypeAttr().getValue() == ConstKind::Parameter;
+  };
+  auto usersInOrder = [](Operation *operation) {
+    SmallVector<Operation *> users(operation->getUsers());
+    llvm::sort(users, [](Operation *left, Operation *right) { return left->isBeforeInBlock(right); });
+    users.erase(std::unique(users.begin(), users.end()), users.end());
+    return users;
+  };
+
+  SmallVector<Operation *> original;
+  for (Operation &operation : block.without_terminator())
+    original.push_back(&operation);
+  llvm::SmallPtrSet<Operation *, 32> done;
+  SmallVector<Operation *> order;
+  auto emit = [&](Operation *operation, auto &&self) -> void {
+    if (!operation || operation->getBlock() != &block || !done.insert(operation).second)
+      return;
+    for (Value operand : operation->getOperands())
+      self(operand.getDefiningOp(), self);
+    order.push_back(operation);
+  };
+
+  for (Operation *operation : original) {
+    if (!anchor(operation) || done.contains(operation))
+      continue;
+    SmallVector<Operation *> producers;
+    for (Value operand : operation->getOperands())
+      producers.push_back(operand.getDefiningOp());
+    for (Operation *producer : producers) {
+      if (!producer)
+        continue;
+      if (parameter(producer))
+        emit(producer, emit);
+      for (Value operand : producer->getOperands())
+        if (parameter(operand.getDefiningOp()))
+          emit(operand.getDefiningOp(), emit);
+    }
+    auto roles = llvm::to_vector(llvm::seq<unsigned>(0, producers.size()));
+    if (isa<StaticComputeOpOp>(operation) && producers.size() >= 3) {
+      roles = {0, 1};
+      llvm::append_range(roles, llvm::seq<unsigned>(3, producers.size()));
+      roles.push_back(2);
+    } else if (isa<StaticUnaryComputeOpOp>(operation) && producers.size() >= 2) {
+      roles = {0};
+      llvm::append_range(roles, llvm::seq<unsigned>(2, producers.size()));
+      roles.push_back(1);
+    }
+    for (unsigned role : roles)
+      emit(producers[role], emit);
+    emit(operation, emit);
+
+    auto options = operation->getAttrOfType<ComputeOpOptionsAttr>("compute");
+    bool transposed = options && options.getComputeTypeHint() == ComputeTypeHintKind::TransposedConv;
+    for (Operation *user : usersInOrder(operation)) {
+      auto reshape = dyn_cast<ReshapeOpOp>(user);
+      if (reshape && cast<DistributedTensorType>(reshape.getType()).getMemorySpace() ==
+                         DistributedMemorySpace::TileMemory)
+        emit(user, emit);
+      if (!transposed || !isa<RedistributeOp>(user))
+        continue;
+      emit(user, emit);
+      for (Operation *view : usersInOrder(user))
+        if (isa<DistributedCreateViewOp>(view))
+          emit(view, emit);
+    }
+  }
+  for (Operation *operation : original)
+    emit(operation, emit);
+
+  Operation *terminator = block.getTerminator();
+  for (Operation *operation : order)
+    operation->moveBefore(terminator);
+}
+
 class LowerSemanticToDistributedPass
     : public PassWrapper<LowerSemanticToDistributedPass, OperationPass<ModuleOp>> {
 public:
@@ -1227,6 +1314,7 @@ public:
     output->getOperation()->removeAttr("tf.entry_function");
     SemanticLowering lowering(*output);
     lowering.lower(function, *output, *boundary);
+    orderLikeSdk(output->getBody().front());
 
     if (failed(verify(*output)))
       return signalPassFailure();
