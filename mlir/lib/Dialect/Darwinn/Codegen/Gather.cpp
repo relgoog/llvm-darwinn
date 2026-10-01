@@ -1,0 +1,630 @@
+#include "Families.h"
+#include <map>
+#include <set>
+
+using namespace mlir;
+using namespace mlir::darwinn;
+using namespace mlir::darwinn::codegen;
+
+namespace {
+
+constexpr int64_t kFlit = 16;
+constexpr int64_t kSlice = 32;
+
+using Rows = std::pair<int64_t, int64_t>;
+
+struct Flow {
+  int64_t from;
+  int64_t to;
+  int64_t first;
+  int64_t last;
+};
+
+struct GatherGeometry {
+  int64_t rowBytes = 0;
+  int64_t channels = 0;
+  SmallVector<std::pair<int64_t, Rows>> sources;
+  SmallVector<std::pair<int64_t, Rows>> destinations;
+  std::map<int64_t, Rows> staging;
+  SmallVector<Flow> rowsFlows;
+  SmallVector<Flow> columnFlows;
+  SmallVector<std::pair<std::pair<int64_t, int64_t>, SmallVector<int64_t>>>
+      columns;
+};
+
+struct GatherPlan : GatherGeometry {
+  int64_t sourceBase = 0;
+  int64_t stagingBase = 0;
+  int64_t destinationBase = 0;
+  int64_t wide = 0;
+  int64_t capacity = 0;
+};
+
+const Rows &rowsOf(ArrayRef<std::pair<int64_t, Rows>> entries, int64_t tile) {
+  return llvm::find_if(entries,
+                       [&](const auto &entry) { return entry.first == tile; })
+      ->second;
+}
+
+FailureOr<GatherGeometry> geometry(Operation *op) {
+  TensorInfo info = resultInfo(op);
+  GatherGeometry g;
+  g.rowBytes = info.shape[2] * info.shape[3] * info.elementBytes;
+  g.channels = info.shape[3];
+  for (const TileBox &entry : clampedTiles(producer(op, 0)))
+    g.sources.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
+  for (const TileBox &entry : clampedTiles(op))
+    g.destinations.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
+  std::map<int64_t, int64_t> owner;
+  std::map<int64_t, std::set<int64_t>> held;
+  for (auto [tile, rows] : g.sources)
+    for (int64_t row = rows.first; row <= rows.second; ++row) {
+      owner[row] = tile;
+      held[tile].insert(row);
+    }
+  for (auto [d, rows] : g.destinations) {
+    for (int64_t row = rows.first; row <= rows.second; ++row) {
+      auto found = owner.find(row);
+      if (found == owner.end())
+        return failure();
+      int64_t s = found->second;
+      int64_t holder =
+          s / kGrid == d / kGrid ? d : s / kGrid * kGrid + d % kGrid;
+      held[holder].insert(row);
+      if (holder == d)
+        continue;
+      auto key = std::make_pair(holder, d);
+      auto column = llvm::find_if(
+          g.columns, [&](const auto &entry) { return entry.first == key; });
+      if (column == g.columns.end())
+        g.columns.push_back({key, {row}});
+      else
+        column->second.push_back(row);
+    }
+  }
+  for (const auto &[tile, rows] : held)
+    g.staging[tile] = {*rows.begin(), *rows.rbegin()};
+  for (auto [h, rows] : g.staging)
+    for (auto [s, sourceRows] : g.sources) {
+      if (s == h || s / kGrid != h / kGrid)
+        continue;
+      int64_t first = std::max(rows.first, sourceRows.first);
+      int64_t last = std::min(rows.second, sourceRows.second);
+      if (first <= last)
+        g.rowsFlows.push_back({s, h, first, last});
+    }
+  for (const auto &[key, rows] : g.columns) {
+    for (auto [index, row] : llvm::enumerate(rows))
+      if (row != rows.front() + static_cast<int64_t>(index))
+        return failure();
+    g.columnFlows.push_back({key.first, key.second, rows.front(), rows.back()});
+  }
+  return g;
+}
+
+FailureOr<GatherPlan> plan(Operation *op, Context &context) {
+  FailureOr<GatherGeometry> g = geometry(op);
+  if (failed(g))
+    return unsupported(op, "a gather whose rows are not contiguous");
+  SmallVector<const StorageBlock *> blocks;
+  for (const StorageBlock &block : context.narrow())
+    if (block.value == op && block.suffix == Suffix::Dest)
+      blocks.push_back(&block);
+  llvm::stable_sort(blocks, [](const StorageBlock *a, const StorageBlock *b) {
+    return a->start < b->start;
+  });
+  if (blocks.size() != 2)
+    return unsupported(op, "a gather without a staging and a destination "
+                           "block");
+  FailureOr<int64_t> source = context.storageAddress(producer(op, 0));
+  FailureOr<int64_t> wide = context.wideAddress(op, Suffix::Gather);
+  FailureOr<int64_t> capacity = context.wideSize(op, Suffix::Gather);
+  if (failed(source) || failed(wide) || failed(capacity))
+    return unsupported(op, "a gather between unplaced blocks");
+  GatherPlan p;
+  static_cast<GatherGeometry &>(p) = std::move(*g);
+  p.sourceBase = *source;
+  p.stagingBase = blocks[0]->offset * kThreads;
+  p.destinationBase = blocks[1]->offset * kThreads;
+  p.wide = *wide;
+  p.capacity = *capacity;
+  return p;
+}
+
+enum class Part { Send, Receive, Forward };
+
+struct Action;
+
+struct MeshOp {
+  int64_t tile;
+  MeshDirection direction;
+  std::map<Part, Action *> parts;
+};
+
+struct Action {
+  int64_t tile;
+  Part role;
+  int64_t size;
+  MeshDirection direction;
+  int64_t address = 0;
+  MeshOp *op = nullptr;
+};
+
+using Address = std::function<int64_t(int64_t, int64_t, int64_t)>;
+
+struct Lines {
+  std::deque<Action> actions;
+  std::deque<MeshOp> ops;
+};
+
+SmallVector<MeshOp *> lineOps(ArrayRef<Flow> flows, bool horizontal,
+                              const Address &read, const Address &write,
+                              Lines &storage) {
+  auto position = [&](int64_t tile) {
+    return horizontal ? tile % kGrid : tile / kGrid;
+  };
+  int64_t step = horizontal ? 1 : kGrid;
+  SmallVector<Flow> ordered(flows);
+  llvm::stable_sort(ordered, [&](const Flow &a, const Flow &b) {
+    auto key = [&](const Flow &f) {
+      return std::make_pair(position(f.to),
+                            std::abs(position(f.to) - position(f.from)));
+    };
+    return key(a) < key(b);
+  });
+  SmallVector<std::pair<int64_t, SmallVector<Action *>>> actions;
+  SmallVector<SmallVector<Action *>> routes;
+  for (const Flow &flow : ordered) {
+    bool forward = position(flow.to) > position(flow.from);
+    MeshDirection direction =
+        horizontal ? (forward ? MeshDirection::OutboundEastInboundWest
+                              : MeshDirection::OutboundWestInboundEast)
+                   : (forward ? MeshDirection::OutboundSouthInboundNorth
+                              : MeshDirection::OutboundNorthInboundSouth);
+    int64_t delta = forward ? step : -step;
+    int64_t hops = std::abs(position(flow.to) - position(flow.from));
+    SmallVector<Action *> route;
+    for (int64_t k = 0; k <= hops; ++k) {
+      int64_t tile = flow.from + delta * k;
+      Part role =
+          k == 0 ? Part::Send : (k == hops ? Part::Receive : Part::Forward);
+      Action &action = storage.actions.emplace_back(
+          Action{tile, role, flow.last - flow.first + 1, direction});
+      if (role == Part::Send)
+        action.address = read(flow.from, flow.first, 0);
+      else if (role == Part::Receive)
+        action.address = write(flow.to, flow.first, flow.from);
+      auto entry = llvm::find_if(
+          actions, [&](const auto &item) { return item.first == tile; });
+      if (entry == actions.end())
+        actions.push_back({tile, {&action}});
+      else
+        entry->second.push_back(&action);
+      route.push_back(&action);
+    }
+    routes.push_back(route);
+  }
+  for (auto &[tile, items] : actions) {
+    size_t k = 0;
+    while (k < items.size()) {
+      MeshOp &op =
+          storage.ops.emplace_back(MeshOp{tile, items[k]->direction, {}});
+      bool pair = k + 1 < items.size() &&
+                  ((items[k]->role == Part::Send &&
+                    items[k + 1]->role == Part::Receive) ||
+                   (items[k]->role == Part::Receive &&
+                    items[k + 1]->role == Part::Send)) &&
+                  items[k]->direction == items[k + 1]->direction;
+      size_t count = pair ? 2 : 1;
+      for (size_t index = k; index < k + count; ++index) {
+        op.parts[items[index]->role] = items[index];
+        items[index]->op = &op;
+      }
+      k += count;
+    }
+  }
+  SmallVector<MeshOp *> out;
+  for (const auto &route : routes)
+    for (Action *action : route)
+      if (!llvm::is_contained(out, action->op))
+        out.push_back(action->op);
+  return out;
+}
+
+using Signature = std::tuple<MeshDirection, std::optional<int64_t>,
+                             std::optional<int64_t>, std::optional<int64_t>>;
+
+Signature signature(const MeshOp *op) {
+  auto size = [&](Part part) -> std::optional<int64_t> {
+    auto found = op->parts.find(part);
+    if (found == op->parts.end())
+      return std::nullopt;
+    return found->second->size;
+  };
+  return {op->direction, size(Part::Send), size(Part::Receive),
+          size(Part::Forward)};
+}
+
+SmallVector<SmallVector<MeshOp *>>
+mergeLines(ArrayRef<SmallVector<MeshOp *>> lines) {
+  SmallVector<SmallVector<MeshOp *>> merged;
+  for (const auto &ops : lines) {
+    int64_t cursor = -1;
+    for (MeshOp *op : ops) {
+      std::optional<size_t> match;
+      for (size_t k = cursor + 1; k < merged.size(); ++k)
+        if (signature(merged[k].front()) == signature(op)) {
+          match = k;
+          break;
+        }
+      if (!match) {
+        merged.push_back({op});
+        cursor = merged.size() - 1;
+      } else {
+        merged[*match].push_back(op);
+        cursor = *match;
+      }
+    }
+  }
+  return merged;
+}
+
+using TileValues = SmallVector<std::pair<int64_t, int64_t>>;
+using Groups = SmallVector<std::pair<int64_t, SmallVector<int64_t>>>;
+using Order = std::function<Groups(Groups)>;
+
+SmallVector<Emitted, 0> registerLoads(const TileValues &values, uint8_t reg,
+                                      const Order &order,
+                                      std::optional<int64_t> thread) {
+  Groups groups;
+  for (const auto &item : values) {
+    auto [tile, value] = item;
+    auto entry = llvm::find_if(
+        groups, [&](const auto &group) { return group.first == item.second; });
+    if (entry == groups.end())
+      groups.push_back({value, {tile}});
+    else
+      entry->second.push_back(tile);
+  }
+  SmallVector<Emitted, 0> out;
+  for (const auto &[value, tiles] : order(groups))
+    out.push_back(
+        load(value, tileSet(tiles), reg,
+             thread ? std::optional(threadBit(*thread)) : std::nullopt));
+  return out;
+}
+
+int64_t maxOf(ArrayRef<int64_t> values) { return *llvm::max_element(values); }
+
+Groups latestFirst(Groups groups) {
+  llvm::stable_sort(groups, [](const auto &a, const auto &b) {
+    return maxOf(a.second) > maxOf(b.second);
+  });
+  return groups;
+}
+
+Groups byRotatedColumn(Groups groups) {
+  SmallVector<int64_t> tiles = llvm::to_vector(llvm::seq<int64_t>(0, kTiles));
+  llvm::stable_sort(tiles, [](int64_t a, int64_t b) {
+    return (a % kGrid + kGrid - 1) % kGrid < (b % kGrid + kGrid - 1) % kGrid;
+  });
+  std::array<int64_t, kTiles> rank{};
+  for (auto [index, tile] : llvm::enumerate(tiles))
+    rank[tile] = index;
+  auto key = [&](const auto &group) {
+    int64_t out = 0;
+    for (int64_t tile : group.second)
+      out = std::max(out, rank[tile]);
+    return out;
+  };
+  llvm::stable_sort(
+      groups, [&](const auto &a, const auto &b) { return key(a) < key(b); });
+  return groups;
+}
+
+Groups byLastTile(Groups groups) {
+  llvm::stable_sort(groups, [](const auto &a, const auto &b) {
+    return maxOf(a.second) < maxOf(b.second);
+  });
+  return groups;
+}
+
+SmallVector<Emitted, 0> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
+                                         const GatherPlan &p) {
+  SmallVector<Emitted, 0> out;
+  for (const auto &members : merged) {
+    const MeshOp *sample = members.front();
+    SmallVector<int64_t> tiles;
+    for (const MeshOp *op : members)
+      tiles.push_back(op->tile);
+    Mesh mesh;
+    mesh.direction = sample->direction;
+    SmallVector<Emitted, 0> loads;
+    std::array<bool, 8> sourced{};
+    for (auto [role, traversal, reg] :
+         {std::make_tuple(Part::Send, &Mesh::read, uint8_t(0)),
+          std::make_tuple(Part::Receive, &Mesh::write, uint8_t(1))}) {
+      if (!sample->parts.count(role))
+        continue;
+      int64_t size = sample->parts.at(role)->size * p.rowBytes;
+      Traversal &target = mesh.*traversal;
+      target.counter = padded({counter(size - kFlit, kFlit)}, 5);
+      target.syncProducer = {producerSync(true)};
+      target.byteAddressMode = access(kFlit);
+      TileValues addresses;
+      std::set<int64_t> distinct;
+      for (const MeshOp *op : members) {
+        addresses.push_back({op->tile, op->parts.at(role)->address});
+        distinct.insert(op->parts.at(role)->address);
+      }
+      if (distinct.size() > 1) {
+        llvm::append_range(loads,
+                           registerLoads(addresses, reg, latestFirst, {}));
+        sourced[reg] = true;
+      } else {
+        target.baseAddress = addresses.front().second;
+      }
+    }
+    if (sample->parts.count(Part::Forward)) {
+      int64_t size = sample->parts.at(Part::Forward)->size * p.rowBytes;
+      mesh.write.counter = padded({counter(size / kFlit - 1, 1, false)}, 5);
+      mesh.write.syncProducer = {producerSync(false)};
+      mesh.write.byteAddressMode = access(kFlit);
+      mesh.forwardingMode = true;
+    }
+    llvm::append_range(out, loads);
+    out.push_back(dma(mesh, tileSet(tiles), sourced));
+  }
+  return out;
+}
+
+FailureOr<std::pair<int64_t, int64_t>> wideSplit(int64_t rows,
+                                                 int64_t capacity) {
+  if (rows <= capacity)
+    return std::make_pair(rows, int64_t(1));
+  for (int64_t inner = capacity / 2; inner > 0; --inner) {
+    int64_t outer = rows / inner;
+    if (rows % inner == 0 && llvm::isPowerOf2_64(outer))
+      return std::make_pair(inner, outer);
+  }
+  return failure();
+}
+
+struct Copy {
+  int64_t source;
+  int64_t destination;
+  int64_t rows;
+};
+
+FailureOr<SmallVector<Emitted, 0>>
+localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
+            const GatherPlan &p, const Order &order) {
+  SmallVector<std::pair<int64_t, std::map<int64_t, Copy>>> groups;
+  for (const auto &item : copies) {
+    const auto &[tile, copy] = item;
+    auto entry = llvm::find_if(groups, [&](const auto &group) {
+      return group.first == item.second.rows;
+    });
+    if (entry == groups.end())
+      groups.push_back({copy.rows, {{tile, copy}}});
+    else
+      entry->second[tile] = copy;
+  }
+  llvm::stable_sort(groups, [](const auto &a, const auto &b) {
+    return a.second.begin()->first < b.second.begin()->first;
+  });
+  int64_t width = p.rowBytes / (p.channels * 2);
+  int64_t pixelBytes = p.channels * 2;
+  SmallVector<Emitted, 0> out;
+  for (const auto &[rows, members] : groups) {
+    SmallVector<int64_t> tiles;
+    for (const auto &entry : members)
+      tiles.push_back(entry.first);
+    std::array<bool, 16> multicast = tileSet(tiles);
+    int64_t pixels = rows * width;
+    int64_t wideRows = pixels * kSlice / 128;
+    FailureOr<std::pair<int64_t, int64_t>> split =
+        wideSplit(wideRows, p.capacity);
+    if (failed(split))
+      return unsupported(op, "a gather copy larger than its wide block");
+    auto [inner, outer] = *split;
+    SmallVector<Counter> wideItems{counter(inner - 1, 1)};
+    if (outer > 1)
+      wideItems.push_back(counter(outer - 1, 1, false));
+    for (int64_t thread = 0; thread < kThreads; ++thread) {
+      std::array<bool, 4> bitmap = threadBit(thread);
+      SmallVector<Counter> readItems;
+      if (thread)
+        readItems.push_back(counter(0, kSlice));
+      readItems.push_back(counter((pixels - 1) * pixelBytes, pixelBytes));
+      NarrowToWide gather;
+      gather.read.counter = padded(readItems, 6);
+      gather.read.byteAddressMode = access(kSlice);
+      TileValues sources;
+      std::set<int64_t> distinctSources;
+      for (const auto &[tile, copy] : members) {
+        sources.push_back({tile, copy.source + thread * kSlice});
+        distinctSources.insert(copy.source + thread * kSlice);
+      }
+      std::array<bool, 8> gatherRegisters{};
+      SmallVector<Emitted, 0> loads;
+      if (distinctSources.size() > 1) {
+        loads = registerLoads(sources, 0, order, thread);
+        gatherRegisters = bits<8>("10000000");
+      } else {
+        gather.read.baseAddress = sources.front().second;
+      }
+      gather.write.baseAddress = p.wide;
+      gather.write.counter = padded(wideItems, 4);
+      gather.write.syncProducer = {producerSync(true, 1)};
+      gather.write.byteAddressMode = access(128);
+      if (outer > 1) {
+        gather.write.doubleBufferLoop = 1;
+        gather.write.secondBufferOffset = inner;
+        gather.writeWatchers = {
+            dmaWatcher(tileWatcher(TileSyncFlag::WideToNarrowWrite,
+                                   (int32_t(1) << 25) - inner, inner, 1, true),
+                       true)};
+      }
+      gather.threadMulticastBitmap = bitmap;
+      gather.byteAddress.strideUnitGranulesLoopMap = 1;
+      gather.byteAddress.defaultStrideUnitGranules = 2;
+      gather.byteAddress.lastStrideUnitGranules = 2;
+      gather.byteAddress.cellStride = kSlice;
+      gather.byteAddress.defaultCellStrideGroupCount = 1;
+      gather.byteAddress.lastCellStrideGroupCount = 1;
+      llvm::append_range(out, loads);
+      out.push_back(dma(gather, multicast, gatherRegisters));
+
+      WideToNarrow scatter;
+      scatter.read.baseAddress = p.wide;
+      scatter.read.counter = padded(wideItems, 4);
+      if (outer > 1) {
+        scatter.read.doubleBufferLoop = 1;
+        scatter.read.secondBufferOffset = inner;
+      }
+      SmallVector<Counter> scatterItems;
+      if (thread)
+        scatterItems.push_back(counter(0, 8));
+      scatterItems.push_back(counter(96, 32));
+      scatterItems.push_back(counter((wideRows - 1) * 128, 128));
+      scatter.write.counter = padded(scatterItems, 6);
+      scatter.write.syncProducer = {producerSync(true, thread ? 2 : 1)};
+      TileValues destinations;
+      std::set<int64_t> distinctDestinations;
+      for (const auto &[tile, copy] : members) {
+        int64_t address = copy.destination / 4 + thread * kSlice / 4;
+        destinations.push_back({tile, address});
+        distinctDestinations.insert(address);
+      }
+      std::array<bool, 8> scatterRegisters{};
+      loads.clear();
+      if (distinctDestinations.size() > 1) {
+        loads = registerLoads(destinations, 1, order, thread);
+        scatterRegisters = bits<8>("01000000");
+      } else {
+        scatter.write.baseAddress = destinations.front().second;
+      }
+      scatter.readWatchers = {dmaWatcher(
+          tileWatcher(TileSyncFlag::NarrowToWideWrite, 1, 1, 1, true))};
+      scatter.wideMemoryLoadStoreLoopId = thread ? 2 : 1;
+      scatter.zInBundleValidCount = 8;
+      scatter.threadMulticastBitmap = bitmap;
+      llvm::append_range(out, loads);
+      out.push_back(dma(scatter, multicast, scatterRegisters));
+    }
+  }
+  return out;
+}
+
+SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
+                                  const Address &read, const Address &write,
+                                  const GatherPlan &p) {
+  std::map<int64_t, SmallVector<Flow>> lines;
+  for (const Flow &flow : flows)
+    lines[horizontal ? flow.from / kGrid : flow.from % kGrid].push_back(flow);
+  auto position = [&](int64_t tile) {
+    return horizontal ? tile % kGrid : tile / kGrid;
+  };
+  Lines storage;
+  SmallVector<Emitted, 0> out;
+  for (bool forward : {true, false}) {
+    SmallVector<SmallVector<MeshOp *>> sequences;
+    for (const auto &[line, members] : lines) {
+      SmallVector<Flow> selected;
+      for (const Flow &flow : members)
+        if ((position(flow.to) > position(flow.from)) == forward)
+          selected.push_back(flow);
+      sequences.push_back(lineOps(selected, horizontal, read, write, storage));
+    }
+    llvm::append_range(out, meshInstructions(mergeLines(sequences), p));
+  }
+  return out;
+}
+
+} // namespace
+
+int64_t codegen::gatherWideRows(Operation *op) {
+  FailureOr<GatherGeometry> g = geometry(op);
+  if (failed(g))
+    return 0;
+  int64_t width = g->rowBytes / (g->channels * 2);
+  int64_t largest = 0;
+  for (auto [tile, rows] : g->sources)
+    largest = std::max(largest, rows.second - rows.first + 1);
+  for (auto [d, rows] : g->destinations) {
+    std::set<int64_t> moved;
+    for (const auto &[key, columnRows] : g->columns)
+      if (key.second == d)
+        moved.insert(columnRows.begin(), columnRows.end());
+    int64_t local = 0;
+    for (int64_t row = rows.first; row <= rows.second; ++row)
+      local += !moved.count(row);
+    largest = std::max(largest, local);
+  }
+  int64_t wideRows = largest * width * kSlice / 128;
+  return wideRows <= 16 ? wideRows : 8;
+}
+
+Body codegen::gatherRows(Operation *op, Context &context) {
+  FailureOr<GatherPlan> planned = plan(op, context);
+  if (failed(planned))
+    return failure();
+  const GatherPlan &p = *planned;
+  std::map<int64_t, Copy> copies;
+  for (auto [tile, rows] : p.sources)
+    copies[tile] = Copy{
+        p.sourceBase,
+        p.stagingBase + (rows.first - p.staging.at(tile).first) * p.rowBytes,
+        rows.second - rows.first + 1};
+  Address read = [&](int64_t s, int64_t first, int64_t) {
+    return p.sourceBase + (first - rowsOf(p.sources, s).first) * p.rowBytes;
+  };
+  Address write = [&](int64_t h, int64_t first, int64_t) {
+    return p.stagingBase + (first - p.staging.at(h).first) * p.rowBytes;
+  };
+  FailureOr<SmallVector<Emitted, 0>> out =
+      localCopies(op, copies, p, byRotatedColumn);
+  if (failed(out))
+    return failure();
+  llvm::append_range(*out, meshStage(p.rowsFlows, true, read, write, p));
+  return out;
+}
+
+Body codegen::gatherColumns(Operation *op, Context &context) {
+  FailureOr<GatherPlan> planned = plan(op, context);
+  if (failed(planned))
+    return failure();
+  const GatherPlan &p = *planned;
+  std::map<int64_t, std::set<int64_t>> moved;
+  for (const auto &[key, rows] : p.columns)
+    moved[key.second].insert(rows.begin(), rows.end());
+  std::map<int64_t, Copy> copies;
+  for (auto [d, rows] : p.destinations) {
+    SmallVector<int64_t> local;
+    for (int64_t row = rows.first; row <= rows.second; ++row)
+      if (!moved[d].count(row))
+        local.push_back(row);
+    for (auto [index, row] : llvm::enumerate(local))
+      if (row != local.front() + static_cast<int64_t>(index))
+        return unsupported(op, "a gather destination with non contiguous "
+                               "local rows");
+    copies[d] = Copy{
+        p.stagingBase + (local.front() - p.staging.at(d).first) * p.rowBytes,
+        p.destinationBase + (local.front() - rows.first) * p.rowBytes,
+        static_cast<int64_t>(local.size())};
+  }
+  Address read = [&](int64_t h, int64_t first, int64_t) {
+    return p.stagingBase + (first - p.staging.at(h).first) * p.rowBytes;
+  };
+  Address write = [&](int64_t d, int64_t first, int64_t) {
+    return p.destinationBase +
+           (first - rowsOf(p.destinations, d).first) * p.rowBytes;
+  };
+  FailureOr<SmallVector<Emitted, 0>> out =
+      localCopies(op, copies, p, byLastTile);
+  if (failed(out))
+    return failure();
+  llvm::append_range(*out, meshStage(p.columnFlows, false, read, write, p));
+  return out;
+}
