@@ -29,6 +29,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   SpillFillOptimization.cpp
   StaticToStreaming.cpp
   TransferCanonicalization.cpp
+  Vectorization.cpp
   TensorComputeConfiguration.cpp
 
   DEPENDS

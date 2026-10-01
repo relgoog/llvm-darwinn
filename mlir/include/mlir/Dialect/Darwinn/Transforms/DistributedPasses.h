@@ -30,6 +30,8 @@ std::unique_ptr<Pass> createScalarCoreStdOpsLoweringPass();
 void registerScalarCoreStdOpsLoweringPass();
 std::unique_ptr<Pass> createLegalizeThreadObliviousOpPass();
 void registerLegalizeThreadObliviousOpPass();
+std::unique_ptr<Pass> createVectorizationPass();
+void registerVectorizationPass();
 
 }
 }
