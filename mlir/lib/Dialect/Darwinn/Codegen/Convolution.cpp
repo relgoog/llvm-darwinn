@@ -232,7 +232,8 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
     prologue.outerLimit = *bias + plan.biasRows - 1;
     prologue.outerStride = 1;
     prologue.accessBytes = row;
-    int64_t loopId = items.size() - (plan.transposed ? 1 : 2);
+    bool blocksCounted = items.size() == loops.size() + 1;
+    int64_t loopId = items.size() - (plan.transposed || !blocksCounted ? 1 : 2);
     if (loopId > 0)
       prologue.loopId = loopId;
     consumer.traversal.prologue = prologue;
@@ -425,15 +426,14 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   sums.counter = padded(masked(sumLoops), 8);
 
   int64_t outIndex = main.size() - 1;
-  int64_t reload =
-      !single ? 2 : (plan.outBlocks > 1 ? outIndex : int64_t(main.size()));
+  int64_t blockDepth = plan.outBlocks > 1 ? outIndex : int64_t(main.size());
+  int64_t reload = !single ? 2 : blockDepth;
   uint32_t stride = single && plan.outBlocks == 1 ? 0 : 1;
   tensor.syncWatchers.push_back(
       tileWatcher(TileSyncFlag::RingBusReadA, 1, stride, reload));
   if (plan.biasRows)
     tensor.syncWatchers.push_back(tileWatcher(
-        TileSyncFlag::WideToScaling, 1, stride,
-        plan.outBlocks > 1 || !single ? outIndex : int64_t(main.size()), true));
+        TileSyncFlag::WideToScaling, 1, plan.outBlocks > 1, blockDepth, true));
   tensor.control.linear = macLinear(single);
   tensor.control.nonLinear = reluNonLinear(op, outElem);
   if (plan.biasRows) {

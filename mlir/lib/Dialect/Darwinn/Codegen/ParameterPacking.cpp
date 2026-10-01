@@ -24,13 +24,6 @@ FailureOr<SmallVector<float>> fillValues(Operation *fill) {
   return out;
 }
 
-Operation *fillBehind(Value value) {
-  Operation *node = value.getDefiningOp();
-  while (node && !isa<FillOp>(node))
-    node = producer(node, 0);
-  return node;
-}
-
 FailureOr<std::optional<SmallVector<float>>> biasValues(Operation *op,
                                                         bool packed) {
   if (!packed)

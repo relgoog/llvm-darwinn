@@ -72,8 +72,10 @@ int64_t dot(ArrayRef<int64_t> left, ArrayRef<int64_t> right);
 int64_t ceilDiv(int64_t numerator, int64_t denominator);
 
 Operation *producer(Operation *op, unsigned index);
+Operation *fillBehind(Value value);
 SmallVector<Operation *> usersOf(Operation *op);
 bool unused(Operation *op);
+bool isModelOutput(Operation *op);
 DistributedMemorySpace sourceSpace(Operation *op);
 DistributedMemorySpace resultSpace(Operation *op);
 

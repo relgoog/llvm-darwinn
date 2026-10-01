@@ -269,7 +269,7 @@ FailureOr<StorageProblems> codegen::storageProblems(ArrayRef<Group> groups) {
     if (!kept || first == step.end() || first->second != group.step)
       continue;
     if (resultSpace(op) == DistributedMemorySpace::HostMemory) {
-      if (unused(op) || written.contains(op))
+      if (isModelOutput(op) || written.contains(op))
         continue;
       auto [root, writers] = hostRoot(op);
       written.insert(writers.begin(), writers.end());
@@ -468,6 +468,12 @@ SmallVector<Hib> Context::resolvedHibs() const {
       fills += hib.size;
   int64_t fillCursor = 0;
   int64_t parameterCursor = ceilDiv(fills, 4096) * 4096;
+  auto constants = [](Operation *op) {
+    return std::make_tuple(
+        fillBehind(op->getOperand(1)),
+        op->getNumOperands() > 3 ? fillBehind(op->getOperand(3)) : nullptr,
+        op->getName());
+  };
   SmallVector<Hib> out;
   for (Hib hib : hibs) {
     if (hib.root == HibRoot::ParameterFill) {
@@ -475,8 +481,17 @@ SmallVector<Hib> Context::resolvedHibs() const {
       fillCursor += hib.size;
       hib.root = HibRoot::ParameterRegion;
     } else if (hib.root == HibRoot::Parameter) {
-      hib.offset = parameterCursor;
-      parameterCursor += hib.size;
+      auto shared = llvm::find_if(out, [&](const Hib &placed) {
+        return placed.root == HibRoot::ParameterRegion && placed.source &&
+               !isa<FillOp>(placed.source) && placed.size == hib.size &&
+               constants(placed.source) == constants(hib.source);
+      });
+      if (shared != out.end()) {
+        hib.offset = shared->offset;
+      } else {
+        hib.offset = parameterCursor;
+        parameterCursor += hib.size;
+      }
       hib.root = HibRoot::ParameterRegion;
     }
     out.push_back(hib);

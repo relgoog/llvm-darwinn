@@ -151,6 +151,13 @@ int64_t codegen::ceilDiv(int64_t numerator, int64_t denominator) {
   return llvm::divideCeilSigned(numerator, denominator);
 }
 
+Operation *codegen::fillBehind(Value value) {
+  Operation *node = value.getDefiningOp();
+  while (node && !isa<FillOp>(node))
+    node = producer(node, 0);
+  return node;
+}
+
 Operation *codegen::producer(Operation *op, unsigned index) {
   if (index >= op->getNumOperands())
     return nullptr;
@@ -169,6 +176,13 @@ SmallVector<Operation *> codegen::usersOf(Operation *op) {
 }
 
 bool codegen::unused(Operation *op) { return usersOf(op).empty(); }
+
+bool codegen::isModelOutput(Operation *op) {
+  return llvm::any_of(op->getUsers(), [](Operation *user) {
+    return isa<func::ReturnOp>(user) ||
+           (isa<CommunicatedJoinViewsOp>(user) && isModelOutput(user));
+  });
+}
 
 DistributedMemorySpace codegen::sourceSpace(Operation *op) {
   if (op->getNumOperands() == 0)

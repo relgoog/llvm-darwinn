@@ -128,11 +128,12 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
       reduced.push_back(index);
   }
   int64_t vector = rank - 1;
-  int64_t lanes = std::min(size[vector], kLanes);
-  int64_t blocks = ceilDiv(size[vector], kLanes);
   LinearFunctionKind linearKind = *linearFunction(op);
   std::optional<NluFunctionKind> nlu = nluFunction(op);
   bool floatInput = inElem == 4;
+  int64_t laneLimit = reduced.empty() ? std::min(kLanes, 16 / inElem) : kLanes;
+  int64_t lanes = std::min(size[vector], laneLimit);
+  int64_t blocks = ceilDiv(size[vector], laneLimit);
   int64_t readBytes = std::max<int64_t>(lanes * inElem, 4);
   int64_t writeBytes = lanes * outElem;
 
@@ -190,18 +191,26 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     for (int64_t dim = 0; dim < rank; ++dim)
       if (dim != vector && !llvm::is_contained(reduced, dim) && size[dim] > 1)
         count *= size[dim];
-    tensor.mainOperation.counter = mainCounters({count - 1});
-    tensor.narrowMemoryRead.counter =
-        padded({counter((count - 1) * readBytes, readBytes)}, 8);
+    int64_t readPixel = blocks * readBytes, writePixel = blocks * writeBytes;
+    SmallVector<int64_t> main{count - 1};
+    SmallVector<Counter> read{counter((count - 1) * readPixel, readPixel)};
+    SmallVector<Counter> write{counter(0, writeBytes),
+                               counter((count - 1) * writePixel, writePixel)};
+    SmallVector<Counter> sums{counter(count - 1, 1, false)};
+    if (blocks > 1) {
+      main.push_back(blocks - 1);
+      read.push_back(counter((blocks - 1) * readBytes, readBytes));
+      write.push_back(counter((blocks - 1) * writeBytes, writeBytes));
+      sums.push_back(counter(blocks - 1, 1, false));
+    }
+    tensor.mainOperation.counter = mainCounters(main);
+    tensor.narrowMemoryRead.counter = padded(read, 8);
     tensor.narrowMemoryRead.byteAddressMode = access(readBytes, 2);
-    tensor.narrowMemoryWriteFromNonLinear.counter = padded(
-        {counter(0, writeBytes), counter((count - 1) * writeBytes, writeBytes)},
-        8);
+    tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
     tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
         producerSync(true, 2)};
     tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(writeBytes);
-    tensor.wideMemoryReadForSums.counter =
-        padded({counter(count - 1, 1, false)}, 8);
+    tensor.wideMemoryReadForSums.counter = padded(sums, 8);
     tensor.wideMemoryReadForSums.secondBufferOffset = 4;
     linear = baseLinear(LinearOperation::PartialSumAdd, OperandType::Half);
   }

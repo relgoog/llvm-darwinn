@@ -487,12 +487,34 @@ Body codegen::modelOutput(Operation *op, Context &context) {
   FailureOr<int64_t> base = context.storageAddress(source);
   if (failed(base))
     return unsupported(op, "a model output from an unplaced narrow block");
+  Operation *view = op->getNumOperands() > 1 ? producer(op, 1) : nullptr;
+  SmallVector<int64_t, 4> full =
+      view ? resultInfo(producer(view, 0)).shape : resultInfo(op).shape;
+  SmallVector<int64_t, 4> strides(full.size(), 1);
+  for (int64_t dim = full.size() - 2; dim >= 0; --dim)
+    strides[dim] = strides[dim + 1] * full[dim + 1];
   std::array<bool, 8> channels = bits<8>("10000000");
   int64_t elem = resultInfo(op).elementBytes;
   SmallVector<Emitted, 0> out;
-  int64_t outputOffset = 0;
   for (auto [order, entry] : llvm::enumerate(tiles(*slicingOf(source)))) {
-    int64_t total = product(extent(entry.box)) * elem;
+    Index size = extent(entry.box);
+    Index low = tail(entry.box.lo, full.size());
+    if (view)
+      low = applyReverse(view, low);
+    size = tail(size, full.size());
+    int64_t total = product(size) * elem;
+    int64_t split = full.size() - 1;
+    while (split >= 0 && size[split] == full[split])
+      --split;
+    int64_t run = split < 0 ? total : size[split] * strides[split] * elem;
+    SmallVector<Counter> loops{counter(0, run)};
+    for (int64_t dim = split - 1; dim >= 0; --dim)
+      if (size[dim] > 1)
+        loops.push_back(counter((size[dim] - 1) * strides[dim] * elem,
+                                strides[dim] * elem));
+    int64_t offset = 0;
+    for (auto [position, stride] : llvm::zip_equal(low, strides))
+      offset += position * stride * elem;
     RingProducer producer;
     producer.traversal.baseAddress = *base;
     producer.traversal.counter = padded({counter(total - kAccess, kAccess)}, 4);
@@ -507,9 +529,9 @@ Body codegen::modelOutput(Operation *op, Context &context) {
     HibDma hib;
     hib.queue = DmaQueue::Output;
     hib.traversal.baseAddress =
-        context.hib(DmaQueue::Output, HibRoot::OutputActivation, outputOffset);
-    hib.traversal.counter = padded({counter(0, total)}, 4);
-    hib.traversal.byteAddressMode = access(total);
+        context.hib(DmaQueue::Output, HibRoot::OutputActivation, offset);
+    hib.traversal.counter = padded(loops, 4);
+    hib.traversal.byteAddressMode = access(run);
     out.push_back(tagged(hib));
     out.push_back(outfeed(total, channels));
     ScalarFence fence;
@@ -517,7 +539,6 @@ Body codegen::modelOutput(Operation *op, Context &context) {
     fence.waitIdle = bits<5>("00010");
     fence.incrementGlobalTokenA = true;
     out.push_back(scalarFence(fence));
-    outputOffset += total;
   }
   llvm::append_range(out, groupFences());
   return out;

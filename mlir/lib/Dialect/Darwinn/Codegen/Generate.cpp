@@ -55,8 +55,8 @@ public:
 
   SmallVector<Emitted, 0> preempt() const {
     std::array<bool, 16> tiles = current.value_or(kAllTiles);
-    SmallVector<Emitted, 0> out =
-        subscribeTiles(tiles, bits<8>("01000001"), true);
+    SmallVector<Emitted, 0> out = subscribeTiles(
+        tiles, current ? bits<8>("01000001") : bits<8>("01000000"), true);
     if (tiles != kAllTiles) {
       std::array<bool, 16> complement;
       for (size_t tile = 0; tile < tiles.size(); ++tile)
@@ -212,7 +212,8 @@ Body groupBody(const Group &group, Context &context) {
       return transferLoad(op, context);
     if (from == DistributedMemorySpace::TileMemory &&
         to == DistributedMemorySpace::HostMemory)
-      return unused(op) ? modelOutput(op, context) : transferStore(op, context);
+      return isModelOutput(op) ? modelOutput(op, context)
+                               : transferStore(op, context);
     if (context.gathered.contains(op))
       return gatherColumns(op, context);
   }
