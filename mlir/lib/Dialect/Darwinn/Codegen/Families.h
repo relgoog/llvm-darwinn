@@ -93,6 +93,7 @@ int64_t permuteWideRows(Operation *op);
 Body permuteCopy(Operation *op, Context &context);
 
 int64_t gatherWideRows(Operation *op);
+int64_t gatherStagingWords(Operation *op);
 Body gatherRows(Operation *op, Context &context);
 Body gatherColumns(Operation *op, Context &context);
 

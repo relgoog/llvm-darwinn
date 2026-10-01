@@ -249,7 +249,7 @@ FailureOr<StorageProblems> codegen::storageProblems(ArrayRef<Group> groups) {
                                  Suffix::Dest,
                                  group.step,
                                  group.step + 1,
-                                 4 * narrowBytes(producer(op, 0), true),
+                                 gatherStagingWords(op),
                                  {},
                                  0});
       SmallVector<Operation *> readers;
