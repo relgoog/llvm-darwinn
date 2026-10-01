@@ -3,6 +3,8 @@
 
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/OwningOpRef.h"
 #include "mlir/Target/Darwinn/Serialization.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -208,6 +210,20 @@ struct GeneratedProgram {
 
 FailureOr<GeneratedProgram> buildProgram(ArrayRef<Segment> segments,
                                          const Context &context);
+
+struct HostEvent {
+  enum class Kind { Dispatch, Root, Copy, Add, Put, Wait };
+  Kind kind;
+  int64_t first = 0;
+  int64_t second = 0;
+  int64_t third = 0;
+};
+
+FailureOr<SmallVector<HostEvent, 0>> hostEvents(const GeneratedProgram &program,
+                                                const EncodedProgram &encoded);
+OwningOpRef<ModuleOp> hostModule(MLIRContext *context,
+                                 ArrayRef<HostEvent> events, int64_t slotCount,
+                                 StringRef programSymbol);
 
 template <size_t N>
 std::array<bool, N> bits(StringRef pattern) {

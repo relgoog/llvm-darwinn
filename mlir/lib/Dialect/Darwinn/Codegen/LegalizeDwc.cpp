@@ -1,5 +1,6 @@
 #include "Codegen.h"
 #include "mlir/Dialect/Darwinn/Codegen/Codegen.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Pass/Pass.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/JSON.h"
@@ -205,6 +206,29 @@ LogicalResult writeSchedule(StringRef path, func::FuncOp function,
   return success();
 }
 
+LogicalResult writeChunks(StringRef path, func::FuncOp function,
+                          const GeneratedProgram &program,
+                          const EncodedProgram &encoded) {
+  llvm::json::Array chunks, hibs;
+  for (const InstructionBytes &chunk : encoded.getChunks())
+    chunks.push_back(hex(chunk));
+  for (const ChunkMeta &meta : program.meta)
+    for (const auto &[index, reference] : meta.hibs) {
+      const InstructionLayout *layout = encoded.findInstruction(reference);
+      const Hib &hib = program.hibs[index];
+      hibs.push_back(llvm::json::Array{reference.chunk,
+                                       *layout->hibAddressBitOffset,
+                                       rootName(hib.root), hib.offset});
+    }
+  std::error_code error;
+  llvm::raw_fd_ostream stream(path, error);
+  if (error)
+    return function.emitError() << "cannot write " << path;
+  stream << llvm::json::Value(llvm::json::Object{{"chunks", std::move(chunks)},
+                                                 {"hibs", std::move(hibs)}});
+  return success();
+}
+
 class LegalizeDwcPass
     : public PassWrapper<LegalizeDwcPass, OperationPass<func::FuncOp>> {
 public:
@@ -221,7 +245,7 @@ public:
   }
 
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<DarwinnDialect>();
+    registry.insert<DarwinnDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() final {
@@ -247,7 +271,7 @@ public:
     FailureOr<GeneratedProgram> program = buildProgram(*segments, *context);
     if (failed(program))
       return signalPassFailure();
-    if (chunksOutput.empty())
+    if (chunksOutput.empty() && hostOutput.empty())
       return;
     auto scalar = ScalarEncoder::create(16, false);
     if (!scalar) {
@@ -259,25 +283,26 @@ public:
       function.emitError(llvm::toString(encoded.takeError()));
       return signalPassFailure();
     }
-    llvm::json::Array chunks, hibs;
-    for (const InstructionBytes &chunk : encoded->getChunks())
-      chunks.push_back(hex(chunk));
-    for (const ChunkMeta &meta : program->meta)
-      for (const auto &[index, reference] : meta.hibs) {
-        const InstructionLayout *layout = encoded->findInstruction(reference);
-        const Hib &hib = program->hibs[index];
-        hibs.push_back(llvm::json::Array{reference.chunk,
-                                         *layout->hibAddressBitOffset,
-                                         rootName(hib.root), hib.offset});
-      }
-    std::error_code error;
-    llvm::raw_fd_ostream stream(chunksOutput, error);
-    if (error) {
-      function.emitError() << "cannot write " << chunksOutput;
+    if (!chunksOutput.empty() &&
+        failed(writeChunks(chunksOutput, function, *program, *encoded)))
+      return signalPassFailure();
+    if (hostOutput.empty())
+      return;
+    FailureOr<SmallVector<HostEvent, 0>> events =
+        hostEvents(*program, *encoded);
+    if (failed(events)) {
+      function.emitError("a hib patch lacks an encoded bit offset");
       return signalPassFailure();
     }
-    stream << llvm::json::Value(llvm::json::Object{
-        {"chunks", std::move(chunks)}, {"hibs", std::move(hibs)}});
+    OwningOpRef<ModuleOp> host =
+        hostModule(&getContext(), *events, program->hibs.size(), programSymbol);
+    std::error_code error;
+    llvm::raw_fd_ostream stream(hostOutput, error);
+    if (error) {
+      function.emitError() << "cannot write " << hostOutput;
+      return signalPassFailure();
+    }
+    host->print(stream);
   }
 
   Option<std::string> nluSplines{
@@ -286,6 +311,13 @@ public:
   Option<std::string> scheduleOutput{
       *this, "schedule-output",
       llvm::cl::desc("Write the tensor groups and storage placements as JSON")};
+  Option<std::string> hostOutput{
+      *this, "host-output",
+      llvm::cl::desc("Write the host program as an LLVM dialect module")};
+  Option<std::string> programSymbol{
+      *this, "program-symbol",
+      llvm::cl::desc("Symbol of the stand alone instruction program"),
+      llvm::cl::init("main_STAND_ALONE_inst_Group_0_0_2_0_0")};
   Option<std::string> chunksOutput{
       *this, "chunks-output",
       llvm::cl::desc("Write the encoded chunks and hib patch offsets as JSON")};

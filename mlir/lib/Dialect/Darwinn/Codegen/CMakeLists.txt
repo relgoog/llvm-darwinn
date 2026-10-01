@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRDarwinnCodegen
   Gather.cpp
   Generate.cpp
   Geometry.cpp
+  HostProgram.cpp
   Interpolate.cpp
   LegalizeDwc.cpp
   Movement.cpp
@@ -22,5 +23,6 @@ add_mlir_dialect_library(MLIRDarwinnCodegen
   MLIRDarwinnEncoding
   MLIRFuncDialect
   MLIRIR
+  MLIRLLVMDialect
   MLIRPass
   )
