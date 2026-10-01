@@ -20,6 +20,8 @@ std::unique_ptr<Pass> createRedistributeOptimizationPass();
 void registerRedistributeOptimizationPass();
 std::unique_ptr<Pass> createSpillFillOptimizationPass();
 void registerSpillFillOptimizationPass();
+std::unique_ptr<Pass> createStaticToStreamingPass();
+void registerStaticToStreamingPass();
 
 }
 }

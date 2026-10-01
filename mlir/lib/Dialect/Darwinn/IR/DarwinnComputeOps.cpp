@@ -216,6 +216,14 @@ LogicalResult StaticUnaryComputeOpOp::verify() {
   return verifyComputeOperation(*this);
 }
 
+LogicalResult StreamingComputeOpOp::verify() {
+  return verifyComputeOperation(*this);
+}
+
+LogicalResult StreamingUnaryComputeOpOp::verify() {
+  return verifyComputeOperation(*this);
+}
+
 LogicalResult TensorOpOp::verify() { return verifyComputeOperation(*this); }
 
 LogicalResult UnaryTensorOpOp::verify() {

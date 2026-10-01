@@ -40,6 +40,21 @@ def Darwinn_ConstKind
   let genSpecializedAttr = 0;
 }
 
+def Darwinn_MemSpaceKind
+    : I32EnumAttr<"MemSpaceKind", "memory space of a streamed view",
+                  [I32EnumAttrCase<"HostMemory", 0, "HOST_MEMORY">,
+                   I32EnumAttrCase<"TileMemory", 1, "TILE_MEMORY">,
+                   I32EnumAttrCase<"TileRegisters", 2, "TILE_REGISTERS">]> {
+  let cppNamespace = "::mlir::darwinn";
+  let genSpecializedAttr = 0;
+}
+
+def Darwinn_MemSpaceAttr
+    : EnumAttr<Darwinn_Dialect, Darwinn_MemSpaceKind, "mem_space"> {
+  let cppClassName = "MemSpaceAttr";
+  let assemblyFormat = "`<` $value `>`";
+}
+
 def Darwinn_AuxTensorTypeAttr
     : EnumAttr<Darwinn_Dialect, Darwinn_AuxTensorKind, "aux_tensor_type"> {
   let cppClassName = "AuxTensorTypeAttr";

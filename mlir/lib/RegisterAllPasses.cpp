@@ -85,6 +85,7 @@ void mlir::registerAllPasses() {
   darwinn::registerTransferCanonicalizationPass();
   darwinn::registerRedistributeOptimizationPass();
   darwinn::registerSpillFillOptimizationPass();
+  darwinn::registerStaticToStreamingPass();
   darwinn::registerOptimizePointwisePass();
   darwinn::registerPlanTensorTraversalsPass();
   func::registerFuncPasses();

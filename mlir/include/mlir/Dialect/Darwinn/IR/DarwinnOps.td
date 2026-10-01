@@ -1653,32 +1653,6 @@ def Darwinn_StaticSparseComputeOpOp : Darwinn_Op<"static_sparse_compute_op"> {
   let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
 }
 
-// Operator: streaming_compute_op
-def Darwinn_StreamingComputeOpOp : Darwinn_Op<"streaming_compute_op"> {
-  let summary = "Darwinn streaming_compute_op operation.";
-  let description = [{
-    Takes any number of operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: streaming_copy_op
-def Darwinn_StreamingCopyOpOp : Darwinn_Op<"streaming_copy_op"> {
-  let summary = "Darwinn streaming_copy_op operation.";
-  let description = [{
-    Takes two operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
 // Operator: streaming_sparse_compute_op
 def Darwinn_StreamingSparseComputeOpOp : Darwinn_Op<"streaming_sparse_compute_op"> {
   let summary = "Darwinn streaming_sparse_compute_op operation.";
@@ -1697,19 +1671,6 @@ def Darwinn_StreamingSparseCopyOpOp : Darwinn_Op<"streaming_sparse_copy_op"> {
   let summary = "Darwinn streaming_sparse_copy_op operation.";
   let description = [{
     Takes two operands.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
-
-// Operator: streaming_unary_compute_op
-def Darwinn_StreamingUnaryComputeOpOp : Darwinn_Op<"streaming_unary_compute_op"> {
-  let summary = "Darwinn streaming_unary_compute_op operation.";
-  let description = [{
-    Takes one operand.
     No kernel shape is evidenced.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs);

@@ -55,6 +55,53 @@ def Darwinn_StaticUnaryComputeOpOp : Darwinn_Op<"static_unary_compute_op"> {
       "operands attr-dict `:` functional-type(operands, results)";
 }
 
+def Darwinn_StreamingComputeOpOp : Darwinn_Op<"streaming_compute_op"> {
+  let arguments = (ins Darwinn_DistributedView:$lhs,
+      Darwinn_DistributedView:$rhs, Darwinn_DistributedView:$destination,
+      Variadic<Darwinn_ComputeTensorOrView>:$auxiliary_tensors,
+      Darwinn_ComputeOpOptionsAttr:$compute, AffineMapAttr:$traversal,
+      AffineMapAttr:$lhs_traversal,
+      OptionalAttr<Darwinn_ComputeAuxiliaryKinds>:$auxiliary_tensor_types,
+      OptionalAttr<BoolAttr>:$streaming_input0,
+      OptionalAttr<BoolAttr>:$streaming_input1,
+      OptionalAttr<BoolAttr>:$streaming_output,
+      OptionalAttr<Darwinn_CustomTilingOptionsAttr>:$custom_tiling,
+      OptionalAttr<Darwinn_DtcInfoAttr>:$dtc_info,
+      OptionalAttr<Darwinn_VexInfoAttr>:$vex_info);
+  let results = (outs Darwinn_DistributedTensor:$output);
+  let hasVerifier = 1;
+  let assemblyFormat =
+      "operands attr-dict `:` functional-type(operands, results)";
+}
+
+def Darwinn_StreamingUnaryComputeOpOp
+    : Darwinn_Op<"streaming_unary_compute_op"> {
+  let arguments = (ins Darwinn_DistributedView:$input,
+      Darwinn_DistributedView:$destination,
+      Variadic<Darwinn_ComputeTensorOrView>:$auxiliary_tensors,
+      Darwinn_ComputeOpOptionsAttr:$compute, AffineMapAttr:$traversal,
+      OptionalAttr<Darwinn_ComputeAuxiliaryKinds>:$auxiliary_tensor_types,
+      OptionalAttr<Darwinn_CustomTilingOptionsAttr>:$custom_tiling,
+      OptionalAttr<I32ArrayAttr>:$custom_constraints,
+      OptionalAttr<Darwinn_VexInfoAttr>:$vex_info);
+  let results = (outs Darwinn_ComputeTensorOrView:$output);
+  let hasVerifier = 1;
+  let assemblyFormat =
+      "operands attr-dict `:` functional-type(operands, results)";
+}
+
+def Darwinn_StreamingCopyOpOp : Darwinn_Op<"streaming_copy_op"> {
+  let arguments = (ins Darwinn_ComputeTensorOrView:$input,
+      AffineMapAttr:$traversal,
+      OptionalAttr<AffineMapAttr>:$forward_index_transformation,
+      OptionalAttr<Darwinn_MemSpaceAttr>:$memory_space,
+      OptionalAttr<BoolAttr>:$streaming_input,
+      OptionalAttr<BoolAttr>:$streaming_output);
+  let results = (outs Darwinn_ComputeTensorOrView:$output);
+  let assemblyFormat =
+      "operands attr-dict `:` functional-type(operands, results)";
+}
+
 def Darwinn_TensorOpOp : Darwinn_Op<"tensor_op"> {
   let arguments = (ins Darwinn_DistributedView:$lhs,
       Darwinn_DistributedView:$rhs, Darwinn_DistributedView:$destination,

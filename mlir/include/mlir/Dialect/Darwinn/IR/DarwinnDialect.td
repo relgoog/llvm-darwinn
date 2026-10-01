@@ -127,10 +127,6 @@ def Darwinn_MaterializePolicyAttr : Darwinn_Attr<"MaterializePolicy", "materiali
   let summary = "Darwinn materialize_policy attribute.";
 }
 
-def Darwinn_MemSpaceAttr : Darwinn_Attr<"MemSpace", "mem_space"> {
-  let summary = "Darwinn mem_space attribute.";
-}
-
 def Darwinn_FenceAttr : Darwinn_Attr<"Fence", "fence"> {
   let summary = "Darwinn fence attribute.";
 }

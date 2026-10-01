@@ -1083,15 +1083,6 @@ LogicalResult darwinn::StaticSparseComputeOpOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::StreamingComputeOpOp::verify() {
-  // No shape contract: fully generic operands carry no rank to check.
-  return success();
-}
-
-LogicalResult darwinn::StreamingCopyOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 2);
-}
-
 LogicalResult darwinn::StreamingSparseComputeOpOp::verify() {
   // No shape contract: fully generic operands carry no rank to check.
   return success();
@@ -1099,10 +1090,6 @@ LogicalResult darwinn::StreamingSparseComputeOpOp::verify() {
 
 LogicalResult darwinn::StreamingSparseCopyOpOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 2);
-}
-
-LogicalResult darwinn::StreamingUnaryComputeOpOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
 }
 
 LogicalResult darwinn::SwizzlingOp::verify() {
