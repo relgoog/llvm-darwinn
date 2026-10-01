@@ -437,21 +437,6 @@ SmallVector<Step> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
   return out;
 }
 
-FailureOr<std::pair<int64_t, int64_t>> wideSplit(int64_t rows,
-                                                 int64_t capacity) {
-  if (rows <= capacity)
-    return std::make_pair(rows, int64_t(1));
-  for (int64_t inner = std::max<int64_t>(capacity / 2, 1); inner > 0; --inner) {
-    int64_t outer = rows / inner;
-    if (rows % inner == 0 && llvm::isPowerOf2_64(outer))
-      return std::make_pair(inner, outer);
-  }
-  for (int64_t inner = std::max<int64_t>(capacity / 2, 1); inner > 0; --inner)
-    if (rows % inner == 0)
-      return std::make_pair(inner, rows / inner);
-  return failure();
-}
-
 struct Copy {
   int64_t source;
   int64_t destination;
@@ -623,12 +608,11 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       for (int64_t count : wideCounts)
         wideRows *= count;
       int64_t whole = std::min<int64_t>(16, writeElement * writeElement / 32);
-      FailureOr<std::pair<int64_t, int64_t>> split = wideSplit(
-          wideRows,
-          wideRows * filled < whole * perWideRow ? wideRows : whole / 2);
-      if (failed(split))
-        return unsupported(op, "a gather copy larger than its wide block");
-      auto [inner, outer] = *split;
+      int64_t inner = wideRows;
+      if (wideRows * filled >= whole * perWideRow)
+        for (inner = 1; inner * perWideRow < 12 || wideRows % inner; ++inner)
+          ;
+      int64_t outer = wideRows / inner;
       int64_t wideLoop = inner > 1;
       int64_t depth = wideLoop || filled <= 8;
       SmallVector<Counter> wideItems;
