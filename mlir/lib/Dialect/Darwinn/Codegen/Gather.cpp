@@ -41,7 +41,6 @@ struct GatherPlan : GatherGeometry {
   int64_t stagingBase = 0;
   int64_t destinationBase = 0;
   int64_t wide = 0;
-  int64_t capacity = 0;
 };
 
 const Rows &rowsOf(ArrayRef<std::pair<int64_t, Rows>> entries, int64_t tile) {
@@ -124,8 +123,7 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   if (failed(g))
     return unsupported(op, "a gather whose rows are not contiguous");
   int64_t pixelBytes = g->channels * 2;
-  if (pixelBytes < 16 || pixelBytes > 128 || 128 % pixelBytes ||
-      g->rowBytes / pixelBytes * pixelBytes % 128)
+  if (pixelBytes < 16 || pixelBytes % 8 || g->rowBytes % 128)
     return unsupported(op, "a gather whose rows do not split into thread "
                            "granules");
   SmallVector<const StorageBlock *> blocks;
@@ -140,8 +138,7 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
                            "block");
   FailureOr<int64_t> source = context.storageAddress(producer(op, 0));
   FailureOr<int64_t> wide = context.wideAddress(op, Suffix::Gather);
-  FailureOr<int64_t> capacity = context.wideSize(op, Suffix::Gather);
-  if (failed(source) || failed(wide) || failed(capacity))
+  if (failed(source) || failed(wide))
     return unsupported(op, "a gather between unplaced blocks");
   GatherPlan p;
   static_cast<GatherGeometry &>(p) = std::move(*g);
@@ -149,7 +146,6 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   p.stagingBase = blocks[0]->offset * kThreads;
   p.destinationBase = blocks[1]->offset * kThreads;
   p.wide = *wide;
-  p.capacity = *capacity;
   return p;
 }
 
@@ -430,12 +426,12 @@ FailureOr<std::pair<int64_t, int64_t>> wideSplit(int64_t rows,
                                                  int64_t capacity) {
   if (rows <= capacity)
     return std::make_pair(rows, int64_t(1));
-  for (int64_t inner = capacity / 2; inner > 0; --inner) {
+  for (int64_t inner = std::max<int64_t>(capacity / 2, 1); inner > 0; --inner) {
     int64_t outer = rows / inner;
     if (rows % inner == 0 && llvm::isPowerOf2_64(outer))
       return std::make_pair(inner, outer);
   }
-  for (int64_t inner = capacity / 2; inner > 0; --inner)
+  for (int64_t inner = std::max<int64_t>(capacity / 2, 1); inner > 0; --inner)
     if (rows % inner == 0)
       return std::make_pair(inner, rows / inner);
   return failure();
@@ -495,9 +491,13 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
   });
   int64_t width = p.rowBytes / (p.channels * 2);
   int64_t pixelBytes = p.channels * 2;
-  int64_t element = std::min(pixelBytes, kSlice);
-  int64_t granules = pixelBytes / element;
-  int64_t segmentPixels = width * granules / kThreads;
+  int64_t element = kSlice;
+  int64_t granules = llvm::divideCeil(pixelBytes, element);
+  while (pixelBytes <= 128 ? kThreads % granules : granules > kThreads)
+    granules = llvm::divideCeil(pixelBytes, element *= 2);
+  element = std::min(pixelBytes, element);
+  int64_t segments = pixelBytes <= 128 ? kThreads / granules : 1;
+  int64_t segmentPixels = width / segments;
   SmallVector<Step> blocks;
   for (const auto &[rows, members] : groups) {
     SmallVector<int64_t> tiles;
@@ -507,33 +507,38 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
         blocks.emplace_back(tiles.front() / kGrid, SmallVector<Emitted, 0>{})
             .second;
     std::array<bool, 16> multicast = tileSet(tiles);
-    int64_t wideRows = rows * segmentPixels * element / 128;
     int64_t stride = members.begin()->second.stride;
     bool aligned =
         stride % kSlice == 0 && llvm::all_of(members, [](const auto &entry) {
           return entry.second.destination % kSlice == 0;
         });
-    FailureOr<std::pair<int64_t, int64_t>> split =
-        !aligned && rows > 1 ? FailureOr<std::pair<int64_t, int64_t>>(
-                                   std::make_pair(wideRows / rows, rows))
-                             : wideSplit(wideRows, p.capacity);
-    if (failed(split))
-      return unsupported(op, "a gather copy larger than its wide block");
-    auto [inner, outer] = *split;
-    SmallVector<Counter> wideItems{counter(inner - 1, 1)};
-    if (outer > 1)
-      wideItems.push_back(counter(outer - 1, 1, false));
-    int64_t writeElement = aligned ? kSlice : element;
-    for (int64_t thread = 0; thread < kThreads; ++thread) {
+    for (int64_t thread = 0; thread < granules * segments; ++thread) {
       std::array<bool, 4> bitmap = threadBit(thread);
       int64_t granule = thread % granules, segment = thread / granules;
       int64_t offset = segment * segmentPixels * pixelBytes + granule * element;
+      int64_t bytes = std::min(element, pixelBytes - granule * element);
+      bool wide = aligned && (bytes == pixelBytes || pixelBytes % kSlice == 0);
+      int64_t writeElement = wide ? kSlice
+                             : bytes == pixelBytes
+                                 ? element
+                                 : std::min<int64_t>(16, bytes & -bytes);
+      int64_t wideRows =
+          std::max<int64_t>(rows * segmentPixels * bytes / 128, 1);
+      int64_t whole = std::min<int64_t>(16, writeElement * writeElement / 32);
+      FailureOr<std::pair<int64_t, int64_t>> split =
+          wideSplit(wideRows, wideRows < whole ? wideRows : whole / 2);
+      if (failed(split))
+        return unsupported(op, "a gather copy larger than its wide block");
+      auto [inner, outer] = *split;
+      SmallVector<Counter> wideItems{counter(inner - 1, 1)};
+      if (outer > 1)
+        wideItems.push_back(counter(outer - 1, 1, false));
 
       SmallVector<Dim> readDims =
-          mergeDims({{1, element, granule != 0},
+          mergeDims({{1, bytes, granule != 0},
                      {segmentPixels, pixelBytes, segment != 0},
                      {rows, p.rowBytes, false}});
-      int64_t run = readDims.front().count * element;
+      int64_t run = readDims.front().count * bytes;
       int64_t accessBytes = std::min<int64_t>(run, 128);
       SmallVector<Counter> readItems;
       pushDim(readItems,
@@ -562,13 +567,13 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       }
 
       SmallVector<Dim> writeDims =
-          mergeDims({{1, element, granule != 0},
+          mergeDims({{1, bytes, granule != 0},
                      {segmentPixels, pixelBytes, segment != 0},
                      {rows, stride, false}});
       int64_t perWideRow = 4;
-      if (writeDims.front().stride == element) {
+      if (writeDims.front().stride == bytes) {
         Dim &run = writeDims.front();
-        run.count = run.count * element / writeElement;
+        run.count = run.count * bytes / writeElement;
         run.stride = writeElement;
         perWideRow = 128 / writeElement;
       }
@@ -577,6 +582,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       SmallVector<Counter> scatterItems;
       SmallVector<int64_t> wideCounts;
       std::optional<int64_t> innerIndex;
+      int64_t need = perWideRow;
       for (const Dim &dim : writeDims) {
         if (innerIndex || dim.count == 1) {
           if (innerIndex && (dim.count > 1 || dim.offset))
@@ -584,19 +590,24 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
           pushDim(scatterItems, dim);
           continue;
         }
-        if (dim.count % perWideRow)
+        int64_t take = std::min(need, dim.count);
+        if (need % take || dim.count % take)
           return unsupported(op, "a gather whose thread rows do not fill "
                                  "whole wide rows");
-        innerIndex = scatterItems.size();
-        scatterItems.push_back(
-            counter((perWideRow - 1) * dim.stride, dim.stride));
-        if (dim.count > perWideRow) {
-          int64_t wide = dim.count / perWideRow;
+        scatterItems.push_back(counter((take - 1) * dim.stride, dim.stride));
+        need /= take;
+        if (need > 1)
+          continue;
+        innerIndex = scatterItems.size() - 1;
+        if (dim.count > take) {
+          int64_t wide = dim.count / take;
           wideCounts.push_back(wide);
-          scatterItems.push_back(counter((wide - 1) * perWideRow * dim.stride,
-                                         perWideRow * dim.stride));
+          scatterItems.push_back(
+              counter((wide - 1) * take * dim.stride, take * dim.stride));
         }
       }
+      if (!innerIndex && wideRows == 1 && !scatterItems.empty())
+        innerIndex = scatterItems.size() - 1;
       if (!innerIndex)
         return unsupported(op, "a gather copy without a wide row");
       std::optional<int64_t> syncLoop;

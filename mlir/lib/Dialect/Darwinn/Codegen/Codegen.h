@@ -169,8 +169,6 @@ public:
   FailureOr<int64_t> storageAddress(Operation *op) const;
   FailureOr<int64_t> wideAddress(Operation *value,
                                  Suffix suffix = Suffix::None) const;
-  FailureOr<int64_t> wideSize(Operation *value,
-                              Suffix suffix = Suffix::None) const;
   FailureOr<int64_t> hostOffset(Operation *writer) const;
   int64_t hib(DmaQueue queue, HibRoot root, int64_t offset, int64_t size = 0,
               Operation *source = nullptr);

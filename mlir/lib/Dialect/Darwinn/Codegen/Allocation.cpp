@@ -444,13 +444,6 @@ FailureOr<int64_t> Context::wideAddress(Operation *value, Suffix suffix) const {
   return failure();
 }
 
-FailureOr<int64_t> Context::wideSize(Operation *value, Suffix suffix) const {
-  for (const StorageBlock &block : wideBlocks)
-    if (block.value == value && block.suffix == suffix)
-      return block.size;
-  return failure();
-}
-
 FailureOr<int64_t> Context::hostOffset(Operation *writer) const {
   for (const StorageBlock &block : hostBlocks)
     if (llvm::is_contained(block.writers, writer))
