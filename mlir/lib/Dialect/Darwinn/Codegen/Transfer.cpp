@@ -177,7 +177,7 @@ Emitted zeroFill(int64_t base, int64_t run,
   SmallVector<Counter> items;
   int64_t bytes;
   if (run >= 16) {
-    items.push_back(counter(run - 16, 16));
+    items.push_back(counter(llvm::alignTo(run, 16) - 16, 16));
     bytes = 16;
   } else {
     items.push_back(counter(0, 16));
@@ -189,7 +189,8 @@ Emitted zeroFill(int64_t base, int64_t run,
   mesh.direction = direction;
   mesh.write.baseAddress = base;
   mesh.write.counter = padded(items, 5);
-  mesh.write.byteAddressMode = access(bytes);
+  mesh.write.byteAddressMode =
+      run > 16 && run % 16 ? access(run % 16, 16, 1) : access(bytes);
   mesh.write.syncProducer = {producerSync(synced)};
   mesh.validBytes = elementBytes;
   return dma(mesh, tiles);
