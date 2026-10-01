@@ -1,4 +1,4 @@
-#include "Codegen.h"
+#include "Families.h"
 #include "mlir/IR/AffineExpr.h"
 
 using namespace mlir;
@@ -46,6 +46,8 @@ TileBoxes clampedBoxes(Operation *op) {
 
 GroupKind movement(Operation *input, Operation *op) {
   TileBoxes from = clampedBoxes(input), to = clampedBoxes(op);
+  for (auto &[tile, box] : from)
+    box = Box{applyForward(op, box.lo), applyForward(op, box.hi)};
   auto squeeze = [](Operation *owner, const TileBoxes &boxes) {
     SmallVector<int64_t, 4> shape = resultInfo(owner).shape;
     std::map<int64_t, SmallVector<std::pair<int64_t, int64_t>>> out;
@@ -166,6 +168,9 @@ SmallVector<Group> codegen::deriveSchedule(func::FuncOp function) {
         } else {
           add(kind, op);
         }
+        if (cast<RedistributeOp>(op).getMappingAttr() &&
+            operandInfo(op, 0).shape != resultInfo(op).shape)
+          add(GroupKind::Padding, op);
         continue;
       }
       add(GroupKind::Op, op);

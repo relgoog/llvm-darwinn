@@ -65,6 +65,10 @@ Body codegen::scatter(Operation *op, Context &context) {
   int64_t elem = info.elementBytes;
   size_t rank = info.shape.size();
   SmallVector<TileBox> sources = clampedTiles(owner);
+  for (TileBox &source : sources) {
+    source.box.lo = applyForward(op, source.box.lo);
+    source.box.hi = applyForward(op, source.box.hi);
+  }
   SmallVector<TileBox> destinations = clampedTiles(op);
   Index sourceExtent = tail(extent(ownerTileBox(owner)), rank);
   Index destinationExtent = tail(extent(unionBox(*slicingOf(op), 0, 0)), rank);
