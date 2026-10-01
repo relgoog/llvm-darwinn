@@ -36,7 +36,8 @@ SmallVector<std::pair<uint8_t, Operation *>> operands(Operation *op) {
     return {{0, producer(op, 0)}, {2, producer(op, 1)}};
   SmallVector<std::pair<uint8_t, Operation *>> out{{0, producer(op, 0)},
                                                    {2, producer(op, 2)}};
-  if (innerOperation(op) == InnerOperationKind::Elementwise && rhsPerThread(op))
+  if (innerOperation(op) == InnerOperationKind::Elementwise &&
+      rhsPerThread(op) && !tensorProduct(op))
     out.push_back({1, producer(op, 1)});
   return out;
 }
@@ -541,7 +542,169 @@ Body codegen::unary(Operation *op, Context &context) {
   return out;
 }
 
+namespace {
+
+struct ProductPlan {
+  int64_t units;
+  int64_t rows;
+  int64_t chunks;
+  int64_t rowBytes;
+  int64_t outRowBytes;
+  int64_t outElem;
+};
+
+constexpr int64_t kProductUnit = 16;
+constexpr int64_t kProductChunk = 256;
+
+FailureOr<ProductPlan> productPlan(Operation *op) {
+  Operation *lhs = producer(op, 0), *destination = producer(op, 2);
+  auto [lhsStrides, elem] = operandLayout(lhs);
+  auto [outStrides, outElem] = operandLayout(destination, op);
+  Index size = extent(viewThreadBox(destination, 0));
+  if (size.size() != 4 || size[0] != 1 || elem != 2)
+    return failure();
+  int64_t segment = size[2] * size[3] * elem;
+  if (lhsStrides[2] != size[3] * elem || segment % kProductUnit ||
+      (segment > kProductChunk && segment % kProductChunk))
+    return failure();
+  int64_t run = std::min(segment, kProductChunk);
+  return ProductPlan{run / kProductUnit, size[1],       segment / run,
+                     lhsStrides[1],      outStrides[1], outElem};
+}
+
+} // namespace
+
+bool codegen::tensorProduct(Operation *op) {
+  return isa<TensorOpOp>(op) &&
+         innerOperation(op) == InnerOperationKind::Elementwise &&
+         linearFunction(op) == LinearFunctionKind::Mac && rhsPerThread(op) &&
+         resultInfo(throughViews(producer(op, 1))).shape ==
+             resultInfo(throughViews(producer(op, 2))).shape;
+}
+
+int64_t codegen::tensorProductRows(Operation *op) {
+  if (!tensorProduct(op))
+    return 1;
+  FailureOr<ProductPlan> plan = productPlan(op);
+  return succeeded(plan) ? 2 * plan->units + 1 : 1;
+}
+
+static Body tensorProductOp(Operation *op, Context &context) {
+  if (firstRowSplit(op))
+    return unsupported(op, "an activation product split across a first row");
+  FailureOr<ProductPlan> planned = productPlan(op);
+  FailureOr<int64_t> wide = context.wideAddress(op);
+  if (failed(planned) || failed(wide))
+    return unsupported(op, "an activation product without a row plan");
+  const ProductPlan &p = *planned;
+  auto loops = [&](int64_t inner, int64_t step) {
+    SmallVector<Counter> items{counter((p.units - 1) * inner, inner)};
+    if (p.rows > 1)
+      items.push_back(counter((p.rows - 1) * step, step));
+    if (p.chunks > 1)
+      items.push_back(
+          counter((p.chunks - 1) * kProductChunk * inner / kProductUnit,
+                  kProductChunk * inner / kProductUnit));
+    return items;
+  };
+  auto unmasked = [&](SmallVector<Counter> items) {
+    if (p.rows > 1)
+      items.push_back(counter(p.rows - 1, 1, false));
+    if (p.chunks > 1)
+      items.push_back(counter(p.chunks - 1, 1, false));
+    return items;
+  };
+
+  SmallVector<Emitted, 0> out;
+  for (int64_t thread : kThreadOrder) {
+    FailureOr<int64_t> address =
+        operandAddress(producer(op, 1), thread, context);
+    if (failed(address))
+      return unsupported(op, "an unplaced activation product operand");
+    out.push_back(load(*address, activeTiles(op), 0, threadBit(thread)));
+  }
+  NarrowToWide copy;
+  copy.read.counter = padded(loops(kProductUnit, p.rowBytes), 6);
+  copy.read.byteAddressMode = access(kProductUnit);
+  copy.write.baseAddress = *wide;
+  copy.write.counter = padded(unmasked({counter(p.units - 1, 1)}), 4);
+  copy.write.syncProducer = {producerSync(true, 1)};
+  copy.write.byteAddressMode = access(2);
+  if (p.rows > 1) {
+    copy.write.doubleBufferLoop = 1;
+    copy.write.secondBufferOffset = p.units;
+  }
+  copy.writeWatchers = {
+      dmaWatcher(tileWatcher(TileSyncFlag::ParameterRead,
+                             (int32_t(1) << 25) - 1, 1, 1, true),
+                 true)};
+  copy.transpose = true;
+  copy.threadMulticastBitmap = bits<4>("1111");
+  copy.byteAddress.strideUnitGranulesLoopMap = 1;
+  copy.byteAddress.defaultStrideUnitGranules = 2;
+  copy.byteAddress.lastStrideUnitGranules = 2;
+  copy.byteAddress.cellStride = 1;
+  copy.byteAddress.cellStrideGroupCountLoopMap = 1;
+  copy.byteAddress.defaultCellStrideGroupCount = 8;
+  copy.byteAddress.lastCellStrideGroupCount = 8;
+  out.push_back(dma(copy, activeTiles(op), bits<8>("10000000")));
+
+  TensorOp product;
+  SmallVector<int64_t> main{0, p.units - 1};
+  if (p.rows > 1)
+    main.push_back(p.rows - 1);
+  if (p.chunks > 1)
+    main.push_back(p.chunks - 1);
+  product.mainOperation.counter = mainCounters(main);
+  product.narrowMemoryRead.counter = padded(loops(kProductUnit, p.rowBytes), 8);
+  product.narrowMemoryRead.byteAddressMode =
+      access(kProductUnit, p.chunks > 1 ? 8 : 2);
+  int64_t outUnit = kLanes * p.outElem;
+  SmallVector<Counter> write{counter(0, outUnit)};
+  llvm::append_range(write, loops(outUnit, p.outRowBytes));
+  product.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
+  product.narrowMemoryWriteFromNonLinear.syncProducer = {producerSync(true, 1)};
+  product.narrowMemoryWriteFromNonLinear.byteAddressMode = access(outUnit);
+  Traversal &parameters = product.wideMemoryReadForParameters;
+  parameters.baseAddress = *wide * 4;
+  parameters.counter = padded(unmasked({counter((p.units - 1) * 4, 4)}), 8);
+  parameters.syncProducer = {producerSync(true, 1)};
+  if (p.rows > 1) {
+    parameters.doubleBufferLoop = 1;
+    parameters.secondBufferOffset = p.units * 4;
+  }
+  Traversal &sums = product.wideMemoryReadForSums;
+  sums.baseAddress = (*wide + 2 * p.units) * 4;
+  sums.counter = padded({counter(p.units - 1, 1, false), counter(0, 1, false),
+                         counter(p.rows * p.chunks - 1, 1, false)},
+                        8);
+  sums.syncProducer = {producerSync(true, 2)};
+  sums.secondBufferOffset = 4;
+  defaultProducer(product.narrowMemoryRead);
+  product.syncWatchers.push_back(tileWatcher(TileSyncFlag::NarrowToWideWrite, 1,
+                                             1, p.rows > 1 ? 2 : 1, true));
+  Linear linear =
+      baseLinear(LinearOperation::HighBandwidthMac, OperandType::Bfloat);
+  linear.macDisable = MacDisable::SecondFloat;
+  linear.partialSumWritebackDisable = true;
+  product.control.linear = linear;
+  product.control.nonLinear =
+      nonLinear(op, ActivationFunction::Relu, p.outElem);
+  product.control.threadMulticastBitmap = bits<4>("1111");
+  product.control.zOutBlockLoopDepth = 1;
+  product.control.lastZOutBlockValidCount = kLanes;
+  product.control.defaultZOutBlockValidCount = kLanes;
+  FailureOr<SmallVector<Emitted, 0>> loads = registers(op, context);
+  if (failed(loads))
+    return failure();
+  llvm::append_range(out, *loads);
+  out.push_back(tensor(product, activeTiles(op), bits<8>("10100000")));
+  return out;
+}
+
 Body codegen::elementwise(Operation *op, Context &context) {
+  if (tensorProduct(op))
+    return tensorProductOp(op, context);
   SmallVector<Emitted, 0> out;
   if (nluFunction(op) == NluFunctionKind::Exp) {
     FailureOr<Emitted> tables =

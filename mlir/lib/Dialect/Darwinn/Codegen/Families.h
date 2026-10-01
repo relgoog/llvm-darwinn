@@ -58,6 +58,8 @@ std::optional<int32_t> immediateBias(Operation *op);
 Body initialization(Operation *op, Context &context);
 Body unary(Operation *op, Context &context);
 Body elementwise(Operation *op, Context &context);
+bool tensorProduct(Operation *op);
+int64_t tensorProductRows(Operation *op);
 FailureOr<Emitted> coefficientTables(Operation *op, NluFunctionKind function,
                                      const Context &context);
 

@@ -103,6 +103,7 @@ struct NarrowToWide {
   llvm::SmallVector<DmaWatcher, 6> readWatchers;
   llvm::SmallVector<DmaWatcher, 6> writeWatchers;
   WideByteAddressMode byteAddress;
+  bool transpose = false;
   std::array<bool, 4> threadMulticastBitmap{};
 };
 

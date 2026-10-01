@@ -124,11 +124,8 @@ public:
       if (copies.size() < 2)
         continue;
       Operation *producer = source.getDefiningOp();
-      if (!isa<RedistributeOp>(producer)) {
-        producer->emitOpError(
-            "is read in place by several tensors, which has no known slicing");
-        return signalPassFailure();
-      }
+      if (!isa_and_nonnull<RedistributeOp>(producer))
+        continue;
       if (failed(mergeSharedSlicing(producer)))
         return signalPassFailure();
     }

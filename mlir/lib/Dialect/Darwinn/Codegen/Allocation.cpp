@@ -337,7 +337,7 @@ codegen::wideProblem(ArrayRef<Group> groups) {
     switch (*innerOperation(op)) {
     case InnerOperationKind::Elementwise:
       if (linearFunction(op) == LinearFunctionKind::Mac)
-        add(op, Suffix::None, step, step, 1);
+        add(op, Suffix::None, step, step, tensorProductRows(op));
       break;
     case InnerOperationKind::Vmc: {
       FailureOr<VmcPlan> plan = vmcPlan(op);
