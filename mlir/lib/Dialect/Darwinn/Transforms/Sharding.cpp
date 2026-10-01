@@ -726,13 +726,21 @@ public:
 
     int64_t budget =
         static_cast<int64_t>(static_cast<float>(kTileBytes) * 0.9f);
+    bool sharded = false;
     for (Group &group : *groups) {
       FailureOr<int64_t> peak = unshardedPeak(group);
       if (failed(peak))
         return signalPassFailure();
       group.peak = *peak;
-      if (group.peak > budget && failed(chooseShard(group, work, budget)))
+      if (group.peak <= budget)
+        continue;
+      if (failed(chooseShard(group, work, budget)))
         return signalPassFailure();
+      sharded = true;
+    }
+    if (!sharded) {
+      function->setAttr("skip_sharding", BoolAttr::get(&getContext(), true));
+      return;
     }
 
     SmallVector<unsigned> order = scheduleGroups(*groups);

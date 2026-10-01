@@ -39,8 +39,12 @@ std::optional<Slicing> slicingOf(Value value) {
   Operation *producer = value.getDefiningOp();
   if (!producer)
     return std::nullopt;
-  if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp>(producer)) {
-    auto destination = producer->getOperands().back();
+  Value destination;
+  if (auto compute = dyn_cast<StaticComputeOpOp>(producer))
+    destination = compute.getDestination();
+  else if (auto unary = dyn_cast<StaticUnaryComputeOpOp>(producer))
+    destination = unary.getDestination();
+  if (destination) {
     if (auto view = destination.getDefiningOp<DistributedCreateViewOp>())
       producer = view.getInput().getDefiningOp();
     if (!producer)
@@ -51,7 +55,11 @@ std::optional<Slicing> slicingOf(Value value) {
 
 bool isNoOp(RedistributeOp redistribute) {
   Value input = redistribute.getInput();
-  if (redistribute.getMappingAttr() || redistribute.getDestination() ||
+  MappingAttr mapping = redistribute.getMappingAttr();
+  if ((mapping &&
+       (!mapping.getForwardIndexTransformation().getValue().isIdentity() ||
+        !mapping.getReverseIndexTransformation().getValue().isIdentity())) ||
+      redistribute.getDestination() ||
       input.getType() != redistribute.getType() ||
       memorySpaceOf(input) != DistributedMemorySpace::TileMemory)
     return false;
