@@ -69,11 +69,17 @@ GroupKind movement(Operation *input, Operation *op) {
         return false;
     return true;
   });
-  if (from.size() != to.size() || !covers)
-    return GroupKind::Scatter;
+  bool padded = cast<RedistributeOp>(op).getMappingAttr() != nullptr;
+  if (from.size() != to.size() || !covers) {
+    bool line = llvm::all_of(from, [&](const auto &entry) {
+      return entry.first / kGrid == from.begin()->first / kGrid;
+    });
+    return padded && line ? GroupKind::Gather : GroupKind::Scatter;
+  }
   const Box &first = from.at(0);
   int64_t rows = first.hi[1] - first.lo[1] + 1;
-  return rows >= 4 ? GroupKind::RingReshapeIdentity : GroupKind::Gather;
+  return rows >= 4 && !padded ? GroupKind::RingReshapeIdentity
+                              : GroupKind::Gather;
 }
 
 bool isPadded(Operation *op) {

@@ -123,8 +123,11 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   FailureOr<GatherGeometry> g = geometry(op);
   if (failed(g))
     return unsupported(op, "a gather whose rows are not contiguous");
-  if (g->channels * 2 < 128)
-    return unsupported(op, "a gather of pixels narrower than 128 bytes");
+  int64_t pixelBytes = g->channels * 2;
+  if (pixelBytes > 128 || 128 % pixelBytes ||
+      g->rowBytes / pixelBytes * pixelBytes % 128)
+    return unsupported(op, "a gather whose rows do not split into thread "
+                           "granules");
   SmallVector<const StorageBlock *> blocks;
   for (const StorageBlock &block : context.narrow())
     if (block.value == op && block.suffix == Suffix::Dest)
@@ -420,6 +423,9 @@ FailureOr<std::pair<int64_t, int64_t>> wideSplit(int64_t rows,
     if (rows % inner == 0 && llvm::isPowerOf2_64(outer))
       return std::make_pair(inner, outer);
   }
+  for (int64_t inner = capacity / 2; inner > 0; --inner)
+    if (rows % inner == 0)
+      return std::make_pair(inner, rows / inner);
   return failure();
 }
 
@@ -429,6 +435,32 @@ struct Copy {
   int64_t rows;
   int64_t stride;
 };
+
+struct Dim {
+  int64_t count;
+  int64_t stride;
+  bool offset;
+};
+
+SmallVector<Dim> mergeDims(ArrayRef<Dim> dims) {
+  SmallVector<Dim> out;
+  for (const Dim &dim : dims) {
+    if (!out.empty() && dim.stride == out.back().count * out.back().stride) {
+      out.back().count *= dim.count;
+      out.back().offset |= dim.offset;
+      continue;
+    }
+    out.push_back(dim);
+  }
+  return out;
+}
+
+void pushDim(SmallVector<Counter> &items, const Dim &dim) {
+  if (dim.count > 1)
+    items.push_back(counter((dim.count - 1) * dim.stride, dim.stride));
+  else if (dim.offset)
+    items.push_back(counter(0, dim.stride));
+}
 
 FailureOr<SmallVector<Emitted, 0>>
 localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
@@ -450,14 +482,15 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
   });
   int64_t width = p.rowBytes / (p.channels * 2);
   int64_t pixelBytes = p.channels * 2;
+  int64_t granules = pixelBytes / kSlice;
+  int64_t segmentPixels = width * granules / kThreads;
   SmallVector<Emitted, 0> out;
   for (const auto &[rows, members] : groups) {
     SmallVector<int64_t> tiles;
     for (const auto &entry : members)
       tiles.push_back(entry.first);
     std::array<bool, 16> multicast = tileSet(tiles);
-    int64_t pixels = rows * width;
-    int64_t wideRows = pixels * kSlice / 128;
+    int64_t wideRows = rows * segmentPixels / 4;
     FailureOr<std::pair<int64_t, int64_t>> split =
         wideSplit(wideRows, p.capacity);
     if (failed(split))
@@ -467,39 +500,31 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
     if (outer > 1)
       wideItems.push_back(counter(outer - 1, 1, false));
     int64_t stride = members.begin()->second.stride;
-    SmallVector<std::pair<int64_t, int64_t>> wideLoops;
-    if (stride == p.rowBytes) {
-      wideLoops.push_back({wideRows, 128});
-    } else {
-      if (wideRows / rows > 1)
-        wideLoops.push_back({wideRows / rows, 128});
-      if (rows > 1)
-        wideLoops.push_back({rows, stride / 4});
-    }
-    std::optional<int64_t> syncLoop;
-    int64_t covered = 1, perIncrement = 1;
-    for (auto [index, loop] : llvm::enumerate(wideLoops)) {
-      if (covered * loop.first > inner) {
-        syncLoop = index;
-        perIncrement = covered;
-        break;
-      }
-      covered *= loop.first;
-    }
     for (int64_t thread = 0; thread < kThreads; ++thread) {
       std::array<bool, 4> bitmap = threadBit(thread);
+      int64_t granule = thread % granules, segment = thread / granules;
+      int64_t offset = segment * segmentPixels * pixelBytes + granule * kSlice;
+
+      SmallVector<Dim> readDims =
+          mergeDims({{1, kSlice, granule != 0},
+                     {segmentPixels, pixelBytes, segment != 0},
+                     {rows, p.rowBytes, false}});
+      int64_t run = readDims.front().count * kSlice;
+      int64_t accessBytes = std::min<int64_t>(run, 128);
       SmallVector<Counter> readItems;
-      if (thread)
-        readItems.push_back(counter(0, kSlice));
-      readItems.push_back(counter((pixels - 1) * pixelBytes, pixelBytes));
+      pushDim(readItems,
+              {run / accessBytes, accessBytes, readDims.front().offset});
+      for (const Dim &dim : ArrayRef(readDims).drop_front())
+        pushDim(readItems, dim);
+
       NarrowToWide gather;
       gather.read.counter = padded(readItems, 6);
-      gather.read.byteAddressMode = access(kSlice);
+      gather.read.byteAddressMode = access(accessBytes);
       TileValues sources;
       std::set<int64_t> distinctSources;
       for (const auto &[tile, copy] : members) {
-        sources.push_back({tile, copy.source + thread * kSlice});
-        distinctSources.insert(copy.source + thread * kSlice);
+        sources.push_back({tile, copy.source + offset});
+        distinctSources.insert(copy.source + offset);
       }
       std::array<bool, 8> gatherRegisters{};
       SmallVector<Emitted, 0> loads;
@@ -509,6 +534,45 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       } else {
         gather.read.baseAddress = sources.front().second;
       }
+
+      SmallVector<Dim> writeDims =
+          mergeDims({{1, kSlice / 4, granule != 0},
+                     {segmentPixels, pixelBytes / 4, segment != 0},
+                     {rows, stride / 4, false}});
+      SmallVector<Counter> scatterItems;
+      SmallVector<int64_t> wideCounts;
+      std::optional<int64_t> innerIndex;
+      for (const Dim &dim : writeDims) {
+        if (innerIndex || dim.count == 1) {
+          if (innerIndex && (dim.count > 1 || dim.offset))
+            wideCounts.push_back(dim.count);
+          pushDim(scatterItems, dim);
+          continue;
+        }
+        if (dim.count % 4)
+          return unsupported(op, "a gather whose thread rows do not fill "
+                                 "whole wide rows");
+        innerIndex = scatterItems.size();
+        scatterItems.push_back(counter(3 * dim.stride, dim.stride));
+        if (dim.count > 4) {
+          wideCounts.push_back(dim.count / 4);
+          scatterItems.push_back(
+              counter((dim.count / 4 - 1) * 4 * dim.stride, 4 * dim.stride));
+        }
+      }
+      if (!innerIndex)
+        return unsupported(op, "a gather copy without a wide row");
+      std::optional<int64_t> syncLoop;
+      int64_t covered = 1, perIncrement = 1;
+      for (auto [index, count] : llvm::enumerate(wideCounts)) {
+        if (covered * count > inner) {
+          syncLoop = *innerIndex + 1 + index;
+          perIncrement = covered;
+          break;
+        }
+        covered *= count;
+      }
+
       gather.write.baseAddress = p.wide;
       gather.write.counter = padded(wideItems, 4);
       gather.write.syncProducer = {producerSync(true, 1)};
@@ -539,20 +603,13 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
         scatter.read.doubleBufferLoop = 1;
         scatter.read.secondBufferOffset = inner;
       }
-      SmallVector<Counter> scatterItems;
-      if (thread)
-        scatterItems.push_back(counter(0, 8));
-      scatterItems.push_back(counter(96, 32));
-      int64_t first = scatterItems.size();
-      for (auto [count, step] : wideLoops)
-        scatterItems.push_back(counter((count - 1) * step, step));
       scatter.write.counter = padded(scatterItems, 6);
-      scatter.write.syncProducer = {producerSync(
-          true, syncLoop ? first + *syncLoop : scatterItems.size() - 1)};
+      scatter.write.syncProducer = {
+          producerSync(true, syncLoop.value_or(scatterItems.size() - 1))};
       TileValues destinations;
       std::set<int64_t> distinctDestinations;
       for (const auto &[tile, copy] : members) {
-        int64_t address = copy.destination / 4 + thread * kSlice / 4;
+        int64_t address = (copy.destination + offset) / 4;
         destinations.push_back({tile, address});
         distinctDestinations.insert(address);
       }
@@ -566,7 +623,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       }
       scatter.readWatchers = {dmaWatcher(
           tileWatcher(TileSyncFlag::NarrowToWideWrite, 1, 1, 1, true))};
-      scatter.wideMemoryLoadStoreLoopId = thread ? 2 : 1;
+      scatter.wideMemoryLoadStoreLoopId = *innerIndex + 1;
       scatter.zInBundleValidCount = 8;
       scatter.threadMulticastBitmap = bitmap;
       llvm::append_range(out, loads);
@@ -624,7 +681,7 @@ int64_t codegen::gatherWideRows(Operation *op) {
   }
   int64_t capacity = 0;
   for (int64_t rows : copies) {
-    int64_t wideRows = rows * width * kSlice / 128;
+    int64_t wideRows = rows * width * g->channels * 2 / 512;
     if (wideRows < 16)
       capacity = std::max(capacity, wideRows);
   }
