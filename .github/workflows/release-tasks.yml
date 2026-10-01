@@ -41,12 +41,12 @@ jobs:
           sudo apt-get install python3-github
 
       - name: Checkout LLVM
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
         with:
           app-id: ${{ secrets.LLVM_TOKEN_GENERATOR_CLIENT_ID }}
           private-key: ${{ secrets.LLVM_TOKEN_GENERATOR_PRIVATE_KEY }}
@@ -97,7 +97,7 @@ jobs:
     environment: pypi
     steps:
       - name: Checkout LLVM
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: "llvmorg-${{ needs.validate-tag.outputs.release-version }}"
@@ -135,13 +135,13 @@ jobs:
             llvm/utils/lit/dist
 
       - name: Upload lit to test.pypi.org
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: llvm/utils/lit/dist/
 
       - name: Upload lit to pypi.org
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: llvm/utils/lit/dist/
 
@@ -196,7 +196,7 @@ jobs:
           sudo apt-get install python3-github
 
       - name: Checkout LLVM
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: llvm/utils/release/github-upload-release.py
