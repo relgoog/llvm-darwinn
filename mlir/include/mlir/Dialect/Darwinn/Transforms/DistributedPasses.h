@@ -12,6 +12,8 @@ std::unique_ptr<Pass> createPropagatingSlicingPass();
 void registerPropagatingSlicingPass();
 std::unique_ptr<Pass> createMoveRedistributeToHostPass();
 void registerMoveRedistributeToHostPass();
+std::unique_ptr<Pass> createShardingPass();
+void registerShardingPass();
 std::unique_ptr<Pass> createNodePartitionPass();
 void registerNodePartitionPass();
 std::unique_ptr<Pass> createTransferCanonicalizationPass();

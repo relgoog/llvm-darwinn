@@ -17,7 +17,6 @@ add_mlir_dialect_library(MLIRDwcTransforms
   NodePartition.cpp
   OpReorderingForStreaming.cpp
   OptimizePointwise.cpp
-  PlanSharding.cpp
   PlanTensorTraversals.cpp
   PreemptionPointsInsertion.cpp
   PropagateDistributedSlices.cpp
@@ -25,6 +24,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   RedistributeOptimization.cpp
   ScalarCoreStdOpsLowering.cpp
   ScheduledStorage.cpp
+  Sharding.cpp
   SlicingCost.cpp
   SlicingModel.cpp
   SpillFillOptimization.cpp

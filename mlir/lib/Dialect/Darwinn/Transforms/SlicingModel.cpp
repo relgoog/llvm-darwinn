@@ -711,7 +711,8 @@ FailureOr<SlicedValue> MaterializedSlicing::slicingOf(Value value) {
   return SlicedValue{&inserted->second.first, &inserted->second.second};
 }
 
-FailureOr<Estimate> MaterializedSlicing::estimate(Operation *operation) {
+FailureOr<Estimate> MaterializedSlicing::estimate(Operation *operation,
+                                                  bool transposed) {
   if (auto fill = dyn_cast<FillOp>(operation))
     return estimateFill(fill);
   if (auto redistribute = dyn_cast<RedistributeOp>(operation)) {
@@ -741,7 +742,7 @@ FailureOr<Estimate> MaterializedSlicing::estimate(Operation *operation) {
     FailureOr<SlicedValue> own = slicingOf(operation->getResult(0));
     if (failed(own))
       return failure();
-    return estimateCompute(operation, *own->code);
+    return estimateCompute(operation, *own->code, transposed);
   }
   if (isa<CreateEmptyTensorOp, DistributedCreateViewOp, ReshapeOpOp,
           GetTensorOp, StreamingCopyOpOp, CommunicatedCreateEmptyTensorOp,

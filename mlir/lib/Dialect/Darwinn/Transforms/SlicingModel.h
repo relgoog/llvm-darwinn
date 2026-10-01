@@ -68,7 +68,8 @@ AffineMap unitReshapeMap(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
                          MLIRContext *context);
 
 FailureOr<Estimate> estimateFill(FillOp fill);
-FailureOr<Estimate> estimateCompute(Operation *operation, const Code &code);
+FailureOr<Estimate> estimateCompute(Operation *operation, const Code &code,
+                                    bool transposed = false);
 FailureOr<Estimate> estimateCopy(CopyOpOp copy, const Code &code);
 FailureOr<Estimate> estimateInterpolate(InterpolateHardwareOp interpolate,
                                         const Code &code);
@@ -78,7 +79,7 @@ FailureOr<Estimate> estimateRedistribute(RedistributeOp redistribute,
 
 class MaterializedSlicing {
 public:
-  FailureOr<Estimate> estimate(Operation *operation);
+  FailureOr<Estimate> estimate(Operation *operation, bool transposed = false);
 
 private:
   FailureOr<SlicedValue> slicingOf(Value value);

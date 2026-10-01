@@ -471,8 +471,8 @@ FailureOr<Estimate> mlir::darwinn::slicing::estimateFill(FillOp fill) {
 }
 
 FailureOr<Estimate>
-mlir::darwinn::slicing::estimateCompute(Operation *operation,
-                                        const Code &code) {
+mlir::darwinn::slicing::estimateCompute(Operation *operation, const Code &code,
+                                        bool transposed) {
   AffineMap traversal = traversalOf(operation);
   SmallVector<Value> views(operation->getOperands());
   auto extents = iterationExtents(traversal.getNumDims(), views);
@@ -489,9 +489,15 @@ mlir::darwinn::slicing::estimateCompute(Operation *operation,
   if (failed(bits))
     return failure();
   bool matrix = kind == InnerOperationKind::Vmc;
-  int64_t zo = std::min<int64_t>(nest.back(), matrix ? 32 : 8 * 16 / *bits);
-  int64_t zi =
-      matrix ? std::min<int64_t>(nest[nest.size() - 2], 8 * 4 / *bits) : 1;
+  auto resultBits = elementBits(operation->getResult(0).getType());
+  if (failed(resultBits))
+    return failure();
+  int64_t zo = std::min<int64_t>(nest.back(), matrix ? (transposed ? 8 : 32)
+                                                     : 8 * 16 / *bits);
+  int64_t zi = matrix ? std::min<int64_t>(nest[nest.size() - 2],
+                                          transposed ? 8 * 16 / *resultBits
+                                                     : 8 * 4 / *bits)
+                      : 1;
   int64_t elements = 1;
   for (auto [dim, used] : llvm::enumerate(usedDims(traversal)))
     if (used)

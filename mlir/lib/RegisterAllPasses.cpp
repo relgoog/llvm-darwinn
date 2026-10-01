@@ -82,6 +82,7 @@ void mlir::registerAllPasses() {
   darwinn::registerLowerSemanticToDistributedPass();
   darwinn::registerPropagatingSlicingPass();
   darwinn::registerMoveRedistributeToHostPass();
+  darwinn::registerShardingPass();
   darwinn::registerNodePartitionPass();
   darwinn::registerTransferCanonicalizationPass();
   darwinn::registerRedistributeOptimizationPass();
