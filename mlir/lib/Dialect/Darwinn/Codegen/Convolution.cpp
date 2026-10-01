@@ -897,7 +897,8 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   plan.lastChunk = chunk;
   plan.inner = pixels;
   plan.outer = 1;
-  if (plan.chunks == 1 && chunk / 2 < kGroupedPairs && shape.size() == 4)
+  if (plan.chunks == 1 && chunk / 2 < kGroupedPairs && shape.size() == 4 &&
+      chunk * shape[1] + pixels + plan.biasRows <= kWideRows)
     plan.tapGroup = shape[1];
   plan.weightsRows = chunk * plan.tapGroup;
   plan.sumsRows = pixels;
