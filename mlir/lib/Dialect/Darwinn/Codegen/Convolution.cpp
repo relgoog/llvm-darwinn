@@ -827,7 +827,7 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   }
   int64_t inner = std::min(pixels, kPartialSumPixels);
   int64_t chunk = 0;
-  for (int64_t c = 2; c <= cinPadded; c += 2)
+  for (int64_t c = 2; c <= (pixels > inner ? cinPadded / 2 : cinPadded); c += 2)
     if (cinPadded % c == 0 && c + inner + plan.biasRows <= kWideRows)
       chunk = c;
   if (!chunk)
