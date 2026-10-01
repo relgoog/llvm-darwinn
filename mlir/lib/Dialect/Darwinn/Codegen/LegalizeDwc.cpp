@@ -229,6 +229,57 @@ LogicalResult writeChunks(StringRef path, func::FuncOp function,
   return success();
 }
 
+std::optional<uint32_t> preemptionTag(const Segment &segment) {
+  for (const Emitted &emitted : segment.instructions)
+    if (emitted.role == Role::PreemptionInterrupt)
+      if (auto *tagged = std::get_if<TaggedPacket>(&emitted.instruction))
+        return tagged->tag;
+  return std::nullopt;
+}
+
+llvm::json::Array liveTensors(const Context &context, int64_t step) {
+  SmallVector<std::pair<int64_t, int64_t>> live;
+  for (const StorageBlock &block : context.narrow())
+    if (block.start < step && step < block.end)
+      live.push_back({block.offset, block.offset + block.size});
+  llvm::sort(live);
+  SmallVector<std::pair<int64_t, int64_t>> merged;
+  for (auto [begin, end] : live) {
+    if (!merged.empty() && begin <= merged.back().second)
+      merged.back().second = std::max(merged.back().second, end);
+    else
+      merged.push_back({begin, end});
+  }
+  llvm::json::Array out;
+  for (auto [begin, end] : merged)
+    out.push_back(llvm::json::Array{begin, end - begin});
+  return out;
+}
+
+LogicalResult writeExecutable(StringRef path, func::FuncOp function,
+                              ArrayRef<Segment> segments,
+                              const Context &context) {
+  llvm::json::Array maps;
+  for (const Segment &segment : segments) {
+    if (!segment.group || segment.group->kind != GroupKind::Preempt)
+      continue;
+    std::optional<uint32_t> tag = preemptionTag(segment);
+    if (!tag)
+      return function.emitError("a preemption point lacks its interrupt");
+    maps.push_back(llvm::json::Object{
+        {"tag", *tag}, {"ranges", liveTensors(context, segment.group->step)}});
+  }
+  std::error_code error;
+  llvm::raw_fd_ostream stream(path, error);
+  if (error)
+    return function.emitError() << "cannot write " << path;
+  stream << llvm::json::Value(
+      llvm::json::Object{{"scratch_bytes", context.scratchBytes()},
+                         {"tile_memory_bytes", context.tileMemoryBytes()},
+                         {"live_tensors", std::move(maps)}});
+  return success();
+}
+
 class LegalizeDwcPass
     : public PassWrapper<LegalizeDwcPass, OperationPass<func::FuncOp>> {
 public:
@@ -267,6 +318,10 @@ public:
     }
     FailureOr<SmallVector<Segment>> segments = generate(groups, *context);
     if (failed(segments))
+      return signalPassFailure();
+    if (!executableOutput.empty() &&
+        failed(
+            writeExecutable(executableOutput, function, *segments, *context)))
       return signalPassFailure();
     FailureOr<GeneratedProgram> program = buildProgram(*segments, *context);
     if (failed(program))
@@ -335,6 +390,10 @@ public:
       *this, "program-symbol",
       llvm::cl::desc("Symbol of the stand alone instruction program"),
       llvm::cl::init("main_STAND_ALONE_inst_Group_0_0_2_0_0")};
+  Option<std::string> executableOutput{
+      *this, "executable-output",
+      llvm::cl::desc("Write the memory requirements and the live tensors at "
+                     "each preemption point as JSON")};
   Option<std::string> chunksOutput{
       *this, "chunks-output",
       llvm::cl::desc("Write the encoded chunks and hib patch offsets as JSON")};

@@ -173,6 +173,8 @@ public:
   int64_t hib(DmaQueue queue, HibRoot root, int64_t offset, int64_t size = 0,
               Operation *source = nullptr);
   SmallVector<Hib> resolvedHibs() const;
+  int64_t tileMemoryBytes() const;
+  int64_t scratchBytes() const;
 
   ArrayRef<StorageBlock> narrow() const { return narrowBlocks; }
   ArrayRef<StorageBlock> host() const { return hostBlocks; }

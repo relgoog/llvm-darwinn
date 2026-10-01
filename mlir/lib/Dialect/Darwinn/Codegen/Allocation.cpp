@@ -9,7 +9,8 @@ using namespace mlir::darwinn::codegen;
 
 namespace {
 
-constexpr int64_t kNarrowCapacity = 196604;
+constexpr int64_t kNarrowSize = 196608;
+constexpr int64_t kNarrowCapacity = kNarrowSize - 4;
 constexpr int64_t kWideCapacity = 64;
 
 bool isView(Operation *op) {
@@ -388,6 +389,20 @@ FailureOr<Context> Context::create(func::FuncOp function,
   context.wideBlocks = std::move(*wide);
   return context;
 }
+
+static int64_t peak(ArrayRef<StorageBlock> blocks) {
+  int64_t out = 0;
+  for (const StorageBlock &block : blocks)
+    out = std::max(out, block.offset + block.size);
+  return out;
+}
+
+int64_t Context::tileMemoryBytes() const {
+  return (peak(narrowBlocks) + kNarrowSize - kNarrowCapacity) * kThreads *
+         kTiles;
+}
+
+int64_t Context::scratchBytes() const { return peak(hostBlocks); }
 
 FailureOr<int64_t> Context::narrowAddress(Operation *value,
                                           Suffix suffix) const {
