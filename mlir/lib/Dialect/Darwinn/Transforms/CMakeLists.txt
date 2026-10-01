@@ -22,6 +22,7 @@ add_mlir_dialect_library(MLIRDwcTransforms
   ScheduledStorage.cpp
   SlicingCost.cpp
   SlicingModel.cpp
+  SpillFillOptimization.cpp
   TransferCanonicalization.cpp
   TensorComputeConfiguration.cpp
 

@@ -18,6 +18,8 @@ std::unique_ptr<Pass> createTransferCanonicalizationPass();
 void registerTransferCanonicalizationPass();
 std::unique_ptr<Pass> createRedistributeOptimizationPass();
 void registerRedistributeOptimizationPass();
+std::unique_ptr<Pass> createSpillFillOptimizationPass();
+void registerSpillFillOptimizationPass();
 
 }
 }
