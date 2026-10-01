@@ -517,17 +517,18 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       int64_t granule = thread % granules, segment = thread / granules;
       int64_t offset = segment * segmentPixels * pixelBytes + granule * element;
       int64_t bytes = std::min(element, pixelBytes - granule * element);
-      bool wide = aligned && (bytes == pixelBytes || pixelBytes % kSlice == 0);
-      int64_t writeElement = wide ? kSlice
-                             : bytes == pixelBytes
-                                 ? element
-                                 : std::min<int64_t>(16, bytes & -bytes);
+      bool merged = bytes == pixelBytes;
+      int64_t writeElement = aligned && (merged || pixelBytes % kSlice == 0)
+                                 ? kSlice
+                             : merged ? (bytes > 16 ? 16 : element)
+                                      : std::min<int64_t>(16, bytes & -bytes);
       SmallVector<Dim> readDims =
           mergeDims({{1, bytes, granule != 0},
                      {segmentPixels, pixelBytes, segment != 0},
                      {rows, p.rowBytes, false}});
       int64_t run = readDims.front().count * bytes;
-      int64_t accessBytes = std::min<int64_t>(run, 128);
+      int64_t accessBytes = std::min<int64_t>(
+          run, llvm::isPowerOf2_64(run) || run > 128 ? 128 : run & -run);
       SmallVector<Counter> readItems;
       pushDim(readItems,
               {run / accessBytes, accessBytes, readDims.front().offset});
@@ -578,15 +579,13 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
           pushDim(scatterItems, dim);
           continue;
         }
-        int64_t need = perWideRow / filled;
-        int64_t take = std::min(need, dim.count);
-        bool fits = need % take == 0 && dim.count % take == 0;
+        int64_t take = std::min(perWideRow / filled, dim.count);
         while (dim.count % take)
           --take;
         if (take > 1)
           scatterItems.push_back(counter((take - 1) * dim.stride, dim.stride));
         filled *= take;
-        if (fits && filled < perWideRow)
+        if (take == dim.count && perWideRow / filled >= 2)
           continue;
         if (scatterItems.empty())
           return unsupported(op, "a gather whose thread rows do not fill "
@@ -623,7 +622,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       std::optional<int64_t> syncLoop;
       int64_t covered = 1, perIncrement = 1;
       for (auto [index, count] : llvm::enumerate(wideCounts)) {
-        if (covered * count > inner) {
+        if (covered * count > inner || inner % (covered * count)) {
           syncLoop = *innerIndex + 1 + index;
           perIncrement = covered;
           break;
