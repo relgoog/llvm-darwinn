@@ -36,6 +36,9 @@ static Expected<uint64_t> counterCount(const Counter &counter) {
     return createStringError("Traversal counter count overflows");
   int64_t count = counter.end / counter.step;
   if (count < 0 || counter.end % counter.step != 0)
+    llvm::errs() << "DBG end " << counter.end << " step " << counter.step
+                 << "\n";
+  if (count < 0 || counter.end % counter.step != 0)
     return createStringError(
         "Traversal counter limit must be a nonnegative multiple of its step");
   return static_cast<uint64_t>(count);

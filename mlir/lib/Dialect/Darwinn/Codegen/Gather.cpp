@@ -123,7 +123,7 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   if (failed(g))
     return unsupported(op, "a gather whose rows are not contiguous");
   int64_t pixelBytes = g->channels * 2;
-  if (pixelBytes < 16 || pixelBytes % 8 || g->rowBytes % 128)
+  if (pixelBytes < 16 || pixelBytes % 8)
     return unsupported(op, "a gather whose rows do not split into thread "
                            "granules");
   SmallVector<const StorageBlock *> blocks;
@@ -177,9 +177,11 @@ struct Lines {
   std::deque<MeshOp> ops;
 };
 
-SmallVector<MeshOp *> lineOps(ArrayRef<Flow> flows, bool horizontal,
-                              const Address &read, const Address &write,
-                              Lines &storage) {
+using Route = SmallVector<MeshOp *>;
+
+SmallVector<Route> lineOps(ArrayRef<Flow> flows, bool horizontal,
+                           const Address &read, const Address &write,
+                           Lines &storage) {
   auto position = [&](int64_t tile) {
     return horizontal ? tile % kGrid : tile / kGrid;
   };
@@ -243,11 +245,16 @@ SmallVector<MeshOp *> lineOps(ArrayRef<Flow> flows, bool horizontal,
       k += count;
     }
   }
-  SmallVector<MeshOp *> out;
-  for (const auto &route : routes)
+  SmallVector<Route> out;
+  std::set<MeshOp *> seen;
+  for (const auto &route : routes) {
+    Route ops;
     for (Action *action : route)
-      if (!llvm::is_contained(out, action->op))
-        out.push_back(action->op);
+      if (seen.insert(action->op).second)
+        ops.push_back(action->op);
+    if (!ops.empty())
+      out.push_back(std::move(ops));
+  }
   return out;
 }
 
@@ -266,25 +273,33 @@ Signature signature(const MeshOp *op) {
 }
 
 SmallVector<SmallVector<MeshOp *>>
-mergeLines(ArrayRef<SmallVector<MeshOp *>> lines) {
+mergeLines(ArrayRef<SmallVector<Route>> lines) {
   SmallVector<SmallVector<MeshOp *>> merged;
-  for (const auto &ops : lines) {
+  for (const auto &routes : lines) {
     int64_t cursor = -1;
-    for (MeshOp *op : ops) {
-      std::optional<size_t> match;
-      for (size_t k = cursor + 1; k < merged.size(); ++k)
-        if (signature(merged[k].front()) == signature(op) &&
-            merged[k].front()->hops == op->hops) {
-          match = k;
+    for (const Route &route : routes) {
+      SmallVector<size_t> matches;
+      int64_t at = cursor;
+      for (MeshOp *op : route) {
+        auto match = llvm::find_if(
+            llvm::seq<size_t>(at + 1, merged.size()), [&](size_t k) {
+              return signature(merged[k].front()) == signature(op) &&
+                     merged[k].front()->hops == op->hops;
+            });
+        if (match == llvm::seq<size_t>(at + 1, merged.size()).end())
           break;
-        }
-      if (!match) {
-        merged.push_back({op});
-        cursor = merged.size() - 1;
-      } else {
-        merged[*match].push_back(op);
-        cursor = *match;
+        matches.push_back(*match);
+        at = *match;
       }
+      if (matches.size() == route.size()) {
+        for (auto [k, op] : llvm::zip(matches, route))
+          merged[k].push_back(op);
+        cursor = at;
+        continue;
+      }
+      for (MeshOp *op : route)
+        merged.push_back({op});
+      cursor = merged.size() - 1;
     }
   }
   return merged;
@@ -522,18 +537,6 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
                              : bytes == pixelBytes
                                  ? element
                                  : std::min<int64_t>(16, bytes & -bytes);
-      int64_t wideRows =
-          std::max<int64_t>(rows * segmentPixels * bytes / 128, 1);
-      int64_t whole = std::min<int64_t>(16, writeElement * writeElement / 32);
-      FailureOr<std::pair<int64_t, int64_t>> split =
-          wideSplit(wideRows, wideRows < whole ? wideRows : whole / 2);
-      if (failed(split))
-        return unsupported(op, "a gather copy larger than its wide block");
-      auto [inner, outer] = *split;
-      SmallVector<Counter> wideItems{counter(inner - 1, 1)};
-      if (outer > 1)
-        wideItems.push_back(counter(outer - 1, 1, false));
-
       SmallVector<Dim> readDims =
           mergeDims({{1, bytes, granule != 0},
                      {segmentPixels, pixelBytes, segment != 0},
@@ -582,7 +585,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       SmallVector<Counter> scatterItems;
       SmallVector<int64_t> wideCounts;
       std::optional<int64_t> innerIndex;
-      int64_t need = perWideRow;
+      int64_t filled = 1;
       for (const Dim &dim : writeDims) {
         if (innerIndex || dim.count == 1) {
           if (innerIndex && (dim.count > 1 || dim.offset))
@@ -590,14 +593,19 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
           pushDim(scatterItems, dim);
           continue;
         }
+        int64_t need = perWideRow / filled;
         int64_t take = std::min(need, dim.count);
-        if (need % take || dim.count % take)
+        bool fits = need % take == 0 && dim.count % take == 0;
+        while (dim.count % take)
+          --take;
+        if (take > 1)
+          scatterItems.push_back(counter((take - 1) * dim.stride, dim.stride));
+        filled *= take;
+        if (fits && filled < perWideRow)
+          continue;
+        if (scatterItems.empty())
           return unsupported(op, "a gather whose thread rows do not fill "
                                  "whole wide rows");
-        scatterItems.push_back(counter((take - 1) * dim.stride, dim.stride));
-        need /= take;
-        if (need > 1)
-          continue;
         innerIndex = scatterItems.size() - 1;
         if (dim.count > take) {
           int64_t wide = dim.count / take;
@@ -606,10 +614,28 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
               counter((wide - 1) * take * dim.stride, take * dim.stride));
         }
       }
-      if (!innerIndex && wideRows == 1 && !scatterItems.empty())
+      if (!innerIndex && !scatterItems.empty())
         innerIndex = scatterItems.size() - 1;
       if (!innerIndex)
         return unsupported(op, "a gather copy without a wide row");
+
+      int64_t wideRows = 1;
+      for (int64_t count : wideCounts)
+        wideRows *= count;
+      int64_t whole = std::min<int64_t>(16, writeElement * writeElement / 32);
+      FailureOr<std::pair<int64_t, int64_t>> split = wideSplit(
+          wideRows,
+          wideRows * filled < whole * perWideRow ? wideRows : whole / 2);
+      if (failed(split))
+        return unsupported(op, "a gather copy larger than its wide block");
+      auto [inner, outer] = *split;
+      int64_t wideLoop = inner > 1;
+      int64_t depth = wideLoop || filled <= 8;
+      SmallVector<Counter> wideItems;
+      if (wideLoop || outer == 1)
+        wideItems.push_back(counter(inner - 1, 1));
+      if (outer > 1)
+        wideItems.push_back(counter(outer - 1, 1, false));
       std::optional<int64_t> syncLoop;
       int64_t covered = 1, perIncrement = 1;
       for (auto [index, count] : llvm::enumerate(wideCounts)) {
@@ -623,22 +649,22 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
 
       gather.write.baseAddress = p.wide;
       gather.write.counter = padded(wideItems, 4);
-      gather.write.syncProducer = {producerSync(true, 1)};
-      gather.write.byteAddressMode = access(128);
+      gather.write.syncProducer = {producerSync(true, depth)};
+      gather.write.byteAddressMode = access(128 * filled / perWideRow);
       if (outer > 1) {
-        gather.write.doubleBufferLoop = 1;
+        gather.write.doubleBufferLoop = wideLoop;
         gather.write.secondBufferOffset = inner;
         gather.writeWatchers = {
             dmaWatcher(tileWatcher(TileSyncFlag::WideToNarrowWrite,
                                    (int32_t(1) << 25) - inner / perIncrement,
-                                   inner / perIncrement, 1, true),
+                                   inner / perIncrement, depth, true),
                        true)};
       }
       gather.threadMulticastBitmap = bitmap;
       gather.byteAddress.strideUnitGranulesLoopMap = 1;
       gather.byteAddress.defaultStrideUnitGranules = 2;
       gather.byteAddress.lastStrideUnitGranules = 2;
-      gather.byteAddress.cellStride = kSlice;
+      gather.byteAddress.cellStride = 32 * filled / perWideRow;
       gather.byteAddress.defaultCellStrideGroupCount = 1;
       gather.byteAddress.lastCellStrideGroupCount = 1;
       llvm::append_range(out, loads);
@@ -648,7 +674,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       scatter.read.baseAddress = p.wide;
       scatter.read.counter = padded(wideItems, 4);
       if (outer > 1) {
-        scatter.read.doubleBufferLoop = 1;
+        scatter.read.doubleBufferLoop = wideLoop;
         scatter.read.secondBufferOffset = inner;
       }
       scatter.write.counter = padded(scatterItems, 6);
@@ -670,7 +696,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
         scatter.write.baseAddress = destinations.front().second;
       }
       scatter.readWatchers = {dmaWatcher(
-          tileWatcher(TileSyncFlag::NarrowToWideWrite, 1, 1, 1, true))};
+          tileWatcher(TileSyncFlag::NarrowToWideWrite, 1, 1, depth, true))};
       scatter.wideMemoryLoadStoreLoopId = *innerIndex + 1;
       scatter.zInBundleValidCount = writeElement / 4;
       scatter.threadMulticastBitmap = bitmap;
@@ -692,8 +718,7 @@ SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
     return horizontal ? tile % kGrid : tile / kGrid;
   };
   Lines storage;
-  std::array<SmallVector<std::pair<int64_t, SmallVector<MeshOp *>>>, 2>
-      sequences;
+  std::array<SmallVector<std::pair<int64_t, SmallVector<Route>>>, 2> sequences;
   for (bool forward : {true, false})
     for (const auto &[line, members] : lines) {
       SmallVector<Flow> selected;
@@ -706,10 +731,19 @@ SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
     }
 
   SmallVector<Emitted, 0> out;
-  auto emitLines = [&](ArrayRef<SmallVector<MeshOp *>> selected) {
-    for (Step &step : meshInstructions(mergeLines(selected), p, receiveStride))
+  auto emit = [&](ArrayRef<SmallVector<MeshOp *>> merged) {
+    for (Step &step : meshInstructions(merged, p, receiveStride))
       llvm::append_range(out, std::move(step.second));
   };
+  std::map<MeshOp *, int64_t> lineOf;
+  SmallVector<SmallVector<Route>> forward;
+  for (auto &[key, sequence] : sequences[0]) {
+    for (const Route &route : sequence)
+      for (MeshOp *op : route)
+        lineOf[op] = key;
+    forward.push_back(std::move(sequence));
+  }
+  SmallVector<SmallVector<MeshOp *>> merged = mergeLines(forward);
   llvm::stable_sort(
       copies, [](const Step &a, const Step &b) { return a.first < b.first; });
   size_t emitted = 0;
@@ -722,15 +756,15 @@ SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
     if (index + 1 < copies.size() &&
         copies[index + 1].first == copies[index].first)
       continue;
-    SmallVector<SmallVector<MeshOp *>> selected;
-    while (emitted < sequences[0].size() && sequences[0][emitted].first < bound)
-      selected.push_back(std::move(sequences[0][emitted++].second));
-    emitLines(selected);
+    size_t first = emitted;
+    while (emitted < merged.size() && lineOf[merged[emitted].front()] < bound)
+      ++emitted;
+    emit(ArrayRef(merged).slice(first, emitted - first));
   }
-  SmallVector<SmallVector<MeshOp *>> backward;
+  SmallVector<SmallVector<Route>> backward;
   for (auto &[key, sequence] : sequences[1])
     backward.push_back(std::move(sequence));
-  emitLines(backward);
+  emit(mergeLines(backward));
   return out;
 }
 
