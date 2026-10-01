@@ -22,6 +22,8 @@ std::unique_ptr<Pass> createSpillFillOptimizationPass();
 void registerSpillFillOptimizationPass();
 std::unique_ptr<Pass> createStaticToStreamingPass();
 void registerStaticToStreamingPass();
+std::unique_ptr<Pass> createOpReorderingForStreamingPass();
+void registerOpReorderingForStreamingPass();
 
 }
 }
