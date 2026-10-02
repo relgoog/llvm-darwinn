@@ -200,6 +200,34 @@ LogicalResult compose(dwc::ConvolutionOp second) {
   return success();
 }
 
+void fuseActivation(dwc::RescalingOp rescaling) {
+  auto activation = rescaling->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+  auto scales = rescaling->getAttrOfType<ArrayAttr>("output_activation_per_z_out_scales");
+  auto padding = rescaling->getAttrOfType<dwc::PerZOutScalePaddingAttr>("per_z_out_scales_padding");
+  if (rescaling->getNumOperands() != 2 || rescaling->getNumResults() != 1 || !activation ||
+      (activation.getValue() != dwc::ActivationFunction::Logistic &&
+       activation.getValue() != dwc::ActivationFunction::HardSwish) ||
+      !scales || !scales.empty() || !padding ||
+      padding.getValue() != dwc::PerZOutScalePadding::None ||
+      !rescaling->getOperand(1).getDefiningOp<dwc::ConstNoneOp>() ||
+      rescaling->getOperand(0).getType() != rescaling->getResult(0).getType())
+    return;
+
+  Operation *convolution = rescaling->getOperand(0).getDefiningOp();
+  if (!isa_and_present<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp>(convolution) ||
+      !convolution->hasOneUse() || convolution->hasAttr("activation_clip_min") ||
+      convolution->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function").getValue() !=
+          dwc::ActivationFunction::None)
+    return;
+
+  Operation *none = rescaling->getOperand(1).getDefiningOp();
+  convolution->setAttr("activation_function", activation);
+  rescaling->getResult(0).replaceAllUsesWith(convolution->getResult(0));
+  rescaling->erase();
+  if (none->use_empty())
+    none->erase();
+}
+
 class OptimizePointwisePass
     : public PassWrapper<OptimizePointwisePass, OperationPass<ModuleOp>> {
 public:
@@ -207,7 +235,9 @@ public:
 
   StringRef getArgument() const final { return "dwc-optimize-pointwise"; }
   StringRef getDescription() const final {
-    return "Compose shrinking linear pointwise convolutions before precision assignment";
+    return "Fuse activations into convolutions and compose shrinking linear "
+           "pointwise "
+           "convolutions before precision assignment";
   }
 
   void getDependentDialects(DialectRegistry &registry) const final {
@@ -217,6 +247,11 @@ public:
   void runOnOperation() final {
     ModuleOp module = getOperation();
     OwningOpRef<ModuleOp> optimized(cast<ModuleOp>(module->clone()));
+    SmallVector<dwc::RescalingOp> rescalings;
+    optimized->walk([&](dwc::RescalingOp operation) { rescalings.push_back(operation); });
+    for (dwc::RescalingOp operation : rescalings)
+      fuseActivation(operation);
+
     SmallVector<dwc::ConvolutionOp> convolutions;
     optimized->walk([&](dwc::ConvolutionOp operation) { convolutions.push_back(operation); });
 

@@ -120,10 +120,15 @@ LogicalResult validateConvolution(Operation *operation) {
   auto padding = operation->getAttrOfType<dwc::PaddingAttr>("pad");
 
   if (cell.getValue() != dwc::CellOperation::Mac || padding.getValue() != dwc::Padding::None ||
+      !llvm::is_contained({dwc::ActivationFunction::None, dwc::ActivationFunction::Relu,
+                           dwc::ActivationFunction::Logistic, dwc::ActivationFunction::HardSwish},
+                          activation.getValue()) ||
       (activation.getValue() != dwc::ActivationFunction::None &&
-       activation.getValue() != dwc::ActivationFunction::Relu))
+       activation.getValue() != dwc::ActivationFunction::Relu &&
+       operation->hasAttr("activation_clip_min")))
     return unsupported(operation, "convolution requires MAC, explicit padding and NONE or RELU "
-                                  "activation with optional typed clip bounds");
+                                  "activation with optional typed clip bounds, or LOGISTIC or "
+                                  "HARD_SWISH without them");
 
   if (operation->getAttrOfType<IntegerAttr>("x_dilation_rate").getInt() != 1 ||
       operation->getAttrOfType<IntegerAttr>("y_dilation_rate").getInt() != 1)
@@ -882,17 +887,24 @@ private:
     }
 
     auto activation = operation->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+    NluFunctionKind nlu = NluFunctionKind::Linear;
     if (activation.getValue() == dwc::ActivationFunction::Relu) {
       float bound = std::min(std::max(0.0f, lower.getValue().convertToFloat()),
                              upper.getValue().convertToFloat());
       lower = builder.getF32FloatAttr(bound);
+    } else if (activation.getValue() == dwc::ActivationFunction::Logistic) {
+      nlu = NluFunctionKind::LogisticSigmoid;
+      lower = builder.getF32FloatAttr(-11.1f);
+      upper = builder.getF32FloatAttr(11.1f);
+    } else if (activation.getValue() == dwc::ActivationFunction::HardSwish) {
+      nlu = NluFunctionKind::HardSwish;
+      lower = builder.getF32FloatAttr(-4.0f);
     }
 
     Value computed = StaticComputeOpOp::create(
         builder, location, outputType, inputView, filterView, destination, auxiliary,
-        computeOptions(inner, LinearFunctionKind::Mac, lower, upper, NluFunctionKind::Linear, {},
-                       hint),
-        traversal, auxiliaryKinds, CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
+        computeOptions(inner, LinearFunctionKind::Mac, lower, upper, nlu, {}, hint), traversal,
+        auxiliaryKinds, CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
     return computed;
   }
 

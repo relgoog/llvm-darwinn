@@ -30,6 +30,10 @@ std::optional<StringRef> splineName(NluFunctionKind function) {
     return StringRef("exp");
   case NluFunctionKind::Reciprocal:
     return StringRef("recip");
+  case NluFunctionKind::LogisticSigmoid:
+    return StringRef("two_tailed_logistic");
+  case NluFunctionKind::HardSwish:
+    return StringRef("hard_swish");
   default:
     return std::nullopt;
   }
@@ -66,15 +70,21 @@ coefficientTables(const llvm::json::Object &spline) {
     lowers.push_back(*lower);
     coefficients.push_back(std::move(parsed));
   }
+  size_t degree = 0;
+  for (auto [lower, values] : llvm::zip_equal(lowers, coefficients))
+    if (std::isfinite(lower))
+      for (auto [power, value] : llvm::enumerate(values))
+        if (value != 0.0f)
+          degree = std::max(degree, power);
   for (auto [index, segment] : llvm::enumerate(tables.splineSegments)) {
     const SmallVector<float> &source =
         coefficients[std::min(index, coefficients.size() - 1)];
-    llvm::copy(source, segment.begin());
+    llvm::copy(ArrayRef(source).take_front(degree + 1), segment.begin());
   }
   for (auto [index, lower] : llvm::enumerate(tables.segmentLowerBounds))
     lower = index + 1 < lowers.size() ? lowers[index + 1]
                                       : std::numeric_limits<float>::infinity();
-  tables.polynomialDegree = coefficients[0].size() - 1;
+  tables.polynomialDegree = degree;
   return tables;
 }
 
@@ -95,7 +105,8 @@ readNluSplines(StringRef path, Operation *anchor) {
     return anchor->emitError() << "NLU splines lack a splines object";
   std::map<NluFunctionKind, CoefficientTables> out;
   for (NluFunctionKind function :
-       {NluFunctionKind::Exp, NluFunctionKind::Reciprocal}) {
+       {NluFunctionKind::Exp, NluFunctionKind::Reciprocal,
+        NluFunctionKind::LogisticSigmoid, NluFunctionKind::HardSwish}) {
     const llvm::json::Object *spline =
         splines->getObject(*splineName(function));
     if (!spline)

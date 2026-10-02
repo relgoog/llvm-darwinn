@@ -355,9 +355,12 @@ LogicalResult validateFunction(func::FuncOp function) {
       auto padding = operation.getAttrOfType<dwc::PaddingAttr>("pad");
       if (!activation || !cell || !padding || cell.getValue() != dwc::CellOperation::Mac ||
           padding.getValue() != dwc::Padding::None ||
-          (activation.getValue() != dwc::ActivationFunction::None &&
-           activation.getValue() != dwc::ActivationFunction::Relu))
-        return unsupported(&operation, "convolutions require MAC, explicit padding and NONE or RELU activation");
+          !llvm::is_contained({dwc::ActivationFunction::None, dwc::ActivationFunction::Relu,
+                               dwc::ActivationFunction::Logistic,
+                               dwc::ActivationFunction::HardSwish},
+                              activation.getValue()))
+        return unsupported(&operation, "convolutions require MAC, explicit padding and NONE, RELU, "
+                                       "LOGISTIC or HARD_SWISH activation");
 
       if (operation.getNumOperands() == 3) {
         auto bias = operation.getOperand(2).getDefiningOp<arith::ConstantOp>();

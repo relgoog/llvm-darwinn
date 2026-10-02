@@ -166,6 +166,7 @@ def Dwc_ActivationFunctionNone : I32EnumAttrCase<"None", 3, "NONE">;
 def Dwc_ActivationFunctionReciprocalSqrt : I32EnumAttrCase<"ReciprocalSqrt", 4, "RECIPROCAL_SQRT">;
 def Dwc_ActivationFunctionRelu : I32EnumAttrCase<"Relu", 5, "RELU">;
 def Dwc_ActivationFunctionTanh : I32EnumAttrCase<"Tanh", 6, "TANH">;
+def Dwc_ActivationFunctionHardSwish : I32EnumAttrCase<"HardSwish", 7, "HARD_SWISH">;
 def Dwc_ActivationFunctionEnum : Dwc_I32Enum<
   "ActivationFunction", "DWC activation function", [
     Dwc_ActivationFunctionExp,
@@ -174,7 +175,8 @@ def Dwc_ActivationFunctionEnum : Dwc_I32Enum<
     Dwc_ActivationFunctionNone,
     Dwc_ActivationFunctionReciprocalSqrt,
     Dwc_ActivationFunctionRelu,
-    Dwc_ActivationFunctionTanh
+    Dwc_ActivationFunctionTanh,
+    Dwc_ActivationFunctionHardSwish
   ]>;
 def Dwc_ActivationFunctionAttr : Dwc_I32EnumAttr<"activation_function", Dwc_ActivationFunctionEnum>;
 

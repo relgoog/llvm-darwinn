@@ -1038,10 +1038,11 @@ LogicalResult dwc::RescalingOp::verify() {
   case ActivationFunction::Tanh:
   case ActivationFunction::ReciprocalSqrt:
   case ActivationFunction::GeluApproximated:
+  case ActivationFunction::HardSwish:
     break;
   default:
     return (*this)->emitOpError("attribute 'activation_function' expects NONE, EXP, LOGISTIC, "
-                                "TANH, RECIPROCAL_SQRT, or GELU_APPROXIMATED");
+                                "TANH, RECIPROCAL_SQRT, GELU_APPROXIMATED, or HARD_SWISH");
   }
   return success();
 }

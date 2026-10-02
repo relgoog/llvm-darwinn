@@ -312,7 +312,10 @@ Linear macLinear(bool writebackDisable) {
 
 NonLinear reluNonLinear(Operation *op, int64_t outElem) {
   NonLinear nonLinear;
-  nonLinear.operation = ActivationFunction::Relu;
+  std::optional<NluFunctionKind> nlu = nluFunction(op);
+  nonLinear.operation = nlu && *nlu != NluFunctionKind::Linear
+                            ? ActivationFunction::Table
+                            : ActivationFunction::Relu;
   nonLinear.activationPipelineScale = 1.0f;
   auto [low, high] = clips(op);
   nonLinear.highClipValue = high;
@@ -947,6 +950,13 @@ Body codegen::vmc(Operation *op, Context &context) {
   FailureOr<SmallVector<Emitted, 0>> loads = registers(op, context);
   if (failed(loads))
     return failure();
+  if (std::optional<NluFunctionKind> nlu = nluFunction(op);
+      nlu && *nlu != NluFunctionKind::Linear) {
+    FailureOr<Emitted> tables = coefficientTables(op, *nlu, context);
+    if (failed(tables))
+      return failure();
+    loads->insert(loads->begin(), *tables);
+  }
   if (!plan->biasRows) {
     FailureOr<Emitted> consumer =
         weightsConsumer(op, *plan, context, active, true);

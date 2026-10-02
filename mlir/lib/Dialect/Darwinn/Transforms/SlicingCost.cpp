@@ -177,8 +177,9 @@ std::optional<int64_t> nluLatency(ComputeOpOptionsAttr options) {
   std::optional<NluFunctionKind> function = options.getNluFunction();
   if (!function || *function == NluFunctionKind::Linear)
     return 1;
-  if (*function == NluFunctionKind::Exp ||
-      *function == NluFunctionKind::Reciprocal)
+  if (llvm::is_contained({NluFunctionKind::Exp, NluFunctionKind::Reciprocal,
+                          NluFunctionKind::LogisticSigmoid, NluFunctionKind::HardSwish},
+                         *function))
     return 5;
   return std::nullopt;
 }
