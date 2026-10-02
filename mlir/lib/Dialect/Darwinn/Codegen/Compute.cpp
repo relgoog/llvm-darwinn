@@ -267,8 +267,14 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
                             : LinearOperation::HighBandwidthMaximum,
                         OperandType::Bfloat);
   } else if (!reduced.empty()) {
-    int64_t axis = reduced.front();
     bool mac = linearKind == LinearFunctionKind::Add && !floatInput;
+    SmallVector<Stream> reductions;
+    int64_t elements = 1;
+    for (int64_t axis : llvm::reverse(reduced)) {
+      elements *= size[axis];
+      reductions.push_back({size[axis], inStrides[axis], 0, 0});
+    }
+    reductions = mergeStreams(reductions);
     SmallVector<Stream> pixels;
     for (int64_t dim = vector - 1; dim >= 0; --dim)
       if (!llvm::is_contained(reduced, dim))
@@ -277,11 +283,10 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
     int64_t count = 1;
     for (const Stream &loop : pixels)
       count *= loop.count;
-    SmallVector<int64_t> main{size[axis] - 1};
-    SmallVector<Counter> read{
-        counter((size[axis] - 1) * inStrides[axis], inStrides[axis])};
+    SmallVector<int64_t> main{elements - 1};
+    SmallVector<Counter> read = streamCounters(reductions, &Stream::lhs);
     SmallVector<Counter> write{counter(0, writeBytes)};
-    SmallVector<Counter> sums{counter(size[axis] - 1, 1, false)};
+    SmallVector<Counter> sums{counter(elements - 1, 1, false)};
     if (mac) {
       main.push_back(blocks - 1);
       read.push_back(counter((blocks - 1) * lanes * inElem, lanes * inElem));
@@ -316,7 +321,8 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
           producerSync(true, 2 + (count > 1))};
       hasParameters = true;
       tensor.wideMemoryReadForSums.baseAddress = 4;
-      tensor.wideMemoryReadForSums.syncProducer = {producerSync(true, 3)};
+      tensor.wideMemoryReadForSums.syncProducer = {producerSync(
+          true, 2 + (reduced.size() == 1 || count > 1 || blocks > 1))};
     }
     if (count > 1 || (mac && blocks > 1)) {
       tensor.wideMemoryReadForSums.doubleBufferLoop =
@@ -773,9 +779,9 @@ Body codegen::initialization(Operation *op, Context &context) {
   Mesh mesh;
   mesh.direction = MeshDirection::OutboundEastInboundWest;
   mesh.write.baseAddress = *scratch;
-  mesh.write.counter = padded({counter(bytes - 16, 16)}, 5);
+  mesh.write.counter = padded({counter(llvm::alignTo(bytes, 16) - 16, 16)}, 5);
   mesh.write.syncProducer = {producerSync(true, 1)};
-  mesh.write.byteAddressMode = access(16);
+  mesh.write.byteAddressMode = access(std::min<int64_t>(bytes, 16));
   mesh.immediateValue = pattern;
   mesh.validBytes = 4;
   NarrowToWide copy;
@@ -787,7 +793,7 @@ Body codegen::initialization(Operation *op, Context &context) {
   copy.write.syncProducer = {producerSync(true)};
   copy.write.byteAddressMode = access(bytes);
   copy.readWatchers = {dmaWatcher(tileWatcher(TileSyncFlag::MeshInboundFromWest,
-                                              1, 1, bytes == 16 ? 1 : 0))};
+                                              1, 1, bytes <= 16 ? 1 : 0))};
   copy.threadMulticastBitmap = bits<4>("1111");
   copy.byteAddress.strideUnitGranulesLoopMap = 1;
   copy.byteAddress.defaultStrideUnitGranules = 4;

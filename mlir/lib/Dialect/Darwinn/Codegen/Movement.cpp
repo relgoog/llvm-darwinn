@@ -105,6 +105,9 @@ struct Relay {
   int64_t rows;
   int64_t rowWide;
   int64_t rowStride;
+  int64_t readAccess;
+  int64_t readStride;
+  int64_t readCount;
 };
 
 FailureOr<SmallVector<Relay>> relays(const ScatterGeometry &g,
@@ -115,8 +118,6 @@ FailureOr<SmallVector<Relay>> relays(const ScatterGeometry &g,
   size_t rowDim = rank - 3;
   int64_t rowBytes =
       product(ArrayRef(g.sourceExtent).drop_front(rowDim + 1)) * g.elem;
-  if (rowBytes % 128)
-    return failure();
   SmallVector<Relay> out;
   for (const TileBox &destination : g.destinations) {
     Index lo, hi, sourceOffset, destinationOffset;
@@ -130,15 +131,47 @@ FailureOr<SmallVector<Relay>> relays(const ScatterGeometry &g,
     }
     if (empty)
       continue;
+
+    Index size = extent(Box{lo, hi});
+    if (size.back() < g.sourceExtent.back()) {
+      int64_t readAccess = size.back() * g.elem;
+      int64_t readStride = g.sourceExtent.back() * g.elem;
+      if (readAccess > 128 || destinationOffset.back() != 0 ||
+          g.destinationStrides[rank - 2] != readAccess)
+        return failure();
+
+      int64_t readCount = 1;
+      for (size_t dim = rank - 1; dim-- > 0;) {
+        if (size[dim] > 1 &&
+            (g.sourceStrides[dim] != readCount * readStride ||
+             g.destinationStrides[dim] != readCount * readAccess))
+          return failure();
+        readCount *= size[dim];
+      }
+
+      int64_t packedBytes = readCount * readAccess;
+      if (packedBytes % 128)
+        return failure();
+
+      out.push_back({destination.tile, dot(sourceOffset, g.sourceStrides),
+                     dot(destinationOffset, g.destinationStrides), 1,
+                     packedBytes / 128, packedBytes, readAccess, readStride,
+                     readCount});
+      continue;
+    }
+
+    if (rowBytes % 128)
+      return failure();
     for (size_t dim = 0; dim < rank; ++dim)
       if (dim != rowDim && (hi[dim] - lo[dim] + 1 != g.sourceExtent[dim] ||
                             (dim > rowDim + 1 && g.destinationStrides[dim] !=
                                                      g.sourceStrides[dim])))
         return failure();
+    int64_t rows = size[rowDim];
     out.push_back({destination.tile, dot(sourceOffset, g.sourceStrides),
-                   dot(destinationOffset, g.destinationStrides),
-                   hi[rowDim] - lo[rowDim] + 1, rowBytes / 128,
-                   g.destinationStrides[rowDim]});
+                   dot(destinationOffset, g.destinationStrides), rows,
+                   rowBytes / 128, g.destinationStrides[rowDim], 128, 128,
+                   rows * rowBytes / 128});
   }
   return out;
 }
@@ -217,7 +250,8 @@ Body relayScatter(Operation *op, Context &context, const ScatterGeometry &g) {
       return consumer;
     };
 
-    using Key = std::tuple<int64_t, int64_t, int64_t, int64_t, int64_t>;
+    using Key = std::tuple<int64_t, int64_t, int64_t, int64_t, int64_t, int64_t,
+                           int64_t, int64_t>;
     struct Group {
       Key key;
       SmallVector<Relay> members;
@@ -226,8 +260,14 @@ Body relayScatter(Operation *op, Context &context, const ScatterGeometry &g) {
     SmallVector<Group> groups;
     std::map<int64_t, size_t> memberGroup;
     for (const Relay &copy : *copies) {
-      Key key{narrowWrites[{copy.tile, ringA}], copy.rows, copy.rowWide,
-              copy.rowStride, wideWrites[{copy.tile, ringA}]};
+      Key key{narrowWrites[{copy.tile, ringA}],
+              copy.rows,
+              copy.rowWide,
+              copy.rowStride,
+              wideWrites[{copy.tile, ringA}],
+              copy.readAccess,
+              copy.readStride,
+              copy.readCount};
       auto found = llvm::find_if(
           groups, [&](const Group &group) { return group.key == key; });
       if (found == groups.end())
@@ -261,7 +301,8 @@ Body relayScatter(Operation *op, Context &context, const ScatterGeometry &g) {
       emitted.push_back(
           {tiles.front(), {dma(consumerFor(written), tileSet(tiles))}});
     for (Group &group : groups) {
-      auto [written, rows, rowWide, rowStride, wideBefore] = group.key;
+      auto [written, rows, rowWide, rowStride, wideBefore, readAccess,
+            readStride, readCount] = group.key;
       SmallVector<int64_t> receivers;
       for (const Relay &copy : group.members)
         receivers.push_back(copy.tile);
@@ -297,8 +338,9 @@ Body relayScatter(Operation *op, Context &context, const ScatterGeometry &g) {
       int64_t perIncrement = counts.size() > 2 ? rowWide : 1;
 
       NarrowToWide gather;
-      gather.read.counter = padded({counter((wideRows - 1) * 128, 128)}, 6);
-      gather.read.byteAddressMode = access(128);
+      gather.read.counter =
+          padded({counter((readCount - 1) * readStride, readStride)}, 6);
+      gather.read.byteAddressMode = access(readAccess);
       gather.readWatchers = {dmaWatcher(tileWatcher(
           ringA ? TileSyncFlag::RingBusReadA : TileSyncFlag::RingBusReadB,
           order / 2 + 1, 1, 1))};
@@ -353,7 +395,14 @@ Body relayScatter(Operation *op, Context &context, const ScatterGeometry &g) {
           base = values.front().second;
           return {};
         }
-        return registerLoads(values, reg, latestFirst, thread);
+        Order order = latestFirst;
+        if (std::get<5>(group.key) < std::get<6>(group.key))
+          order = [](Groups groups) {
+            std::rotate(groups.begin(), std::next(groups.begin()),
+                        groups.end());
+            return groups;
+          };
+        return registerLoads(values, reg, order, thread);
       };
       SmallVector<Emitted, 0> loads =
           sourced(reads, 0, gather.read.baseAddress);
@@ -400,7 +449,8 @@ int64_t codegen::scatterRelayWords(Operation *op) {
     if (failed(copies))
       return 0;
     for (const Relay &copy : *copies) {
-      auto [inner, outer] = widePlan(copy.rows * copy.rowWide, bundleBytes(g));
+      int64_t wideRows = copy.readAccess * copy.readCount / 128;
+      auto [inner, outer] = widePlan(wideRows, bundleBytes(g));
       words = std::max(words, outer > 1 ? 2 * inner : inner);
     }
   }

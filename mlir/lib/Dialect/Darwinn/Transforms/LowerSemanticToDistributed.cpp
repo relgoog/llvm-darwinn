@@ -240,18 +240,23 @@ LogicalResult validateCwise(dwc::CwiseOp operation) {
   return success();
 }
 
-FailureOr<unsigned> reducedAxis(Operation *operation) {
+FailureOr<SmallVector<unsigned>> reducedAxes(Operation *operation) {
   auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
   auto dimensions = operation->getAttrOfType<DenseIntElementsAttr>("dimensions");
-  if (!dimensions || dimensions.getNumElements() != 1)
+  if (!dimensions || dimensions.getNumElements() == 0)
     return failure();
 
-  int64_t axis = (*dimensions.getValues<APInt>().begin()).getSExtValue();
-  if (axis < 0)
-    axis += input.getRank();
-  if (axis < 0 || axis >= input.getRank())
-    return failure();
-  return unsigned(axis);
+  SmallVector<unsigned> axes;
+  for (const APInt &value : dimensions.getValues<APInt>()) {
+    int64_t axis = value.getSExtValue();
+    if (axis < 0)
+      axis += input.getRank();
+    if (axis < 0 || axis >= input.getRank() || llvm::is_contained(axes, axis))
+      return failure();
+    axes.push_back(axis);
+  }
+  llvm::sort(axes);
+  return axes;
 }
 
 LogicalResult validateReduction(dwc::ReductionOp operation) {
@@ -266,23 +271,31 @@ LogicalResult validateReduction(dwc::ReductionOp operation) {
   auto kind = operation->getAttrOfType<dwc::ReductionTypeAttr>("op_type");
   auto activation =
       operation->getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function");
-  FailureOr<unsigned> axis = reducedAxis(operation);
+  FailureOr<SmallVector<unsigned>> axes = reducedAxes(operation);
+  unsigned minor = input.getRank() - 1;
 
-  if (failed(axis) || !kind || !activation || !input.getElementType().isBF16() ||
-      output.getElementType() != input.getElementType())
-    return unsupported(operation, "reduction requires one in-range axis and bf16 input and "
-                                  "result");
+  if (failed(axes) || (axes->size() > 1 && llvm::is_contained(*axes, minor)) || !kind ||
+      !activation || !input.getElementType().isBF16() ||
+      (!output.getElementType().isBF16() && !output.getElementType().isF32()))
+    return unsupported(operation, "reduction requires in-range axes, several only off the minor "
+                                  "axis, bf16 input and a bf16 or f32 result");
 
   SmallVector<int64_t> reduced(input.getShape());
-  reduced[*axis] = 1;
+  int64_t count = 1;
+  for (unsigned axis : *axes) {
+    if (count > std::numeric_limits<int64_t>::max() / input.getDimSize(axis))
+      return unsupported(operation, "reduced element count exceeds signed 64-bit storage");
+    count *= input.getDimSize(axis);
+    reduced[axis] = 1;
+  }
   if (output.getShape() != ArrayRef<int64_t>(reduced))
-    return unsupported(operation, "reduction result must keep the reduced axis with extent one");
+    return unsupported(operation, "reduction result must keep the reduced axes with extent one");
 
-  if ((kind.getValue() != dwc::ReductionType::Max &&
-       kind.getValue() != dwc::ReductionType::Sum) ||
+  if ((kind.getValue() != dwc::ReductionType::Max && kind.getValue() != dwc::ReductionType::Sum &&
+       kind.getValue() != dwc::ReductionType::Mean) ||
       (activation.getValue() == dwc::SimpleActivationFunction::Reciprocal &&
        kind.getValue() != dwc::ReductionType::Sum))
-    return unsupported(operation, "only MAX, SUM and reciprocal SUM reductions have a "
+    return unsupported(operation, "only MAX, SUM, MEAN and reciprocal SUM reductions have a "
                                   "supported lowering");
 
   return success();
@@ -929,7 +942,7 @@ private:
   // largest divisor of the extent that is at most eight and below it. Other axes are traversed
   // just before the minor axis.
   Value lowerReduction(Operation *operation) {
-    unsigned axis = *reducedAxis(operation);
+    SmallVector<unsigned> axes = *reducedAxes(operation);
     auto kind = operation->getAttrOfType<dwc::ReductionTypeAttr>("op_type").getValue();
     bool maximum = kind == dwc::ReductionType::Max;
     bool reciprocal =
@@ -939,23 +952,30 @@ private:
     auto outputType = tileType(operation->getResult(0).getType());
     unsigned rank = inputType.getRank();
     Value source = values.lookup(operation->getOperand(0));
+    int64_t count = 1;
+    for (unsigned axis : axes)
+      count *= inputType.getDimSize(axis);
+    float scale = kind == dwc::ReductionType::Mean ? 1.0f / count : 1.0f;
     auto finalOptions = [&] {
-      return reductionOptions(maximum, reciprocal, builder.getF32FloatAttr(maximum ? -0.0f : 0.0f));
+      return reductionOptions(maximum, reciprocal,
+                              builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), scale);
     };
 
-    if (axis != rank - 1) {
+    if (axes.back() != rank - 1) {
       SmallVector<unsigned> order;
       for (unsigned dimension = 0; dimension + 1 < rank; ++dimension) {
-        if (dimension != axis)
+        if (!llvm::is_contained(axes, dimension))
           order.push_back(dimension);
       }
-      order.append({axis, rank - 1});
+      llvm::append_range(order, axes);
+      order.push_back(rank - 1);
 
       SmallVector<AffineExpr> inputCoordinates(rank);
       for (auto [position, dimension] : llvm::enumerate(order))
         inputCoordinates[dimension] = builder.getAffineDimExpr(position);
       SmallVector<AffineExpr> outputCoordinates(inputCoordinates);
-      outputCoordinates[axis] = builder.getAffineConstantExpr(0);
+      for (unsigned axis : axes)
+        outputCoordinates[axis] = builder.getAffineConstantExpr(0);
 
       auto traversal = AffineMap::get(rank, 0, outputCoordinates, context);
       Value inputView =
@@ -963,7 +983,7 @@ private:
       return reduce(inputView, outputType, traversal, finalOptions());
     }
 
-    int64_t extent = inputType.getDimSize(axis);
+    int64_t extent = inputType.getDimSize(rank - 1);
     int64_t lanes = 1;
     for (int64_t candidate = std::min<int64_t>(8, extent - 1); candidate > 1; --candidate) {
       if (extent % candidate == 0) {
@@ -1009,11 +1029,12 @@ private:
     return reshape(reduced, outputType);
   }
 
-  ComputeOpOptionsAttr reductionOptions(bool maximum, bool reciprocal, FloatAttr bias) {
+  ComputeOpOptionsAttr reductionOptions(bool maximum, bool reciprocal, FloatAttr bias,
+                                        float scale = 1.0f) {
     return computeOptions(InnerOperationKind::Unary,
                           maximum ? LinearFunctionKind::Max : LinearFunctionKind::Add, {}, {},
                           reciprocal ? NluFunctionKind::Reciprocal : NluFunctionKind::Linear, bias,
-                          std::nullopt, true);
+                          std::nullopt, true, scale);
   }
 
   Value reduce(Value inputView, DistributedTensorType outputType, AffineMap traversal,

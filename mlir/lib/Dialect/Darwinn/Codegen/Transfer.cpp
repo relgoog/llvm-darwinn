@@ -306,7 +306,7 @@ Emitted codegen::outfeed(int64_t total, const std::array<bool, 8> &channels) {
   RingOutfeed out;
   out.traversal.counter = padded(items, 5);
   out.traversal.syncProducer = {producerSync(false)};
-  out.traversal.byteAddressMode = access(kAccess);
+  out.traversal.byteAddressMode = access(std::min(total, kAccess));
   out.virtualChannels = channels;
   out.bytesToPop = total;
   return tagged(out);
@@ -532,10 +532,11 @@ Body codegen::modelOutput(Operation *op, Context &context) {
       offset += position * stride * elem;
     RingProducer producer;
     producer.traversal.baseAddress = *base;
-    producer.traversal.counter = padded({counter(total - kAccess, kAccess)}, 4);
+    producer.traversal.counter =
+        padded({counter(llvm::alignTo(total, kAccess) - kAccess, kAccess)}, 4);
     producer.traversal.syncProducer = {producerSync(true),
                                        producerSync(true, 1)};
-    producer.traversal.byteAddressMode = access(kAccess);
+    producer.traversal.byteAddressMode = access(std::min(total, kAccess));
     producer.watchers = {
         dmaWatcher(tileWatcher(TileSyncFlag::RingBusProducerA, order, 0))};
     producer.virtualChannelSubscription = channels;

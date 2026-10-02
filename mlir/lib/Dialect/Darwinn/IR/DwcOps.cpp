@@ -950,10 +950,11 @@ LogicalResult dwc::ReductionOp::verify() {
   {
     auto dims = llvm::cast<ElementsAttr>((*this)->getAttr("dimensions"));
     auto shaped = llvm::dyn_cast<ShapedType>(dims.getType());
-    if (!shaped || !shaped.hasRank() || shaped.getRank() != 1 || !shaped.getElementType().isSignlessInteger(32))
+    if (!shaped || !shaped.hasRank() || shaped.getRank() != 1 ||
+        !shaped.getElementType().isSignlessInteger(32))
       return (*this)->emitOpError("attribute 'dimensions' expects 1D tensor of I32 elements");
-    if (!shaped.hasStaticShape() || shaped.getNumElements() != 1)
-      return (*this)->emitOpError("attribute 'dimensions' expects singleton tensor");
+    if (!shaped.hasStaticShape() || shaped.getNumElements() == 0)
+      return (*this)->emitOpError("attribute 'dimensions' expects nonempty tensor");
   }
   auto tensor = llvm::dyn_cast<TensorType>(getInputs()[0].getType());
   Type element = tensor ? tensor.getElementType() : getInputs()[0].getType();

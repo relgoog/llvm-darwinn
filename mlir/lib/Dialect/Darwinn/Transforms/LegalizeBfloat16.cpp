@@ -411,21 +411,30 @@ LogicalResult validateFunction(func::FuncOp function) {
           ? dyn_cast<RankedTensorType>(operation.getResult(0).getType()) : RankedTensorType();
       auto dimensions = operation.getAttrOfType<DenseIntElementsAttr>("dimensions");
       auto kind = operation.getAttrOfType<dwc::ReductionTypeAttr>("op_type");
-      auto activation = operation.getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function");
+      auto activation =
+          operation.getAttrOfType<dwc::SimpleActivationFunctionAttr>("activation_function");
       if (!input || !output || !staticF32(input) || !staticF32(output) ||
-          input.getRank() != output.getRank() || !dimensions || dimensions.getNumElements() != 1 ||
-          !kind || kind.getValue() != dwc::ReductionType::Sum || !activation ||
-          activation.getValue() != dwc::SimpleActivationFunction::None)
-        return unsupported(&operation, "only static keep-dimensions SUM with NONE activation is supported");
+          input.getRank() != output.getRank() || !dimensions || dimensions.empty() || !kind ||
+          (kind.getValue() != dwc::ReductionType::Sum &&
+           kind.getValue() != dwc::ReductionType::Mean) ||
+          !activation || activation.getValue() != dwc::SimpleActivationFunction::None)
+        return unsupported(
+            &operation,
+            "only static keep-dimensions SUM or MEAN with NONE activation is supported");
 
-      int64_t axis = (*dimensions.getValues<APInt>().begin()).getSExtValue();
-      if (axis < 0)
-        axis += input.getRank();
-      if (axis < 0 || axis >= input.getRank())
-        return unsupported(&operation, "reduction axis is outside the input rank");
+      SmallVector<bool> reduced(input.getRank(), false);
+      for (const APInt &value : dimensions.getValues<APInt>()) {
+        int64_t axis = value.getSExtValue();
+        if (axis < 0)
+          axis += input.getRank();
+        if (axis < 0 || axis >= input.getRank())
+          return unsupported(&operation, "reduction axis is outside the input rank");
+        reduced[axis] = true;
+      }
       for (int64_t index = 0; index < input.getRank(); ++index) {
-        if (output.getDimSize(index) != (index == axis ? 1 : input.getDimSize(index)))
-          return unsupported(&operation, "reduction output shape does not preserve unreduced dimensions");
+        if (output.getDimSize(index) != (reduced[index] ? 1 : input.getDimSize(index)))
+          return unsupported(&operation,
+                             "reduction output shape does not preserve unreduced dimensions");
       }
       continue;
     }

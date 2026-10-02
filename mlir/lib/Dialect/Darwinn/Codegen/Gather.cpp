@@ -22,10 +22,13 @@ struct Flow {
 
 struct GatherGeometry {
   int64_t rowBytes = 0;
+  int64_t sourceRowBytes = 0;
+  int64_t sourcePixelBytes = 0;
   int64_t channels = 0;
   int64_t destinationRowBytes = 0;
   int64_t columnOffset = 0;
   bool columnFirst = false;
+  std::map<int64_t, int64_t> channelOffsets;
   std::map<int64_t, int64_t> origin;
   SmallVector<std::pair<int64_t, Rows>> sources;
   SmallVector<std::pair<int64_t, Rows>> destinations;
@@ -54,15 +57,34 @@ FailureOr<GatherGeometry> geometry(Operation *op) {
   Index shift = applyForward(op, Index(info.shape.size(), 0));
   GatherGeometry g;
   g.rowBytes = source.shape[2] * source.shape[3] * source.elementBytes;
+  g.sourceRowBytes = g.rowBytes;
   g.channels = source.shape[3];
   g.destinationRowBytes = info.shape[2] * info.shape[3] * info.elementBytes;
   g.columnOffset = shift[2] * info.shape[3] * info.elementBytes;
+  SmallVector<TileBox> destinations = clampedTiles(op);
+  int64_t heldChannels = extent(destinations.front().box).back();
+  if (heldChannels < source.shape.back()) {
+    if (info.shape != source.shape || info.elementBytes != 2 ||
+        llvm::any_of(destinations, [&](const TileBox &entry) {
+          return entry.tile / kGrid != destinations.front().tile / kGrid ||
+                 entry.box.lo[1] != 0 || entry.box.lo[2] != 0 ||
+                 entry.box.hi[1] + 1 != info.shape[1] ||
+                 entry.box.hi[2] + 1 != info.shape[2] ||
+                 extent(entry.box).back() != heldChannels;
+        }))
+      return failure();
+    g.sourcePixelBytes = source.shape.back() * source.elementBytes;
+    g.channels = heldChannels;
+    g.rowBytes = g.destinationRowBytes = info.shape[2] * heldChannels * 2;
+    for (const TileBox &entry : destinations)
+      g.channelOffsets[entry.tile % kGrid] = entry.box.lo.back() * 2;
+  }
   for (const TileBox &entry : clampedTiles(producer(op, 0)))
     g.sources.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
   g.columnFirst = llvm::all_of(g.sources, [&](const auto &entry) {
     return entry.first / kGrid == g.sources.front().first / kGrid;
   });
-  for (const TileBox &entry : clampedTiles(op)) {
+  for (const TileBox &entry : destinations) {
     int64_t first = entry.box.lo[1] - shift[1];
     g.origin[entry.tile] = first;
     g.destinations.push_back(
@@ -123,7 +145,7 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   if (failed(g))
     return unsupported(op, "a gather whose rows are not contiguous");
   int64_t pixelBytes = g->channels * 2;
-  if (pixelBytes < 16 || pixelBytes % 8)
+  if ((!g->sourcePixelBytes && pixelBytes < 16) || pixelBytes % 8)
     return unsupported(op, "a gather whose rows do not split into thread "
                            "granules");
   SmallVector<const StorageBlock *> blocks;
@@ -213,7 +235,7 @@ SmallVector<Route> lineOps(ArrayRef<Flow> flows, bool horizontal,
       Action &action = storage.actions.emplace_back(Action{
           tile, role, flow.last - flow.first + 1, direction, 0, nullptr, hops});
       if (role == Part::Send)
-        action.address = read(flow.from, flow.first, 0);
+        action.address = read(flow.from, flow.first, flow.to);
       else if (role == Part::Receive)
         action.address = write(flow.to, flow.first, flow.from);
       auto entry = llvm::find_if(
@@ -379,7 +401,8 @@ Groups byFirstTileDescending(Groups groups) {
 using Step = std::pair<int64_t, SmallVector<Emitted, 0>>;
 
 SmallVector<Step> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
-                                   const GatherPlan &p, int64_t receiveStride) {
+                                   const GatherPlan &p, int64_t receiveStride,
+                                   int64_t sendPixelBytes) {
   SmallVector<Step> out;
   for (const auto &members : merged) {
     const MeshOp *sample = members.front();
@@ -399,7 +422,12 @@ SmallVector<Step> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
       Traversal &target = mesh.*traversal;
       bool strided =
           role == Part::Receive && rows > 1 && receiveStride != p.rowBytes;
-      if (strided)
+      if (role == Part::Send && sendPixelBytes) {
+        int64_t accessBytes = p.channels * 2;
+        int64_t pixels = rows * p.rowBytes / accessBytes;
+        target.counter =
+            padded({counter((pixels - 1) * sendPixelBytes, sendPixelBytes)}, 5);
+      } else if (strided)
         target.counter =
             padded({counter(p.rowBytes - kFlit, kFlit),
                     counter((rows - 1) * receiveStride, receiveStride)},
@@ -407,7 +435,8 @@ SmallVector<Step> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
       else
         target.counter = padded({counter(rows * p.rowBytes - kFlit, kFlit)}, 5);
       target.syncProducer = {producerSync(true, strided)};
-      target.byteAddressMode = access(kFlit);
+      target.byteAddressMode =
+          access(role == Part::Send && sendPixelBytes ? p.channels * 2 : kFlit);
       TileValues addresses;
       std::set<int64_t> distinct;
       for (const MeshOp *op : members) {
@@ -468,16 +497,18 @@ void pushDim(SmallVector<Counter> &items, const Dim &dim) {
     items.push_back(counter(0, dim.stride));
 }
 
-FailureOr<SmallVector<Step>> localCopies(Operation *op,
-                                         const std::map<int64_t, Copy> &copies,
-                                         const GatherPlan &p,
-                                         const Order &sourceOrder,
-                                         const Order &destinationOrder) {
+FailureOr<SmallVector<Step>>
+localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
+            const GatherPlan &p, const Order &sourceOrder,
+            const Order &destinationOrder, int64_t sourcePixelBytes = 0) {
   SmallVector<std::pair<int64_t, std::map<int64_t, Copy>>> groups;
   for (const auto &item : copies) {
     const auto &[tile, copy] = item;
     auto entry = llvm::find_if(groups, [&](const auto &group) {
-      return group.first == item.second.rows;
+      return group.first == item.second.rows &&
+             (!sourcePixelBytes ||
+              (group.second.begin()->second.source % sourcePixelBytes != 0) ==
+                  (item.second.source % sourcePixelBytes != 0));
     });
     if (entry == groups.end())
       groups.push_back({copy.rows, {{tile, copy}}});
@@ -489,6 +520,8 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
   });
   int64_t width = p.rowBytes / (p.channels * 2);
   int64_t pixelBytes = p.channels * 2;
+  int64_t readPixelBytes = sourcePixelBytes ? sourcePixelBytes : pixelBytes;
+  int64_t readRowBytes = width * readPixelBytes;
   int64_t element = kSlice;
   int64_t granules = llvm::divideCeil(pixelBytes, element);
   while (pixelBytes <= 128 ? kThreads % granules : granules > kThreads)
@@ -524,7 +557,9 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
               segment = thread / granules % segments,
               rowGroup = thread / (granules * segments);
       int64_t offset = segment * segmentPixels * pixelBytes + granule * element;
-      int64_t sourceOffset = offset + rowGroup * groupRows * p.rowBytes;
+      int64_t sourceOffset = segment * segmentPixels * readPixelBytes +
+                             granule * element +
+                             rowGroup * groupRows * readRowBytes;
       int64_t destinationOffset = offset + rowGroup * groupRows * stride;
       int64_t bytes = std::min(element, pixelBytes - granule * element);
       bool merged = bytes == pixelBytes;
@@ -533,16 +568,20 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
                              : merged ? (bytes > 16 ? 16 : element)
                                       : std::min<int64_t>(16, bytes & -bytes);
       SmallVector<Dim> readDims =
-          mergeDims({{1, bytes, granule != 0},
-                     {segmentPixels, pixelBytes, segment != 0},
-                     {groupRows, p.rowBytes, false}});
+          mergeDims({{1, bytes,
+                      granule != 0 ||
+                          (sourcePixelBytes &&
+                           members.begin()->second.source % sourcePixelBytes)},
+                     {segmentPixels, readPixelBytes, segment != 0},
+                     {groupRows, readRowBytes, false}});
       int64_t run = readDims.front().count * bytes;
       int64_t accessBytes = std::min<int64_t>(
           run, llvm::isPowerOf2_64(run) || run > 128 ? 128 : run & -run);
       if (run > 128)
         while (accessBytes > 8 && run % accessBytes)
           accessBytes -= 8;
-      writeElement = std::min(writeElement, accessBytes & -accessBytes);
+      if (!sourcePixelBytes)
+        writeElement = std::min(writeElement, accessBytes & -accessBytes);
       SmallVector<Counter> readItems;
       pushDim(readItems,
               {run / accessBytes, accessBytes, readDims.front().offset});
@@ -707,7 +746,8 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
 SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
                                   const Address &read, const Address &write,
                                   const GatherPlan &p, int64_t receiveStride,
-                                  SmallVector<Step> copies) {
+                                  SmallVector<Step> copies,
+                                  int64_t sendPixelBytes = 0) {
   std::map<int64_t, SmallVector<Flow>> lines;
   for (const Flow &flow : flows)
     lines[horizontal ? flow.from / kGrid : flow.from % kGrid].push_back(flow);
@@ -729,7 +769,8 @@ SmallVector<Emitted, 0> meshStage(ArrayRef<Flow> flows, bool horizontal,
 
   SmallVector<Emitted, 0> out;
   auto emit = [&](ArrayRef<SmallVector<MeshOp *>> merged) {
-    for (Step &step : meshInstructions(merged, p, receiveStride))
+    for (Step &step :
+         meshInstructions(merged, p, receiveStride, sendPixelBytes))
       llvm::append_range(out, std::move(step.second));
   };
   std::map<MeshOp *, int64_t> lineOf;
@@ -818,23 +859,34 @@ Body codegen::gatherRows(Operation *op, Context &context) {
     int64_t last = std::min(rows.second, staged->second.second);
     if (first > last)
       continue;
+    int64_t channel =
+        p.sourcePixelBytes ? p.channelOffsets.at(tile % kGrid) : 0;
     copies[tile] =
-        Copy{p.sourceBase + (first - rows.first) * p.rowBytes,
+        Copy{p.sourceBase + (first - rows.first) * p.sourceRowBytes + channel,
              p.stagingBase + (first - staged->second.first) * p.rowBytes,
              last - first + 1, p.rowBytes};
   }
-  Address read = [&](int64_t s, int64_t first, int64_t) {
-    return p.sourceBase + (first - rowsOf(p.sources, s).first) * p.rowBytes;
+  Address read = [&](int64_t s, int64_t first, int64_t destination) {
+    int64_t channel =
+        p.sourcePixelBytes ? p.channelOffsets.at(destination % kGrid) : 0;
+    return p.sourceBase +
+           (first - rowsOf(p.sources, s).first) * p.sourceRowBytes + channel;
   };
   Address write = [&](int64_t h, int64_t first, int64_t) {
     return p.stagingBase + (first - p.staging.at(h).first) * p.rowBytes;
   };
+  Order order = byRotatedColumn;
+  if (p.sourcePixelBytes)
+    order = [](Groups groups) {
+      std::rotate(groups.begin(), std::next(groups.begin()), groups.end());
+      return groups;
+    };
   FailureOr<SmallVector<Step>> blocks =
-      localCopies(op, copies, p, byRotatedColumn, byRotatedColumn);
+      localCopies(op, copies, p, order, order, p.sourcePixelBytes);
   if (failed(blocks))
     return failure();
   return meshStage(p.rowsFlows, !p.columnFirst, read, write, p, p.rowBytes,
-                   std::move(*blocks));
+                   std::move(*blocks), p.sourcePixelBytes);
 }
 
 Body codegen::gatherColumns(Operation *op, Context &context) {

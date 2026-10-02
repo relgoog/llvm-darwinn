@@ -80,7 +80,12 @@ GroupKind movement(Operation *input, Operation *op) {
     bool line = llvm::all_of(from, [&](const auto &entry) {
       return entry.first / kGrid == from.begin()->first / kGrid;
     });
-    return padded && line ? GroupKind::Gather : GroupKind::Scatter;
+    bool channels =
+        from.begin()->second.lo.back() == 0 &&
+        from.begin()->second.hi.back() > to.begin()->second.hi.back();
+    return (padded && line) || (channels && !scatterStagingWords(op))
+               ? GroupKind::Gather
+               : GroupKind::Scatter;
   }
   return product(extent(from.at(0))) * operandInfo(op, 0).elementBytes >=
                  kBroadcastBytes
