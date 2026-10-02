@@ -89,6 +89,7 @@ FailureOr<VmcPlan> vmcPlan(Operation *op);
 Operation *weightsView(Operation *op);
 int64_t stencilTaps(Operation *op);
 int64_t stencilBlocks(Operation *op);
+bool macCopy(Operation *op);
 bool hasBias(Operation *op);
 Body vmc(Operation *op, Context &context);
 Body stencil(Operation *op, Context &context);

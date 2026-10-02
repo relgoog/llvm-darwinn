@@ -15,6 +15,8 @@ bool initNeeded(Operation *op) {
            linear == LinearFunctionKind::Sub;
   if (inner != InnerOperationKind::Unary)
     return false;
+  if (macCopy(op))
+    return true;
   if (linear != LinearFunctionKind::Add ||
       nluFunction(op) != NluFunctionKind::Linear)
     return false;

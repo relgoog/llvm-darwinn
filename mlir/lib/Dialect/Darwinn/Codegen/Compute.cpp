@@ -114,6 +114,23 @@ void defaultProducer(Traversal &traversal) {
     traversal.syncProducer = {producerSync(false)};
 }
 
+} // namespace
+
+bool codegen::macCopy(Operation *op) {
+  if (!isa<UnaryTensorOpOp>(op) ||
+      linearFunction(op) != LinearFunctionKind::Add ||
+      nluFunction(op) != NluFunctionKind::Linear ||
+      resultInfo(throughViews(producer(op, 0))).elementBytes != 2)
+    return false;
+  auto traversal = op->getAttrOfType<AffineMapAttr>("traversal");
+  return llvm::none_of(traversal.getValue().getResults(), [](AffineExpr expr) {
+    auto constant = dyn_cast<AffineConstantExpr>(expr);
+    return constant && constant.getValue() == 0;
+  });
+}
+
+namespace {
+
 FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
   AffineMap traversalMap =
       op->getAttrOfType<AffineMapAttr>("traversal").getValue();
@@ -210,6 +227,57 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
                           OperandType::Bfloat);
     else
       linear = baseLinear(LinearOperation::PartialSumAdd, OperandType::Half);
+  } else if (macCopy(op)) {
+    SmallVector<Stream> pixels;
+    for (int64_t dim = vector - 1; dim >= 0; --dim) {
+      Stream loop{size[dim], inStrides[dim], outStrides[dim], 0};
+      if (!pixels.empty() && dim > 0 &&
+          loop.lhs == pixels.back().count * pixels.back().lhs &&
+          loop.out == pixels.back().count * pixels.back().out)
+        pixels.back().count *= loop.count;
+      else
+        pixels.push_back(loop);
+    }
+    SmallVector<int64_t> main;
+    SmallVector<Counter> read, write{counter(0, writeBytes)};
+    int64_t run = 1;
+    for (const Stream &loop : pixels) {
+      if (loop.count > 1) {
+        run *= loop.count;
+      } else {
+        if (run > 1)
+          main.push_back(run - 1);
+        main.push_back(0);
+        run = 1;
+      }
+      read.push_back(counter((loop.count - 1) * loop.lhs, loop.lhs));
+      write.push_back(counter((loop.count - 1) * loop.out, loop.out));
+    }
+    if (run > 1)
+      main.push_back(run - 1);
+    main.push_back(blocks - 1);
+    read.push_back(counter((blocks - 1) * readBytes, readBytes));
+    write.push_back(counter((blocks - 1) * writeBytes, writeBytes));
+    SmallVector<Counter> loops;
+    for (int64_t end : main)
+      loops.push_back(counter(end, 1, false));
+    tensor.mainOperation.counter = mainCounters(main);
+    tensor.narrowMemoryRead.counter = padded(read, 8);
+    tensor.narrowMemoryRead.byteAddressMode =
+        access(readBytes, 1u << (main.size() - 1));
+    tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
+    tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
+        producerSync(true, pixels.size() + 1)};
+    tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(writeBytes);
+    tensor.wideMemoryReadForParameters.counter = padded(loops, 8);
+    tensor.wideMemoryReadForParameters.syncProducer = {producerSync(true, 1)};
+    hasParameters = true;
+    tensor.wideMemoryReadForSums.counter = padded(loops, 8);
+    tensor.wideMemoryReadForSums.baseAddress = 4;
+    tensor.wideMemoryReadForSums.syncProducer = {producerSync(true, 1)};
+    tensor.wideMemoryReadForSums.secondBufferOffset = 4;
+    mainLoops = main.size() - 1;
+    linear = baseLinear(LinearOperation::HighBandwidthMac, OperandType::Bfloat);
   } else {
     SmallVector<Stream> pixels;
     for (int64_t dim = vector - 1; dim >= 0; --dim)
