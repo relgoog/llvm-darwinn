@@ -339,6 +339,122 @@ Emitted codegen::hibGather(ArrayRef<int64_t> view, ArrayRef<int64_t> buffer,
   return tagged(hib);
 }
 
+Body codegen::joinedCopies(Operation *op, Context &context) {
+  auto join = cast<CommunicatedJoinViewsOp>(op);
+  auto slicing = slicingOf(op);
+  auto destinationBase = context.narrowAddress(op);
+  if (!slicing || failed(destinationBase))
+    return unsupported(op, "a join without placed tile storage");
+
+  Index destinationShape = extent(ownerTileBox(op, 0));
+  TensorInfo output = resultInfo(op);
+  Index destinationStrides = strides(destinationShape, output.elementBytes);
+  SmallVector<int64_t> active;
+  for (const TileBox &tile : tiles(*slicing)) {
+    if (extent(tile.box) != destinationShape)
+      return unsupported(op, "a join with differing tile extents");
+    active.push_back(tile.tile);
+  }
+
+  SmallVector<Emitted, 0> instructions;
+  for (Value filled : join.getOperands()) {
+    auto copy = filled.getDefiningOp<NarrowToNarrowOp>();
+    if (!copy || copy.getShards().size() != 1)
+      return unsupported(op, "a join without one narrow-copy shard per input");
+    auto view =
+        copy.getDestination().getDefiningOp<CommunicatedCreateWriteViewOp>();
+    if (!copy.getInput().getDefiningOp())
+      return unsupported(op, "a join copy without a placed input producer");
+    auto sourceBase =
+        context.storageAddress(storage(copy.getInput().getDefiningOp()));
+    auto shard = cast<NarrowToNarrowShardAttr>(copy.getShards()[0]);
+    if (!view || failed(sourceBase) ||
+        shard.getSlices().size() != active.size())
+      return unsupported(op, "a join copy without matching tile ownership");
+
+    auto sample = cast<NarrowToNarrowSliceAttr>(shard.getSlices()[0]);
+    if (!sample.getReadDomain() || !sample.getReadAffineMap() ||
+        !sample.getWriteAffineMap() || !sample.getReadBytes() ||
+        !sample.getWriteBytes())
+      return unsupported(op, "a join copy without complete traversal fields");
+    Index shape;
+    for (Attribute dimension : sample.getReadDomain())
+      shape.push_back(cast<IntegerAttr>(dimension).getInt());
+    if (shape.empty() ||
+        llvm::any_of(shape, [](int64_t size) { return size <= 0; }) ||
+        shape.size() != destinationShape.size() ||
+        sample.getReadBytes().getInt() != output.elementBytes ||
+        sample.getWriteBytes().getInt() != output.elementBytes ||
+        ArrayRef<int64_t>(shape).drop_back() !=
+            ArrayRef<int64_t>(destinationShape).drop_back())
+      return unsupported(op,
+                         "a join copy that does not preserve spatial tiles");
+
+    unsigned rank = shape.size();
+    auto addressMap = [&](ArrayRef<int64_t> extents) {
+      Index layout = strides(extents, 1);
+      AffineExpr address = getAffineConstantExpr(0, op->getContext());
+      for (auto [axis, stride] : llvm::enumerate(layout))
+        address = address + getAffineDimExpr(axis, op->getContext()) * stride;
+      return AffineMap::get(rank, 0, address);
+    };
+    if (sample.getReadAffineMap().getValue() != addressMap(shape) ||
+        sample.getWriteAffineMap().getValue() != addressMap(destinationShape))
+      return unsupported(op, "a join copy without dense channel traversals");
+    for (auto [index, attribute] : llvm::enumerate(shard.getSlices())) {
+      auto slice = cast<NarrowToNarrowSliceAttr>(attribute);
+      auto id = slice.getId();
+      if (!id || id.size() != 3 ||
+          cast<IntegerAttr>(id[0]).getInt() != active[index] / kGrid ||
+          cast<IntegerAttr>(id[1]).getInt() != active[index] % kGrid ||
+          cast<IntegerAttr>(id[2]).getInt() != 0 ||
+          slice.getReadDomain() != sample.getReadDomain() ||
+          slice.getWriteDomain() != sample.getReadDomain() ||
+          slice.getReadAffineMap() != sample.getReadAffineMap() ||
+          slice.getWriteAffineMap() != sample.getWriteAffineMap() ||
+          slice.getReadBytes() != sample.getReadBytes() ||
+          slice.getWriteBytes() != sample.getWriteBytes())
+        return unsupported(
+            op, "a join copy with differing tile traversal geometry");
+    }
+
+    AffineMap mapping = view.getReverseIndexTransformation();
+    Index origin(rank, 0);
+    Index offset = evaluate(mapping, origin);
+    for (unsigned axis = 0; axis < rank; ++axis) {
+      if ((axis + 1 != rank && offset[axis] != 0) || offset[axis] < 0 ||
+          offset[axis] + shape[axis] > destinationShape[axis] ||
+          mapping.getResult(axis) !=
+              getAffineDimExpr(axis, op->getContext()) + offset[axis])
+        return unsupported(op,
+                           "a join copy without a channel-offset write view");
+    }
+
+    int64_t channelBytes = shape.back() * output.elementBytes;
+    int64_t pixels = product(ArrayRef<int64_t>(shape).drop_back());
+    if (channelBytes % 16)
+      return unsupported(
+          op, "a join copy whose channels do not fill sixteen-byte accesses");
+    NarrowToNarrow transfer;
+    transfer.read.baseAddress = *sourceBase;
+    transfer.read.counter =
+        padded({counter(pixels * channelBytes - 16, 16)}, 4);
+    transfer.read.syncProducer = {producerSync(false)};
+    transfer.read.byteAddressMode = access(16);
+    transfer.write.baseAddress =
+        *destinationBase + dot(offset, destinationStrides);
+    int64_t pixelStride = destinationShape.back() * output.elementBytes;
+    transfer.write.counter =
+        padded({counter(channelBytes - 16, 16),
+                counter((pixels - 1) * pixelStride, pixelStride)},
+               4);
+    transfer.write.syncProducer = {producerSync(true, 1)};
+    transfer.write.byteAddressMode = access(16);
+    instructions.push_back(dma(transfer, tileSet(active)));
+  }
+  return instructions;
+}
+
 Body codegen::transferLoad(Operation *op, Context &context) {
   Operation *source = producer(op, 0);
   HostView host = hostView(op);

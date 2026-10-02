@@ -111,12 +111,21 @@ def Darwinn_ImageFormatAttr : Darwinn_Attr<"ImageFormat", "image_format"> {
   let summary = "Darwinn image_format attribute.";
 }
 
-def Darwinn_JoinAttributesAttr : Darwinn_Attr<"JoinAttributes", "join_attributes"> {
-  let summary = "Darwinn join_attributes attribute.";
+def Darwinn_JoinAttributesAttr : AttrDef<Darwinn_Dialect, "JoinAttributes"> {
+  let mnemonic = "join_attributes";
+  let parameters = (ins "::mlir::ArrayAttr":$descriptors);
+  let assemblyFormat = "`<` struct(params) `>`";
+  let genVerifyDecl = 1;
 }
 
-def Darwinn_LocalCopyAttributesAttr : Darwinn_Attr<"LocalCopyAttributes", "local_copy_attributes"> {
-  let summary = "Darwinn local_copy_attributes attribute.";
+def Darwinn_LocalCopyAttributesAttr
+    : AttrDef<Darwinn_Dialect, "LocalCopyAttributes"> {
+  let mnemonic = "local_copy_attributes";
+  let parameters = (ins "::mlir::ArrayAttr":$limits,
+      "::mlir::AffineMapAttr":$read_traversal,
+      "::mlir::AffineMapAttr":$write_traversal);
+  let assemblyFormat = "`<` struct(params) `>`";
+  let genVerifyDecl = 1;
 }
 
 def Darwinn_KernelLevelAttr : Darwinn_Attr<"KernelLevel", "kernel_level"> {

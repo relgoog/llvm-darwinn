@@ -196,4 +196,27 @@ def Darwinn_NarrowToWideShardAttr
   let genVerifyDecl = 1;
 }
 
+def Darwinn_NarrowToNarrowSliceAttr
+    : AttrDef<Darwinn_Dialect, "NarrowToNarrowSlice"> {
+  let mnemonic = "narrow_to_narrow_slice";
+  let parameters = (ins OptionalParameter<"::mlir::ArrayAttr">:$id,
+      OptionalParameter<"::mlir::ArrayAttr">:$read_domain,
+      OptionalParameter<"::mlir::AffineMapAttr">:$read_affine_map,
+      OptionalParameter<"::mlir::IntegerAttr">:$read_bytes,
+      OptionalParameter<"::mlir::ArrayAttr">:$write_domain,
+      OptionalParameter<"::mlir::AffineMapAttr">:$write_affine_map,
+      OptionalParameter<"::mlir::IntegerAttr">:$write_bytes);
+  let assemblyFormat = "`<` struct(params) `>`";
+  let genVerifyDecl = 1;
+}
+
+def Darwinn_NarrowToNarrowShardAttr
+    : AttrDef<Darwinn_Dialect, "NarrowToNarrowShard"> {
+  let mnemonic = "narrow_to_narrow_shard";
+  let parameters = (ins "::mlir::ArrayAttr":$shard_id,
+      "::mlir::ArrayAttr":$slices);
+  let assemblyFormat = "`<` struct(params) `>`";
+  let genVerifyDecl = 1;
+}
+
 #endif

@@ -39,6 +39,12 @@ Index codegen::evaluate(AffineMap map, ArrayRef<int64_t> point) {
 }
 
 std::optional<Slicing> codegen::slicingOf(Operation *op) {
+  if (auto join = dyn_cast<CommunicatedJoinViewsOp>(op)) {
+    Operation *writer = join.getOperands().front().getDefiningOp();
+    Operation *view = writer ? producer(writer, 1) : nullptr;
+    Operation *owner = view ? producer(view, 0) : nullptr;
+    return owner ? slicingOf(owner) : std::nullopt;
+  }
   auto begins = op->getAttrOfType<AffineMapAttr>("slicing_begins");
   auto ends = op->getAttrOfType<AffineMapAttr>("slicing_ends");
   auto domain = op->getAttrOfType<ArrayAttr>("slicing_domain");

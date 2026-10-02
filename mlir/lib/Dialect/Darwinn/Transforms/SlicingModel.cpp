@@ -28,7 +28,7 @@ bool producesHost(Operation *operation) {
 }
 
 bool isAnchor(Operation *operation) {
-  if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp,
+  if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp, MathJoinOp,
           InterpolateHardwareOp>(operation))
     return true;
   if (isa<DistributedCreateViewOp>(operation))
@@ -320,7 +320,7 @@ LogicalResult SlicingModel::generateCodes() {
     Operation *anchor = block.anchor;
     ArrayRef<int64_t> shape = shapeOf(block.key);
     unsigned rank = shape.size();
-    SmallVector<int64_t, 3> domain = isa<CopyOpOp>(anchor)
+    SmallVector<int64_t, 3> domain = isa<CopyOpOp, MathJoinOp>(anchor)
                                          ? SmallVector<int64_t, 3>{4, 4, 1}
                                          : SmallVector<int64_t, 3>{4, 4, 4};
     llvm::SmallDenseSet<unsigned> threadForbidden;
@@ -339,7 +339,8 @@ LogicalResult SlicingModel::generateCodes() {
 
     SmallVector<unsigned> allowed;
     for (unsigned dim = 0; dim < rank; ++dim)
-      if (shape[dim] > 1)
+      if (shape[dim] > 1 &&
+          !(isa<MathJoinOp>(anchor) && dim == rank - 1))
         allowed.push_back(dim);
     SmallVector<Assignment> assignments;
     bool threaded = domain[2] > 1;
@@ -566,6 +567,15 @@ SlicingModel::derive(unsigned blockId, unsigned codeId) {
       result[source] = {AffineMap::get(dims, 0, begins, context),
                         AffineMap::get(dims, 0, ends, context)};
     }
+  } else if (auto join = dyn_cast<MathJoinOp>(anchor)) {
+    for (Value input : join.getInputs()) {
+      SmallVector<AffineExpr> begins(code.maps.begins.getResults());
+      SmallVector<AffineExpr> ends(code.maps.ends.getResults());
+      begins.back() = getAffineConstantExpr(0, context);
+      ends.back() = getAffineConstantExpr(shapeOf(input).back() - 1, context);
+      result[input] = {AffineMap::get(dims, 0, begins, context),
+                       AffineMap::get(dims, 0, ends, context)};
+    }
   } else if (auto copy = dyn_cast<CopyOpOp>(anchor)) {
     result[copy.getInput()] =
         image(copy.getReverseIndexTransformation(),
@@ -760,6 +770,12 @@ FailureOr<Estimate> MaterializedSlicing::estimate(Operation *operation,
       return failure();
     return estimateCopy(copy, *own->code);
   }
+  if (auto join = dyn_cast<MathJoinOp>(operation)) {
+    FailureOr<SlicedValue> own = slicingOf(join.getOutput());
+    if (failed(own))
+      return failure();
+    return estimateJoin(join, *own->code);
+  }
   if (auto interpolate = dyn_cast<InterpolateHardwareOp>(operation)) {
     FailureOr<SlicedValue> own = slicingOf(interpolate.getOutput());
     if (failed(own))
@@ -792,7 +808,7 @@ LogicalResult SlicingModel::emit(ArrayRef<unsigned> state) {
     SmallVector<int32_t> domain(code.domain.begin(), code.domain.end());
     for (Operation *member : block.members) {
       if (!isa<RedistributeOp, CreateEmptyTensorOp, FillOp, CopyOpOp,
-               InterpolateHardwareOp>(member))
+               MathJoinOp, InterpolateHardwareOp>(member))
         continue;
       Value value = member->getResult(0);
       auto maps = (*derived)->find(value);

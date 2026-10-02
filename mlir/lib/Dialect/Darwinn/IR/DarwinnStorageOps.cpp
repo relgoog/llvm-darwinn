@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/IR/AffineMap.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
@@ -108,6 +109,69 @@ static LogicalResult verifyViewStorage(Operation *operation, ShapedType input,
         "requires matching storage and view memory spaces");
 
   return success();
+}
+
+static LogicalResult verifyLocalCopyTraversal(Operation *operation,
+                                              StringRef name, AffineMap map,
+                                              ArrayAttr limits,
+                                              ShapedType tensor) {
+  if (failed(verifyMap(operation, name, map, limits.size(), tensor.getRank())))
+    return failure();
+
+  SmallVector<std::optional<int64_t>> lowerBounds(limits.size(), 0);
+  SmallVector<std::optional<int64_t>> upperBounds;
+
+  for (Attribute attribute : limits) {
+    auto extent = dyn_cast<IntegerAttr>(attribute);
+
+    if (!extent || !extent.getType().isSignlessInteger(32) ||
+        extent.getValue().isNegative())
+      return operation->emitOpError(
+          "requires nonnegative i32 local copy limits");
+
+    if (extent.getValue().isZero())
+      return success();
+
+    upperBounds.push_back(extent.getInt() - 1);
+  }
+
+  for (auto [index, expression] : llvm::enumerate(map.getResults())) {
+    std::optional<int64_t> lower = getBoundForAffineExpr(
+        expression, map.getNumDims(), 0, lowerBounds, upperBounds, false);
+    std::optional<int64_t> upper = getBoundForAffineExpr(
+        expression, map.getNumDims(), 0, lowerBounds, upperBounds, true);
+
+    if ((lower && *lower < 0) || (upper && !tensor.isDynamicDim(index) &&
+                                  *upper >= tensor.getDimSize(index)))
+      return operation->emitOpError()
+             << name << " exceeds the tensor shape within local copy limits";
+  }
+
+  return success();
+}
+
+static LogicalResult verifyLocalCopy(Operation *operation, ShapedType input,
+                                     ShapedType output,
+                                     LocalCopyAttributesAttr attributes) {
+  if (failed(verifyViewStorage(operation, input, output)) ||
+      failed(verifyLocalCopyTraversal(operation, "read_traversal",
+                                      attributes.getReadTraversal().getValue(),
+                                      attributes.getLimits(), input)))
+    return failure();
+
+  return verifyLocalCopyTraversal(operation, "write_traversal",
+                                  attributes.getWriteTraversal().getValue(),
+                                  attributes.getLimits(), output);
+}
+
+static LogicalResult verifyFilledDestination(Operation *operation,
+                                             ShapedType destination,
+                                             ShapedType output) {
+  if (destination.getShape() != output.getShape())
+    return operation->emitOpError(
+        "requires the filled view to match its destination shape");
+
+  return verifyViewStorage(operation, destination, output);
 }
 
 LogicalResult CreateEmptyTensorOp::verify() {
@@ -286,13 +350,19 @@ LogicalResult CommunicatedJoinViewsOp::verify() {
                                  output)))
       return failure();
 
-    auto transfer = input.getDefiningOp<RedistributeOp>();
+    Value destination;
 
-    if (!transfer || !transfer.getDestination())
+    if (auto transfer = input.getDefiningOp<RedistributeOp>())
+      destination = transfer.getDestination();
+    else if (auto transfer = input.getDefiningOp<CommunicatedLocalCopyOp>())
+      destination = transfer.getDestination();
+    else if (auto transfer = input.getDefiningOp<NarrowToNarrowOp>())
+      destination = transfer.getDestination();
+
+    if (!destination)
       continue;
 
-    auto writeView = transfer.getDestination()
-                         .getDefiningOp<CommunicatedCreateWriteViewOp>();
+    auto writeView = destination.getDefiningOp<CommunicatedCreateWriteViewOp>();
 
     if (!writeView)
       continue;
@@ -314,4 +384,52 @@ LogicalResult CommunicatedJoinViewsOp::verify() {
   }
 
   return success();
+}
+
+LogicalResult MathJoinOp::verify() {
+  auto descriptors = getJoinAttributes().getDescriptors();
+
+  if (getInputs().empty() || descriptors.size() != getInputs().size())
+    return emitOpError("requires one local copy descriptor per input tensor");
+
+  auto output = cast<ShapedType>(getOutput().getType());
+
+  for (auto [input, attribute] : llvm::zip(getInputs(), descriptors)) {
+    auto descriptor = dyn_cast<LocalCopyAttributesAttr>(attribute);
+
+    if (!descriptor)
+      return emitOpError("requires local copy descriptors");
+
+    if (failed(verifyLocalCopy(*this, cast<ShapedType>(input.getType()), output,
+                               descriptor)))
+      return failure();
+  }
+
+  return verifySlicing(*this, "slicing", getSlicingBeginsAttr(),
+                       getSlicingDomainAttr(), getSlicingEndsAttr(), output);
+}
+
+LogicalResult CommunicatedLocalCopyOp::verify() {
+  auto input = cast<ShapedType>(getInput().getType());
+  auto destination = cast<ShapedType>(getDestination().getType());
+  auto output = cast<ShapedType>(getOutput().getType());
+
+  if (failed(verifyFilledDestination(*this, destination, output)))
+    return failure();
+
+  return verifyLocalCopy(*this, input, output, getLocalCopyAttributes());
+}
+
+LogicalResult NarrowToNarrowOp::verify() {
+  auto input = cast<ShapedType>(getInput().getType());
+  auto destination = cast<ShapedType>(getDestination().getType());
+  auto output = cast<ShapedType>(getOutput().getType());
+
+  if (input.getShape() != output.getShape())
+    return emitOpError("requires matching input and filled view shapes");
+
+  if (failed(verifyFilledDestination(*this, destination, output)))
+    return failure();
+
+  return verifyViewStorage(*this, input, output);
 }

@@ -36,6 +36,7 @@ static llvm::Expected<uint8_t> getOpcode(const Mesh &mesh) {
 
 static llvm::Expected<uint8_t> getOpcode(const WideToNarrow &) { return 20; }
 static llvm::Expected<uint8_t> getOpcode(const NarrowToWide &) { return 19; }
+static llvm::Expected<uint8_t> getOpcode(const NarrowToNarrow &) { return 15; }
 
 static llvm::Error writeRingTransfer(BitWriter &writer,
                                      const Traversal &traversal,
@@ -290,6 +291,27 @@ static llvm::Error writeBody(BitWriter &writer, const NarrowToWide &transfer) {
   if (auto error = writer.write(3, 2))
     return error;
   return writer.writeBitmap(transfer.threadMulticastBitmap);
+}
+
+static llvm::Error writeBody(BitWriter &writer,
+                             const NarrowToNarrow &transfer) {
+  TraversalEncoding encoding{20, 20, 20, 4, 20, true, 0, 20, std::nullopt, 0};
+
+  if (auto error =
+          writeTransferPair(writer, transfer.read, transfer.write, encoding,
+                            encoding, false, {}, {}, 0, true))
+    return error;
+
+  unsigned defaultTailBits = 1112;
+
+  while (defaultTailBits) {
+    unsigned width = std::min(defaultTailBits, 64u);
+    if (auto error = writer.write(0, width))
+      return error;
+    defaultTailBits -= width;
+  }
+
+  return llvm::Error::success();
 }
 
 llvm::Expected<InstructionBytes>

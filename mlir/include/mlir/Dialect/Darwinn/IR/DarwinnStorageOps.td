@@ -90,4 +90,30 @@ def Darwinn_CommunicatedJoinViewsOp
   let results = (outs Darwinn_DistributedTensor:$output);
 }
 
+def Darwinn_MathJoinOp : Darwinn_StorageOp<"math.join"> {
+  let arguments = (ins Variadic<Darwinn_DistributedTensor>:$inputs,
+      Darwinn_JoinAttributesAttr:$join_attributes,
+      AffineMapAttr:$slicing_begins, I32ArrayAttr:$slicing_domain,
+      AffineMapAttr:$slicing_ends);
+  let results = (outs Darwinn_DistributedTensor:$output);
+}
+
+def Darwinn_CommunicatedLocalCopyOp
+    : Darwinn_StorageOp<"communicated.local_copy"> {
+  let arguments = (ins Darwinn_DistributedTensor:$input,
+      Darwinn_WriteView:$destination,
+      Darwinn_LocalCopyAttributesAttr:$local_copy_attributes);
+  let results = (outs Darwinn_FilledView:$output);
+}
+
+def Darwinn_NarrowToNarrowShards
+    : TypedArrayAttrBase<Darwinn_NarrowToNarrowShardAttr,
+                         "array of narrow to narrow shards">;
+
+def Darwinn_NarrowToNarrowOp : Darwinn_StorageOp<"narrow_to_narrow"> {
+  let arguments = (ins Darwinn_DistributedTensor:$input,
+      Darwinn_WriteView:$destination, Darwinn_NarrowToNarrowShards:$shards);
+  let results = (outs Darwinn_FilledView:$output);
+}
+
 #endif

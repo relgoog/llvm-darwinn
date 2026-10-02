@@ -75,19 +75,32 @@ void restoreThreads(Operation *operation) {
   mergeSlicing(operation);
 }
 
-LogicalResult readMerged(RedistributeOp redistribute) {
-  FailureOr<Operation *> owner = threadSlicingOwner(redistribute.getInput());
+LogicalResult readMerged(OpOperand &operand) {
+  Operation *operation = operand.getOwner();
+  FailureOr<Operation *> owner = threadSlicingOwner(operand.get());
   if (failed(owner))
-    return redistribute.emitOpError("reads a value without a tile slicing");
+    return operation->emitOpError("reads a value without a tile slicing");
   if (!isThreadSliced(*owner))
     return success();
-  OpBuilder builder(redistribute);
-  Value input = redistribute.getInput();
-  auto read = GetTensorOp::create(builder, redistribute.getLoc(),
-                                  input.getType(), input);
+
+  OpBuilder builder(operation);
+  Value input = operand.get();
+
+  if (auto read = input.getDefiningOp<GetTensorOp>();
+      read && isa<MathJoinOp>(operation)) {
+    if (read->hasOneUse()) {
+      mergeSlicing(read);
+      return success();
+    }
+
+    input = read.getInput();
+  }
+
+  auto read =
+      GetTensorOp::create(builder, operation->getLoc(), input.getType(), input);
   copySlicing(*owner, read);
   mergeSlicing(read);
-  redistribute.getInputMutable().assign(read.getResult());
+  operand.set(read.getResult());
   return success();
 }
 
@@ -113,22 +126,37 @@ public:
   void runOnOperation() final {
     SmallVector<Operation *> oblivious;
     SmallVector<RedistributeOp> transfers;
+    SmallVector<MathJoinOp> joins;
     getOperation().walk([&](Operation *operation) {
       if (auto redistribute = dyn_cast<RedistributeOp>(operation))
         transfers.push_back(redistribute);
-      if (isa<RedistributeOp, FillOp>(operation) && isThreadSliced(operation))
+      if (auto join = dyn_cast<MathJoinOp>(operation))
+        joins.push_back(join);
+      if (isa<RedistributeOp, FillOp, MathJoinOp>(operation) &&
+          isThreadSliced(operation))
         oblivious.push_back(operation);
     });
-    for (Operation *operation : oblivious)
-      restoreThreads(operation);
+    for (Operation *operation : oblivious) {
+      if (isa<MathJoinOp>(operation) &&
+          llvm::all_of(operation->getUsers(),
+                       [](Operation *user) { return isa<GetTensorOp>(user); }))
+        mergeSlicing(operation);
+      else
+        restoreThreads(operation);
+    }
+
     for (RedistributeOp redistribute : transfers)
       if (memorySpaceOf(redistribute.getInput()) !=
               DistributedMemorySpace::HostMemory &&
-          failed(readMerged(redistribute)))
+          failed(readMerged(redistribute->getOpOperand(0))))
         return signalPassFailure();
+
+    for (MathJoinOp join : joins)
+      for (OpOperand &operand : join->getOpOperands())
+        if (failed(readMerged(operand)))
+          return signalPassFailure();
   }
 };
-
 }
 
 std::unique_ptr<Pass> mlir::darwinn::createLegalizeThreadObliviousOpPass() {

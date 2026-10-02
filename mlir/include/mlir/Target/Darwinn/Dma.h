@@ -107,8 +107,13 @@ struct NarrowToWide {
   std::array<bool, 4> threadMulticastBitmap{};
 };
 
-using DmaOperation =
-    std::variant<RingConsumer, RingProducer, Mesh, WideToNarrow, NarrowToWide>;
+struct NarrowToNarrow {
+  Traversal read;
+  Traversal write;
+};
+
+using DmaOperation = std::variant<RingConsumer, RingProducer, Mesh,
+                                  WideToNarrow, NarrowToWide, NarrowToNarrow>;
 
 struct DmaInstruction {
   TileHeader header;

@@ -28,6 +28,7 @@
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MathToLibm/MathToLibm.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Dialect/Darwinn/IR/DarwinnOps.h"
 #include "mlir/Dialect/Darwinn/IR/DwcOps.h"
 #include "mlir/Dialect/Darwinn/Transforms/LowerRuntime.h"
 #include "mlir/Dialect/DiveVm/IR/DiveVmOps.h"
@@ -5228,16 +5229,101 @@ struct DwcLowerInputCastPass
   }
 };
 
+static LogicalResult lowerMathJoin(MathJoinOp join) {
+  auto outputType = join.getOutput().getType();
+  ArrayRef<int64_t> outputShape = outputType.getShape();
+  auto descriptors = join.getJoinAttributes().getDescriptors();
+  OpBuilder builder(join);
+
+  if (!outputType.hasStaticShape() || outputShape.empty() ||
+      outputType.getMemorySpace() != DistributedMemorySpace::TileMemory ||
+      join.getInputs().empty() || descriptors.size() != join.getInputs().size())
+    return join.emitOpError("requires static tile tensors and one descriptor per input");
+
+  int64_t channelOffset = 0;
+
+  for (auto [input, attribute] : llvm::zip(join.getInputs(), descriptors)) {
+    auto inputType = cast<DistributedTensorType>(input.getType());
+    auto descriptor = dyn_cast<LocalCopyAttributesAttr>(attribute);
+
+    if (!descriptor || !inputType.hasStaticShape() || inputType.getRank() != outputType.getRank() ||
+        inputType.getShape().drop_back() != outputShape.drop_back() ||
+        !descriptor.getReadTraversal().getValue().isIdentity() ||
+        descriptor.getLimits().size() != inputType.getShape().size() ||
+        inputType.getShape().back() <= 0 ||
+        inputType.getShape().back() > outputShape.back() - channelOffset)
+      return join.emitOpError("supports only dense channel concatenation with identity reads");
+
+    SmallVector<AffineExpr> writeResults;
+
+    for (auto [axis, extent] : llvm::enumerate(inputType.getShape())) {
+      auto limit = dyn_cast<IntegerAttr>(descriptor.getLimits()[axis]);
+
+      if (!limit || limit.getInt() != extent)
+        return join.emitOpError("requires local copy limits to match each input shape");
+
+      writeResults.push_back(builder.getAffineDimExpr(axis));
+    }
+
+    writeResults.back() = writeResults.back() + channelOffset;
+
+    if (descriptor.getWriteTraversal().getValue() !=
+        AffineMap::get(outputType.getRank(), 0, writeResults, builder.getContext()))
+      return join.emitOpError("requires contiguous channel offsets in input order");
+
+    channelOffset += inputType.getShape().back();
+  }
+
+  if (channelOffset != outputShape.back())
+    return join.emitOpError("requires input channels to cover the output shape");
+
+  auto emptyType = EmptyTensorType::get(builder.getContext(), outputShape,
+                                        outputType.getElementType(), outputType.getMemorySpace());
+  auto empty = CommunicatedCreateEmptyTensorOp::create(
+      builder, join.getLoc(), emptyType, join.getSlicingBeginsAttr(), join.getSlicingDomainAttr(),
+      join.getSlicingEndsAttr());
+  SmallVector<Value> filled;
+
+  for (auto [input, attribute] : llvm::zip(join.getInputs(), descriptors)) {
+    auto inputType = cast<DistributedTensorType>(input.getType());
+    auto descriptor = cast<LocalCopyAttributesAttr>(attribute);
+    auto viewType = WriteViewType::get(builder.getContext(), inputType.getShape(),
+                                       inputType.getElementType(), inputType.getMemorySpace());
+    auto view = CommunicatedCreateWriteViewOp::create(
+        builder, join.getLoc(), viewType, empty.getOutput(), descriptor.getWriteTraversal());
+    auto filledType = FilledViewType::get(builder.getContext(), inputType.getShape(),
+                                          inputType.getElementType(), inputType.getMemorySpace());
+    auto identity = AffineMapAttr::get(builder.getMultiDimIdentityMap(inputType.getRank()));
+    auto attributes = LocalCopyAttributesAttr::get(builder.getContext(), descriptor.getLimits(),
+                                                   identity, identity);
+    auto copy = CommunicatedLocalCopyOp::create(builder, join.getLoc(), filledType, input,
+                                                view.getOutput(), attributes);
+    filled.push_back(copy.getOutput());
+  }
+
+  auto result = CommunicatedJoinViewsOp::create(builder, join.getLoc(), outputType, filled);
+  join.replaceAllUsesWith(result.getOutput());
+  join.erase();
+  return success();
+}
+
 // TSV row: "lower-join" at 0xdc9464.
 struct DwcLowerJoinPass
     : public darwinn::impl::DwcLowerJoinPassBase<DwcLowerJoinPass> {
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
+    registry.insert<DarwinnDialect, dive_vm::DiveVmDialect, LLVM::LLVMDialect>();
   }
 
   void runOnOperation() override {
+    SmallVector<MathJoinOp> joins;
+    getOperation().walk([&](MathJoinOp join) { joins.push_back(join); });
+
+    for (MathJoinOp join : joins)
+      if (failed(lowerMathJoin(join)))
+        return signalPassFailure();
+
     // The sibling-owned LowerCopySlice and LowerConvert sets do the real
     // lowering, identity folds below only clean up what patterns leave behind.
     RewritePatternSet patterns(&getContext());

@@ -35,6 +35,7 @@ Emitted hibGather(ArrayRef<int64_t> view, ArrayRef<int64_t> buffer,
                   int64_t elementBytes, DmaQueue queue, int64_t index);
 
 Body transferLoad(Operation *op, Context &context);
+Body joinedCopies(Operation *op, Context &context);
 Body transferStore(Operation *op, Context &context);
 Body modelOutput(Operation *op, Context &context);
 Body fill(Operation *op, Context &context);

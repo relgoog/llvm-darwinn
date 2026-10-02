@@ -11,6 +11,7 @@
 #include "mlir/Pass/PassRegistry.h"
 #include "llvm/ADT/STLExtras.h"
 #include <algorithm>
+#include <limits>
 #include <optional>
 
 #define GET_ATTRDEF_CLASSES
@@ -114,9 +115,9 @@ std::optional<dwc::CwiseOpType> binaryKind(linalg::GenericOp operation) {
 }
 
 bool isCompute(Operation *operation) {
-  return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp,
-             dwc::TransposedConvolutionOp, dwc::CwiseOp, dwc::ReductionOp,
-             dwc::PoolingOp, linalg::GenericOp>(operation);
+  return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp, dwc::TransposedConvolutionOp,
+             dwc::CwiseOp, dwc::ReductionOp, dwc::PoolingOp, dwc::ConcatenationOp,
+             linalg::GenericOp>(operation);
 }
 
 std::optional<int32_t> sumAxis(linalg::GenericOp operation) {
@@ -370,6 +371,31 @@ LogicalResult validateFunction(func::FuncOp function) {
       continue;
     }
 
+    if (isa<dwc::ConcatenationOp>(operation)) {
+      auto mode = operation.getAttrOfType<IntegerAttr>("mode");
+      if (operation.getNumOperands() < 2 || operation.getNumResults() != 1 || !mode ||
+          mode.getInt() != 3 || !staticF32(operation.getResult(0).getType()))
+        return unsupported(&operation,
+                           "concatenation requires channel mode and static f32 tensors");
+
+      auto output = cast<RankedTensorType>(operation.getResult(0).getType());
+      if (output.getRank() != 4)
+        return unsupported(&operation, "concatenation requires rank-four tensors");
+
+      int64_t channels = 0;
+      for (Value operand : operation.getOperands()) {
+        auto input = dyn_cast<RankedTensorType>(operand.getType());
+        if (!input || !staticF32(input) || input.getRank() != 4 ||
+            input.getShape().drop_back() != output.getShape().drop_back() ||
+            channels > std::numeric_limits<int64_t>::max() - input.getDimSize(3))
+          return unsupported(&operation, "concatenation input shapes must agree outside channels");
+        channels += input.getDimSize(3);
+      }
+      if (channels != output.getDimSize(3))
+        return unsupported(&operation, "concatenation output channels must equal the input sum");
+      continue;
+    }
+
     if (isa<dwc::ReshapeOp, dwc::TransposeOp>(operation)) {
       if (operation.getNumOperands() != 1 || operation.getNumResults() != 1 ||
           !staticF32(operation.getOperand(0).getType()) ||
@@ -574,13 +600,15 @@ public:
       }
 
       bool terminal = operation.getResult(0).hasOneUse() &&
-          isa<func::ReturnOp>(*operation.getResult(0).getUsers().begin());
+                      isa<func::ReturnOp>(*operation.getResult(0).getUsers().begin());
       auto pool = operation.getAttrOfType<dwc::PoolAttr>("pool");
-      bool boundaryCast = terminal && (isa<dwc::ReshapeOp, dwc::TransposeOp,
-                                           dwc::ImageInterpolationOp>(operation) ||
-                                       (pool && pool.getValue() == dwc::Pool::Max));
+      bool boundaryCast =
+          terminal &&
+          (isa<dwc::ReshapeOp, dwc::TransposeOp, dwc::ImageInterpolationOp, dwc::ConcatenationOp>(
+               operation) ||
+           (pool && pool.getValue() == dwc::Pool::Max));
       Type resultType = terminal && !boundaryCast ? operation.getResult(0).getType()
-                                                : bfloatType(operation.getResult(0).getType());
+                                                  : bfloatType(operation.getResult(0).getType());
 
       if (auto binary = dyn_cast<linalg::GenericOp>(operation)) {
         OperationState state(operation.getLoc(), dwc::CwiseOp::getOperationName());
@@ -595,8 +623,11 @@ public:
       }
 
       OperationState state(operation.getLoc(), operation.getName());
+      bool hasBias =
+          isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp, dwc::TransposedConvolutionOp>(
+              operation);
       for (auto [index, value] : llvm::enumerate(operation.getOperands()))
-        state.addOperands(converted(value, index == 2));
+        state.addOperands(converted(value, hasBias && index == 2));
       state.addTypes(resultType);
       state.addAttributes(operation.getAttrs());
       Value result = builder.create(state)->getResult(0);

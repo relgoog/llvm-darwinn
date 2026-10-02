@@ -863,10 +863,6 @@ LogicalResult darwinn::MultimediaOp::verify() {
   return success();
 }
 
-LogicalResult darwinn::NarrowToNarrowOp::verify() {
-  return verifyDwcArityN(*this, getInputs().size(), 1);
-}
-
 LogicalResult darwinn::NarrowToNarrowShardOp::verify() {
   return verifyDwcArityN(*this, getInputs().size(), 1);
 }

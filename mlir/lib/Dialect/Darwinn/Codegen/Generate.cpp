@@ -228,6 +228,8 @@ Body groupBody(const Group &group, Context &context) {
   }
   if (isa<FillOp>(op))
     return fill(op, context);
+  if (isa<CommunicatedJoinViewsOp>(op))
+    return joinedCopies(op, context);
   if (isa<InterpolateHardwareOp>(op))
     return interpolate(op, context);
   if (isa<UnaryTensorOpOp>(op))

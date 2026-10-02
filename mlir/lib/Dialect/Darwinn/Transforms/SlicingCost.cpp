@@ -458,6 +458,8 @@ FailureOr<Estimate> SlicingModel::estimate(Operation *operation,
   }
   if (auto copy = dyn_cast<CopyOpOp>(operation))
     return estimateCopy(copy, codes[codeId]);
+  if (auto join = dyn_cast<MathJoinOp>(operation))
+    return estimateJoin(join, codes[codeId]);
   if (auto interpolate = dyn_cast<InterpolateHardwareOp>(operation))
     return estimateInterpolate(interpolate, codes[codeId]);
   if (auto redistribute = dyn_cast<RedistributeOp>(operation))
@@ -597,6 +599,27 @@ FailureOr<Estimate> mlir::darwinn::slicing::estimateCopy(CopyOpOp copy,
   int64_t rows = product(ArrayRef<int64_t>(extent).drop_back());
   int64_t lines = llvm::divideCeilSigned(extent.back() * *bits, 128);
   return Estimate{0, {{0, rows * lines * 128 / *bits / 8}}};
+}
+
+FailureOr<Estimate> mlir::darwinn::slicing::estimateJoin(MathJoinOp join,
+                                                         const Code &code) {
+  SmallVector<int64_t> extent(shapeOf(join.getOutput()));
+  if (!code.isUnsliced()) {
+    SmallVector<int64_t> origin(code.domain.size(), 0);
+    Tile tile = tileAt(code.maps, origin);
+    for (unsigned dim = 0; dim < extent.size(); ++dim)
+      extent[dim] = tile.hi[dim] - tile.lo[dim] + 1;
+  }
+  auto bits = elementBits(join.getOutput().getType());
+  if (failed(bits))
+    return failure();
+  int64_t rows = product(ArrayRef<int64_t>(extent).drop_back());
+  int64_t cycles = 0;
+  for (Value input : join.getInputs())
+    cycles += rows *
+              llvm::divideCeilSigned(shapeOf(input).back() * *bits, 128) * 128 /
+              *bits / 8;
+  return Estimate{0, {{0, cycles}}};
 }
 
 FailureOr<Estimate>

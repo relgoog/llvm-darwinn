@@ -1050,17 +1050,6 @@ def Darwinn_MultimediaOp : Darwinn_Op<"multimedia"> {
 }
 
 // Operator: narrow_to_narrow
-def Darwinn_NarrowToNarrowOp : Darwinn_Op<"narrow_to_narrow"> {
-  let summary = "Darwinn narrow_to_narrow operation.";
-  let description = [{
-    Takes one operand.
-    No kernel shape is evidenced.
-  }];
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
-  let hasVerifier = 1;
-  let assemblyFormat = "operands attr-dict `:` functional-type(operands, results)";
-}
 
 // Operator: narrow_to_narrow_shard
 def Darwinn_NarrowToNarrowShardOp : Darwinn_Op<"narrow_to_narrow_shard"> {

@@ -164,7 +164,9 @@ SmallVector<Group> codegen::deriveSchedule(func::FuncOp function) {
       hostReaders(op, readers);
       if (llvm::none_of(readers, isPadded))
         add(GroupKind::Empty, op);
-    } else if (isa<InterpolateHardwareOp>(op)) {
+    } else if (isa<InterpolateHardwareOp>(op) ||
+               (isa<CommunicatedJoinViewsOp>(op) &&
+                resultSpace(op) == DistributedMemorySpace::TileMemory)) {
       add(GroupKind::Op, op);
     } else if (isa<RedistributeOp>(op)) {
       DistributedMemorySpace source = sourceSpace(op);

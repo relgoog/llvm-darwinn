@@ -158,6 +158,33 @@ LogicalResult validateConvolution(Operation *operation) {
   return success();
 }
 
+LogicalResult validateConcatenation(Operation *operation) {
+  auto mode = operation->getAttrOfType<IntegerAttr>("mode");
+  if (operation->getNumOperands() < 2 || operation->getNumResults() != 1 || !mode ||
+      mode.getInt() != 3 || !isSupportedTensor(operation->getResult(0).getType(), true))
+    return unsupported(operation,
+                       "concatenation requires channel mode and positive static rank-four tensors");
+
+  auto output = cast<RankedTensorType>(operation->getResult(0).getType());
+  if (!output.getElementType().isBF16())
+    return unsupported(operation, "concatenation requires bf16 inputs and output");
+
+  int64_t channels = 0;
+  for (Value operand : operation->getOperands()) {
+    if (!isSupportedTensor(operand.getType(), true))
+      return unsupported(operation, "concatenation requires positive static rank-four tensors");
+    auto input = cast<RankedTensorType>(operand.getType());
+    if (!input.getElementType().isBF16() ||
+        input.getShape().drop_back() != output.getShape().drop_back() ||
+        channels > std::numeric_limits<int32_t>::max() - input.getDimSize(3))
+      return unsupported(operation, "concatenation input shapes must agree outside channels");
+    channels += input.getDimSize(3);
+  }
+  if (channels != output.getDimSize(3))
+    return unsupported(operation, "concatenation output channels must equal the input sum");
+  return success();
+}
+
 LogicalResult validatePadding(tensor::PadOp operation) {
   auto input = operation.getSourceType();
   auto output = operation.getResultType();
@@ -450,6 +477,7 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
             name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max" ||
             (isa<dwc::TransposedConvolutionOp>(operation) &&
              (name == "x_out_dim" || name == "y_out_dim")))) ||
+          (isa<dwc::ConcatenationOp>(operation) && name == "mode") ||
           (isa<dwc::ImageInterpolationOp>(operation) &&
            (name == "algorithm" || name == "stride_method")) ||
           (isa<dwc::ReductionOp>(operation) &&
@@ -475,6 +503,12 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
 
     if (isConvolution(&operation)) {
       if (failed(validateConvolution(&operation)))
+        return failure();
+      continue;
+    }
+
+    if (isa<dwc::ConcatenationOp>(operation)) {
+      if (failed(validateConcatenation(&operation)))
         return failure();
       continue;
     }
@@ -705,6 +739,11 @@ public:
         continue;
       }
 
+      if (isa<dwc::ConcatenationOp>(operation)) {
+        values.map(operation.getResult(0), lowerConcatenation(&operation));
+        continue;
+      }
+
       if (isa<InfeedOp, OutfeedOp>(operation)) {
         auto memory = isa<InfeedOp>(operation) ? DistributedMemorySpace::TileMemory
                                                : DistributedMemorySpace::HostMemory;
@@ -817,6 +856,30 @@ public:
   }
 
 private:
+  Value lowerConcatenation(Operation *operation) {
+    auto outputType = tileType(operation->getResult(0).getType());
+    auto identity = AffineMapAttr::get(AffineMap::getMultiDimIdentityMap(4, context));
+    SmallVector<Value> inputs;
+    SmallVector<Attribute> descriptors;
+    int64_t channels = 0;
+    for (Value operand : operation->getOperands()) {
+      inputs.push_back(tileOperand(values.lookup(operand)));
+      auto shape = cast<RankedTensorType>(operand.getType()).getShape();
+      SmallVector<int32_t> limits(shape.begin(), shape.end());
+      SmallVector<AffineExpr> coordinates(identity.getValue().getResults());
+      coordinates.back() = coordinates.back() + channels;
+      descriptors.push_back(LocalCopyAttributesAttr::get(
+          context, builder.getI32ArrayAttr(limits), identity,
+          AffineMapAttr::get(AffineMap::get(4, 0, coordinates, context))));
+      channels += shape.back();
+    }
+
+    return MathJoinOp::create(builder, operation->getLoc(), outputType, inputs,
+                              JoinAttributesAttr::get(context, builder.getArrayAttr(descriptors)),
+                              sliceBegins(4), builder.getI32ArrayAttr({1, 1}),
+                              sliceEnds(outputType.getShape()));
+  }
+
   Value lowerTransposedConvolution(Operation *operation, Value input, Value filter, Value bias) {
     SmallVector<AffineExpr> dimensions;
     for (unsigned axis = 0; axis < 9; ++axis)
@@ -1254,8 +1317,8 @@ private:
 // producer directly.
 void orderLikeSdk(Block &block) {
   auto anchor = [](Operation *operation) {
-    return isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp, InterpolateHardwareOp>(
-        operation);
+    return isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp, InterpolateHardwareOp,
+               MathJoinOp>(operation);
   };
   auto parameter = [](Operation *operation) {
     auto fill = dyn_cast_if_present<FillOp>(operation);

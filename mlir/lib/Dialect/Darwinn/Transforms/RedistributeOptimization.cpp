@@ -113,7 +113,8 @@ std::optional<Slicing> slicingOf(Value value) {
 
 bool sameTiles(const Slicing &left, const Slicing &right,
                ArrayRef<int64_t> shape) {
-  if (left.domain != right.domain || left.domain.size() != 3)
+  if (left.domain.size() != 3 || right.domain.size() != 3 ||
+      left.domain[0] != right.domain[0] || left.domain[1] != right.domain[1])
     return false;
   int64_t extents[3];
   for (auto [axis, extent] : llvm::enumerate(left.domain))
@@ -121,7 +122,8 @@ bool sameTiles(const Slicing &left, const Slicing &right,
   auto box = [&](const Slicing &slicing, int64_t row, int64_t column) {
     SmallVector<int64_t> low(shape.size(), INT64_MAX);
     SmallVector<int64_t> high(shape.size(), INT64_MIN);
-    for (int64_t thread = 0; thread < extents[2]; ++thread) {
+    int64_t threads = cast<IntegerAttr>(slicing.domain[2]).getInt();
+    for (int64_t thread = 0; thread < threads; ++thread) {
       SmallVector<int64_t> begins =
           slicing.begins.getValue().compose({row, column, thread});
       SmallVector<int64_t> ends =

@@ -206,12 +206,12 @@ private:
       } else if (failed(addOperand(redistribute.getInput()))) {
         return failure();
       }
-    } else if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp,
+    } else if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp, CopyOpOp, MathJoinOp,
                    InterpolateHardwareOp>(operation)) {
       for (Value operand : operation->getOperands())
         if (failed(addOperand(operand)))
           return failure();
-      if (isa<CopyOpOp, InterpolateHardwareOp>(operation)) {
+      if (isa<CopyOpOp, MathJoinOp, InterpolateHardwareOp>(operation)) {
         FailureOr<int64_t> bytes = tileBytes(operation, element, true);
         if (failed(bytes))
           return failure();
@@ -219,8 +219,7 @@ private:
       }
     } else if (!isAlias(operation) &&
                !isa<CreateEmptyTensorOp, CommunicatedCreateEmptyTensorOp,
-                    CommunicatedCreateWriteViewOp, CommunicatedJoinViewsOp>(
-                   operation)) {
+                    CommunicatedCreateWriteViewOp, CommunicatedJoinViewsOp>(operation)) {
       return operation->emitOpError("has no recovered SDK memory usage");
     } else {
       return 0;
