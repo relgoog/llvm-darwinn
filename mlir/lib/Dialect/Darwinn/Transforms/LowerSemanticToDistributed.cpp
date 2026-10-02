@@ -365,13 +365,14 @@ LogicalResult validateRescaling(dwc::RescalingOp operation) {
   auto scales = operation->getAttrOfType<ArrayAttr>("output_activation_per_z_out_scales");
   auto padding = operation->getAttrOfType<dwc::PerZOutScalePaddingAttr>("per_z_out_scales_padding");
 
-  if (input.getShape() != output.getShape() || !input.getElementType().isF32() ||
-      !output.getElementType().isBF16() ||
+  bool narrowing = input.getElementType().isF32() && output.getElementType().isBF16();
+  bool widening = input.getElementType().isBF16() && output.getElementType().isF32();
+  if (input.getShape() != output.getShape() || !(narrowing || widening) ||
       !operation->getOperand(1).getDefiningOp<dwc::ConstNoneOp>() || !activation ||
       activation.getValue() != dwc::ActivationFunction::None || !scales || !scales.empty() ||
       !padding || padding.getValue() != dwc::PerZOutScalePadding::None)
     return unsupported(operation, "rescaling currently supports only shape-preserving "
-                                  "f32 to bf16 conversion without bias, scale or activation");
+                                  "f32 and bf16 conversion without bias, scale or activation");
 
   return success();
 }
