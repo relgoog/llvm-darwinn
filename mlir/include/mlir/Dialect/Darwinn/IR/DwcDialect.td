@@ -360,9 +360,13 @@ def Dwc_PaddingValueTypeEnum : Dwc_I32Enum<
 def Dwc_PaddingValueTypeAttr : Dwc_I32EnumAttr<"padding_value_type", Dwc_PaddingValueTypeEnum>;
 
 def Dwc_PoolUnknown : I32EnumAttrCase<"Unknown", 0, "UNKNOWN">;
+def Dwc_PoolMax : I32EnumAttrCase<"Max", 1, "MAX">;
+def Dwc_PoolAverage : I32EnumAttrCase<"Average", 2, "AVERAGE">;
 def Dwc_PoolEnum : Dwc_I32Enum<
   "Pool", "DWC pool", [
-    Dwc_PoolUnknown
+    Dwc_PoolUnknown,
+    Dwc_PoolMax,
+    Dwc_PoolAverage
   ]>;
 def Dwc_PoolAttr : Dwc_I32EnumAttr<"pool", Dwc_PoolEnum>;
 

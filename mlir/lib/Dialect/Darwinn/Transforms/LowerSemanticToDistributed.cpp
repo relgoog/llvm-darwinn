@@ -441,6 +441,9 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
            (name == "algorithm" || name == "stride_method")) ||
           (isa<dwc::ReductionOp>(operation) &&
            (name == "activation_function" || name == "dimensions" || name == "op_type")) ||
+          (isa<dwc::PoolingOp>(operation) &&
+           (name == "pool" || name == "pad" || name == "kernel_x_dim" || name == "kernel_y_dim" ||
+            name == "x_stride" || name == "y_stride")) ||
           (isa<tensor::PadOp>(operation) &&
            (name == "static_low" || name == "static_high" || name == "operandSegmentSizes" ||
             name == "nofold")) ||
@@ -490,6 +493,14 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
     if (auto rescaling = dyn_cast<dwc::RescalingOp>(operation)) {
       if (failed(validateRescaling(rescaling)))
         return failure();
+      continue;
+    }
+
+    if (isa<dwc::PoolingOp>(operation)) {
+      if (!isSupportedTensor(operation.getOperand(0).getType()) ||
+          !isSupportedTensor(operation.getResult(0).getType(), true) ||
+          !cast<ShapedType>(operation.getOperand(0).getType()).getElementType().isBF16())
+        return unsupported(&operation, "pooling requires a bf16 input and a bf16 or f32 result");
       continue;
     }
 
@@ -707,6 +718,11 @@ public:
 
       if (isa<dwc::ImageInterpolationOp>(operation)) {
         values.map(operation.getResult(0), lowerInterpolation(&operation));
+        continue;
+      }
+
+      if (isa<dwc::PoolingOp>(operation)) {
+        values.map(operation.getResult(0), lowerPooling(&operation));
         continue;
       }
 
@@ -1064,6 +1080,38 @@ private:
     return interpolation;
   }
 
+  Value lowerPooling(Operation *operation) {
+    bool maximum = operation->getAttrOfType<dwc::PoolAttr>("pool").getValue() == dwc::Pool::Max;
+    auto integer = [&](StringRef name) {
+      return operation->getAttrOfType<IntegerAttr>(name).getInt();
+    };
+    int64_t kernelY = integer("kernel_y_dim"), kernelX = integer("kernel_x_dim");
+    auto outputType = tileType(operation->getResult(0).getType());
+    SmallVector<AffineExpr> dimensions;
+    for (unsigned axis = 0; axis < 6; ++axis)
+      dimensions.push_back(builder.getAffineDimExpr(axis));
+    auto input = AffineMap::get(6, 0,
+                                {dimensions[0], dimensions[1] * integer("y_stride") + dimensions[3],
+                                 dimensions[2] * integer("x_stride") + dimensions[4],
+                                 dimensions[5]},
+                                context);
+    auto traversal = AffineMap::get(
+        6, 0, {dimensions[0], dimensions[1], dimensions[2], dimensions[5]}, context);
+    ComputeOpOptionsAttr options = computeOptions(
+        InnerOperationKind::Unary, maximum ? LinearFunctionKind::Max : LinearFunctionKind::Add, {},
+        {}, NluFunctionKind::Linear, builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), std::nullopt,
+        true, maximum ? 1.0f : 1.0f / float(kernelY * kernelX));
+    Value empty = CreateEmptyTensorOp::create(builder, operation->getLoc(), outputType,
+                                              sliceBegins(4), builder.getI32ArrayAttr({1, 1}),
+                                              sliceEnds(outputType.getShape()));
+    return StaticUnaryComputeOpOp::create(
+        builder, operation->getLoc(), outputType,
+        view(tileOperand(values.lookup(operation->getOperand(0))), input), view(empty, traversal),
+        ValueRange{}, options, traversal, builder.getArrayAttr({}), CustomTilingOptionsAttr{},
+        builder.getI32ArrayAttr({-1, -1, -1, int32_t(kernelY), int32_t(kernelX), -1}),
+        VexInfoAttr{});
+  }
+
   DistributedTensorType tileType(Type type) {
     auto tensor = cast<ShapedType>(type);
     return DistributedTensorType::get(context, tensor.getShape(), tensor.getElementType(),
@@ -1149,7 +1197,7 @@ private:
                                       NluFunctionKind nlu = NluFunctionKind::Linear,
                                       FloatAttr bias = {},
                                       std::optional<ComputeTypeHintKind> type = std::nullopt,
-                                      bool reductionHints = false) {
+                                      bool reductionHints = false, float scale = 1.0f) {
     if (!lower) {
       lower = builder.getF32FloatAttr(-std::numeric_limits<float>::infinity());
       upper = builder.getF32FloatAttr(std::numeric_limits<float>::infinity());
@@ -1164,7 +1212,7 @@ private:
     }
 
     return ComputeOpOptionsAttr::get(
-        context, inner, {}, {}, builder.getF32FloatAttr(1), {},
+        context, inner, {}, {}, builder.getF32FloatAttr(scale), {},
         bias ? bias : builder.getF32FloatAttr(0), lower, upper, {}, linear, {}, {},
         builder.getI32IntegerAttr(0), nlu, NluPreprocessKind::None, NluPredicateKind::None,
         NluPredicateKind::None, {}, false, {}, {}, {}, {}, rounding, lowering, type);

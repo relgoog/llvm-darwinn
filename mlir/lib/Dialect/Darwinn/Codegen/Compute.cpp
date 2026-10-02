@@ -116,8 +116,20 @@ void defaultProducer(Traversal &traversal) {
 
 } // namespace
 
+SmallVector<unsigned> codegen::windowDims(Operation *op) {
+  SmallVector<unsigned> out;
+  auto traversal = op->getAttrOfType<AffineMapAttr>("traversal");
+  if (!isa<UnaryTensorOpOp>(op) || !traversal ||
+      !op->getAttrOfType<ArrayAttr>("custom_constraints"))
+    return out;
+  for (unsigned dim = 0; dim < traversal.getValue().getNumDims(); ++dim)
+    if (!traversal.getValue().isFunctionOfDim(dim))
+      out.push_back(dim);
+  return out;
+}
+
 bool codegen::macCopy(Operation *op) {
-  if (!isa<UnaryTensorOpOp>(op) ||
+  if (!isa<UnaryTensorOpOp>(op) || !windowDims(op).empty() ||
       linearFunction(op) != LinearFunctionKind::Add ||
       nluFunction(op) != NluFunctionKind::Linear ||
       resultInfo(throughViews(producer(op, 0))).elementBytes != 2)
@@ -131,13 +143,14 @@ bool codegen::macCopy(Operation *op) {
 
 namespace {
 
-FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
+FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
+                                  int64_t thread = 0) {
   AffineMap traversalMap =
       op->getAttrOfType<AffineMapAttr>("traversal").getValue();
   Operation *source = producer(op, 0);
   auto [inStrides, inElem] = operandLayout(source);
   auto [outStrides, outElem] = operandLayout(producer(op, 1), op);
-  Index size = extent(viewThreadBox(source, 0));
+  Index size = extent(viewThreadBox(source, thread));
   int64_t rank = traversalMap.getNumDims();
   SmallVector<int64_t> reduced;
   for (auto [index, expr] : llvm::enumerate(traversalMap.getResults())) {
@@ -160,7 +173,100 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
   Linear linear;
   bool hasParameters = false;
   int64_t mainLoops = 1;
-  if (!reduced.empty()) {
+  if (SmallVector<unsigned> window = windowDims(op); !window.empty()) {
+    AffineMap inputMap = op->getOperand(0)
+                             .getDefiningOp()
+                             ->getAttrOfType<AffineMapAttr>("traversal")
+                             .getValue();
+    auto lhsStride = [&](unsigned dim) {
+      SmallVector<int64_t> origin(rank, 0), unit(rank, 0);
+      unit[dim] = 1;
+      SmallVector<int64_t> from = inputMap.compose(origin),
+                           to = inputMap.compose(unit);
+      int64_t stride = 0;
+      for (size_t axis = 0; axis < from.size(); ++axis)
+        stride += (to[axis] - from[axis]) * inStrides[axis];
+      return stride;
+    };
+    auto constraints = op->getAttrOfType<ArrayAttr>("custom_constraints");
+    Index outSize = extent(viewThreadBox(producer(op, 1), thread));
+    int64_t channels = outSize.back();
+    lanes = std::min(channels, kLanes);
+    blocks = ceilDiv(channels, kLanes);
+    readBytes = lanes * inElem;
+    writeBytes = lanes * outElem;
+    lastLanes = lanes;
+    int64_t taps = 1;
+    SmallVector<Counter> windowReads;
+    for (unsigned dim : llvm::reverse(window)) {
+      int64_t count = cast<IntegerAttr>(constraints[dim]).getInt();
+      taps *= count;
+      windowReads.push_back(
+          counter((count - 1) * lhsStride(dim), lhsStride(dim)));
+    }
+    SmallVector<Stream> pixels;
+    for (int64_t index = traversalMap.getNumResults() - 2; index >= 0;
+         --index) {
+      unsigned dim =
+          cast<AffineDimExpr>(traversalMap.getResult(index)).getPosition();
+      pixels.push_back({outSize[index], lhsStride(dim), outStrides[index], 0});
+    }
+    pixels = mergeStreams(pixels);
+    int64_t count = 1;
+    for (const Stream &loop : pixels)
+      count *= loop.count;
+    bool mac = linearKind == LinearFunctionKind::Add;
+    SmallVector<Counter> read(windowReads), write{counter(0, writeBytes)};
+    auto block = [&] {
+      read.push_back(counter((blocks - 1) * readBytes, readBytes));
+      write.push_back(counter((blocks - 1) * writeBytes, writeBytes));
+    };
+    auto pixelLoops = [&] {
+      for (const Stream &loop : pixels) {
+        read.push_back(counter((loop.count - 1) * loop.lhs, loop.lhs));
+        write.push_back(counter((loop.count - 1) * loop.out, loop.out));
+      }
+    };
+    SmallVector<int64_t> main{taps - 1};
+    if (mac) {
+      main.append({blocks - 1, count - 1});
+      block();
+      pixelLoops();
+    } else {
+      main.push_back(count - 1);
+      pixelLoops();
+      if (blocks > 1) {
+        main.push_back(blocks - 1);
+        block();
+      }
+    }
+    mainLoops = mac ? 1 : 2;
+    SmallVector<Counter> loops;
+    for (int64_t end : main)
+      loops.push_back(counter(end, 1, false));
+    tensor.mainOperation.counter = mainCounters(main);
+    tensor.narrowMemoryRead.counter = padded(read, 8);
+    tensor.narrowMemoryRead.byteAddressMode =
+        access(readBytes, 1u << mainLoops);
+    tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
+    tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
+        producerSync(true, mac ? 1 : 1 + pixels.size())};
+    tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(writeBytes);
+    tensor.wideMemoryReadForSums.counter = padded(loops, 8);
+    tensor.wideMemoryReadForSums.doubleBufferLoop = mac && blocks == 1 ? 2 : 1;
+    tensor.wideMemoryReadForSums.secondBufferOffset = 4;
+    if (mac) {
+      tensor.wideMemoryReadForParameters.counter = padded(loops, 8);
+      tensor.wideMemoryReadForParameters.syncProducer = {producerSync(true, 3)};
+      hasParameters = true;
+      tensor.wideMemoryReadForSums.baseAddress = 4;
+      tensor.wideMemoryReadForSums.syncProducer = {producerSync(true, 3)};
+    }
+    tensor.control.partialSumReuseMap = 1;
+    linear = baseLinear(mac ? LinearOperation::HighBandwidthMac
+                            : LinearOperation::HighBandwidthMaximum,
+                        OperandType::Bfloat);
+  } else if (!reduced.empty()) {
     int64_t axis = reduced.front();
     bool mac = linearKind == LinearFunctionKind::Add && !floatInput;
     SmallVector<Stream> pixels;
@@ -231,9 +337,10 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     SmallVector<Stream> pixels;
     for (int64_t dim = vector - 1; dim >= 0; --dim) {
       Stream loop{size[dim], inStrides[dim], outStrides[dim], 0};
-      if (!pixels.empty() && dim > 0 &&
-          loop.lhs == pixels.back().count * pixels.back().lhs &&
-          loop.out == pixels.back().count * pixels.back().out)
+      if (!pixels.empty() &&
+          ((dim > 0 && loop.lhs == pixels.back().count * pixels.back().lhs &&
+            loop.out == pixels.back().count * pixels.back().out) ||
+           (loop.count == 1 && pixels.back().count == 1)))
         pixels.back().count *= loop.count;
       else
         pixels.push_back(loop);
@@ -335,6 +442,8 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
       op,
       reciprocal ? ActivationFunction::Reciprocal : ActivationFunction::Relu,
       outElem);
+  tensor.control.nonLinear.activationPipelineScale =
+      computeOptions(op).getScaleImmediate().getValueAsDouble();
   if (reciprocal) {
     tensor.control.nonLinear.symmetricFunction = true;
     tensor.control.nonLinear.evenOddFunction = true;
@@ -491,15 +600,28 @@ Operation *codegen::storage(Operation *op) {
   }
 }
 
+namespace {
+
+Box clamped(Box box, Operation *sliced) {
+  SmallVector<int64_t, 4> shape = resultInfo(sliced).shape;
+  size_t skip = box.hi.size() - shape.size();
+  for (auto [dim, size] : llvm::enumerate(shape))
+    box.hi[skip + dim] = std::min(box.hi[skip + dim], size - 1);
+  return box;
+}
+
+} // namespace
+
 Box codegen::ownerTileBox(Operation *owner) {
   Operation *target = owner;
   if (isa<TensorOpOp, UnaryTensorOpOp>(owner))
     target = throughViews(producer(owner, destinationIndex(owner)));
-  return unionBox(*slicingOf(target), 0, 0);
+  return clamped(unionBox(*slicingOf(target), 0, 0), target);
 }
 
 Box codegen::viewThreadBox(Operation *view, int64_t thread) {
-  return threadBox(*slicingOf(throughViews(view)), thread);
+  Operation *sliced = throughViews(view);
+  return clamped(threadBox(*slicingOf(sliced), thread), sliced);
 }
 
 FailureOr<int64_t> codegen::operandAddress(Operation *view, int64_t thread,
@@ -561,11 +683,13 @@ std::pair<Index, int64_t> codegen::operandLayout(Operation *view,
 }
 
 std::array<bool, 16> codegen::activeTiles(Operation *op) {
-  auto slicing = slicingOf(throughViews(producer(op, destinationIndex(op))));
+  Operation *destination = throughViews(producer(op, destinationIndex(op)));
+  SmallVector<int64_t, 4> shape = resultInfo(destination).shape;
   std::array<bool, 16> out{};
-  for (int64_t tile = 0; tile < kTiles; ++tile)
-    out[tile] =
-        tile / kGrid < slicing->domain[0] && tile % kGrid < slicing->domain[1];
+  for (const TileBox &entry : tiles(*slicingOf(destination)))
+    out[entry.tile] |=
+        llvm::all_of_zip(tail(entry.box.lo, shape.size()), shape,
+                         [](int64_t low, int64_t size) { return low < size; });
   return out;
 }
 
@@ -677,12 +801,35 @@ Body codegen::unary(Operation *op, Context &context) {
       return failure();
     out.push_back(*tables);
   }
-  FailureOr<SmallVector<Emitted, 0>> loads = registers(op, context);
+  Index common = extent(viewThreadBox(producer(op, 1), 0));
+  SmallVector<int64_t> shared, odd;
+  for (int64_t thread : kThreadOrder) {
+    Index size = extent(viewThreadBox(producer(op, 1), thread));
+    bool empty = llvm::any_of(size, [](int64_t count) { return count <= 0; });
+    (size == common || empty ? shared : odd).push_back(thread);
+  }
+  FailureOr<SmallVector<Emitted, 0>> loads = registers(op, context, shared);
   FailureOr<TensorOp> tensorOp = unaryTensorOp(op, context);
   if (failed(loads) || failed(tensorOp))
     return failure();
+  std::array<bool, 4> threads{};
+  for (int64_t thread : shared)
+    threads[thread] = true;
+  tensorOp->control.threadMulticastBitmap = threads;
   llvm::append_range(out, *loads);
   out.push_back(tensor(*tensorOp, activeTiles(op), bits<8>("10100000")));
+  for (int64_t thread : odd) {
+    FailureOr<TensorOp> single = unaryTensorOp(op, context, thread);
+    FailureOr<int64_t> lhs = operandAddress(producer(op, 0), thread, context);
+    FailureOr<int64_t> result =
+        operandAddress(producer(op, 1), thread, context, op);
+    if (failed(single) || failed(lhs) || failed(result))
+      return unsupported(op, "an unplaced unary operand");
+    single->narrowMemoryRead.baseAddress = *lhs;
+    single->narrowMemoryWriteFromNonLinear.baseAddress = *result;
+    single->control.threadMulticastBitmap = threadBit(thread);
+    out.push_back(tensor(*single, activeTiles(op), {}));
+  }
   return out;
 }
 

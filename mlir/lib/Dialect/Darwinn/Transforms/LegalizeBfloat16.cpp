@@ -116,7 +116,7 @@ std::optional<dwc::CwiseOpType> binaryKind(linalg::GenericOp operation) {
 bool isCompute(Operation *operation) {
   return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp,
              dwc::TransposedConvolutionOp, dwc::CwiseOp, dwc::ReductionOp,
-             linalg::GenericOp>(operation);
+             dwc::PoolingOp, linalg::GenericOp>(operation);
 }
 
 std::optional<int32_t> sumAxis(linalg::GenericOp operation) {
@@ -397,6 +397,13 @@ LogicalResult validateFunction(func::FuncOp function) {
       continue;
     }
 
+    if (isa<dwc::PoolingOp>(operation)) {
+      if (!staticF32(operation.getOperand(0).getType()) ||
+          !staticF32(operation.getResult(0).getType()))
+        return unsupported(&operation, "pooling requires static f32 input and output");
+      continue;
+    }
+
     if (isa<dwc::ReductionOp>(operation)) {
       auto input = operation.getNumOperands() == 1
           ? dyn_cast<RankedTensorType>(operation.getOperand(0).getType()) : RankedTensorType();
@@ -555,8 +562,10 @@ public:
 
       bool terminal = operation.getResult(0).hasOneUse() &&
           isa<func::ReturnOp>(*operation.getResult(0).getUsers().begin());
-      bool boundaryCast = terminal && isa<dwc::ReshapeOp, dwc::TransposeOp,
-                                          dwc::ImageInterpolationOp>(operation);
+      auto pool = operation.getAttrOfType<dwc::PoolAttr>("pool");
+      bool boundaryCast = terminal && (isa<dwc::ReshapeOp, dwc::TransposeOp,
+                                           dwc::ImageInterpolationOp>(operation) ||
+                                       (pool && pool.getValue() == dwc::Pool::Max));
       Type resultType = terminal && !boundaryCast ? operation.getResult(0).getType()
                                                 : bfloatType(operation.getResult(0).getType());
 

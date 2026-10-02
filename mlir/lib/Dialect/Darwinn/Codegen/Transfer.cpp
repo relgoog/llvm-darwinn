@@ -496,8 +496,14 @@ Body codegen::modelOutput(Operation *op, Context &context) {
     strides[dim] = strides[dim + 1] * full[dim + 1];
   std::array<bool, 8> channels = bits<8>("10000000");
   int64_t elem = resultInfo(op).elementBytes;
+  SmallVector<int64_t, 4> held = resultInfo(source).shape;
+  SmallVector<TileBox> boxes;
+  for (const TileBox &entry : tiles(*slicingOf(source)))
+    if (llvm::all_of_zip(tail(entry.box.lo, held.size()), held,
+                         [](int64_t low, int64_t size) { return low < size; }))
+      boxes.push_back(entry);
   SmallVector<Emitted, 0> out;
-  for (auto [order, entry] : llvm::enumerate(tiles(*slicingOf(source)))) {
+  for (auto [order, entry] : llvm::enumerate(boxes)) {
     Index size = extent(entry.box);
     Index low = tail(entry.box.lo, full.size());
     if (view)

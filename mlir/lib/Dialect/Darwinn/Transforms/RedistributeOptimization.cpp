@@ -21,8 +21,26 @@ struct Slicing {
   AffineMapAttr ends;
 
   bool operator==(const Slicing &other) const {
-    return begins == other.begins && domain == other.domain &&
-           ends == other.ends;
+    if (domain != other.domain)
+      return false;
+    if (begins == other.begins && ends == other.ends)
+      return true;
+    SmallVector<int64_t> point(domain.size(), 0);
+    while (true) {
+      if (begins.getValue().compose(point) !=
+              other.begins.getValue().compose(point) ||
+          ends.getValue().compose(point) !=
+              other.ends.getValue().compose(point))
+        return false;
+      size_t axis = 0;
+      for (; axis < point.size(); ++axis) {
+        if (++point[axis] < cast<IntegerAttr>(domain[axis]).getInt())
+          break;
+        point[axis] = 0;
+      }
+      if (axis == point.size())
+        return true;
+    }
   }
 };
 
@@ -93,6 +111,35 @@ std::optional<Slicing> slicingOf(Value value) {
   return slicingOf(producer);
 }
 
+bool sameTiles(const Slicing &left, const Slicing &right,
+               ArrayRef<int64_t> shape) {
+  if (left.domain != right.domain || left.domain.size() != 3)
+    return false;
+  int64_t extents[3];
+  for (auto [axis, extent] : llvm::enumerate(left.domain))
+    extents[axis] = cast<IntegerAttr>(extent).getInt();
+  auto box = [&](const Slicing &slicing, int64_t row, int64_t column) {
+    SmallVector<int64_t> low(shape.size(), INT64_MAX);
+    SmallVector<int64_t> high(shape.size(), INT64_MIN);
+    for (int64_t thread = 0; thread < extents[2]; ++thread) {
+      SmallVector<int64_t> begins =
+          slicing.begins.getValue().compose({row, column, thread});
+      SmallVector<int64_t> ends =
+          slicing.ends.getValue().compose({row, column, thread});
+      for (size_t dim = 0; dim < shape.size(); ++dim) {
+        low[dim] = std::min(low[dim], std::max<int64_t>(begins[dim], 0));
+        high[dim] = std::max(high[dim], std::min(ends[dim], shape[dim] - 1));
+      }
+    }
+    return std::make_pair(low, high);
+  };
+  for (int64_t row = 0; row < extents[0]; ++row)
+    for (int64_t column = 0; column < extents[1]; ++column)
+      if (box(left, row, column) != box(right, row, column))
+        return false;
+  return true;
+}
+
 bool isNoOp(RedistributeOp redistribute) {
   Value input = redistribute.getInput();
   MappingAttr mapping = redistribute.getMappingAttr();
@@ -104,7 +151,11 @@ bool isNoOp(RedistributeOp redistribute) {
       memorySpaceOf(input) != DistributedMemorySpace::TileMemory)
     return false;
   std::optional<Slicing> source = slicingOf(input);
-  return source && source == slicingOf(redistribute.getOperation());
+  std::optional<Slicing> result = slicingOf(redistribute.getOperation());
+  return source && result &&
+         (source == result ||
+          sameTiles(*source, *result,
+                    cast<DistributedTensorType>(input.getType()).getShape()));
 }
 
 // A reshape that splits or merges only dims every tile holds whole, with the

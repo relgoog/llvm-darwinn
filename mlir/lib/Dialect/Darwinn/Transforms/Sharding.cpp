@@ -336,9 +336,8 @@ LogicalResult relate(Group &group, bool required) {
   }
   if (!group.extents.empty())
     return success();
-  SmallVector<Value> operands(anchor->getOperands());
   FailureOr<SmallVector<int64_t>> extents =
-      iterationExtents(group.coordinates[anchor].getNumDims(), operands);
+      iterationExtents(group.coordinates[anchor].getNumDims(), anchor);
   if (failed(extents))
     return anchor->emitOpError("has no iteration extents");
   group.extents = std::move(*extents);

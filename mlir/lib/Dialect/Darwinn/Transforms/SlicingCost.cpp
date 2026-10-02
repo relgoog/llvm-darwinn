@@ -478,7 +478,7 @@ mlir::darwinn::slicing::estimateCompute(Operation *operation, const Code &code,
                                         bool transposed) {
   AffineMap traversal = traversalOf(operation);
   SmallVector<Value> views(operation->getOperands());
-  auto extents = iterationExtents(traversal.getNumDims(), views);
+  auto extents = iterationExtents(traversal.getNumDims(), operation);
   if (failed(extents))
     return operation->emitOpError("has views without linear traversals");
   SmallVector<int64_t> nest(*extents);

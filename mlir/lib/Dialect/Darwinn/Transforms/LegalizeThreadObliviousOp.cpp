@@ -33,10 +33,17 @@ void mergeSlicing(Operation *operation) {
       kBegins,
       AffineMapAttr::get(mergeThreads(
           operation->getAttrOfType<AffineMapAttr>(kBegins).getValue(), 0)));
-  operation->setAttr(
-      kEnds, AffineMapAttr::get(mergeThreads(
-                 operation->getAttrOfType<AffineMapAttr>(kEnds).getValue(),
-                 threads - 1)));
+  AffineMap ends = mergeThreads(
+      operation->getAttrOfType<AffineMapAttr>(kEnds).getValue(), threads - 1);
+  if (auto shaped = dyn_cast<ShapedType>(operation->getResult(0).getType())) {
+    SmallVector<AffineExpr> clamped(ends.getResults());
+    for (auto [dim, end] : llvm::enumerate(clamped))
+      if (auto constant = dyn_cast<AffineConstantExpr>(end);
+          constant && constant.getValue() >= shaped.getDimSize(dim))
+        end = builder.getAffineConstantExpr(shaped.getDimSize(dim) - 1);
+    ends = AffineMap::get(ends.getNumDims(), 0, clamped, builder.getContext());
+  }
+  operation->setAttr(kEnds, AffineMapAttr::get(ends));
   operation->setAttr(kDomain, builder.getArrayAttr({domain[0], domain[1]}));
 }
 

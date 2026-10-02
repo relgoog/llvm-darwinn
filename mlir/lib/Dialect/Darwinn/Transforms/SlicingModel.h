@@ -60,7 +60,7 @@ ArrayRef<int64_t> shapeOf(Value value);
 DistributedMemorySpace memorySpaceOf(Value value);
 AffineMap traversalOf(Operation *operation);
 FailureOr<SmallVector<int64_t>> iterationExtents(unsigned dims,
-                                                 ArrayRef<Value> views);
+                                                 Operation *anchor);
 Tile reshapeTile(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
                  const Tile &tile);
 AffineMap mergeThreads(AffineMap map, int64_t thread);

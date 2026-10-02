@@ -1688,6 +1688,26 @@ LogicalResult dwc::PackBitsOp::verify() {
 }
 
 LogicalResult dwc::PoolingOp::verify() {
+  if (getInputs().size() != 1 || getOutputs().size() != 1)
+    return emitOpError("expects one input and one result");
+  auto input = llvm::dyn_cast<RankedTensorType>(getInputs()[0].getType());
+  auto output = llvm::dyn_cast<RankedTensorType>(getOutputs()[0].getType());
+  auto pool = (*this)->getAttrOfType<PoolAttr>("pool");
+  auto padding = (*this)->getAttrOfType<PaddingAttr>("pad");
+  if (!input || !output || input.getRank() != 4 || output.getRank() != 4 || !pool ||
+      pool.getValue() == Pool::Unknown || !padding || padding.getValue() != Padding::None)
+    return emitOpError("expects rank-four input and result, MAX or AVERAGE pool and NONE padding");
+  for (auto [kernel, stride, axis] : {std::tuple{"kernel_y_dim", "y_stride", 1},
+                                      std::tuple{"kernel_x_dim", "x_stride", 2}}) {
+    auto window = (*this)->getAttrOfType<IntegerAttr>(kernel);
+    auto step = (*this)->getAttrOfType<IntegerAttr>(stride);
+    if (!window || !step || window.getInt() < 1 || step.getInt() < 1 ||
+        input.getDimSize(axis) < window.getInt() ||
+        output.getDimSize(axis) != (input.getDimSize(axis) - window.getInt()) / step.getInt() + 1)
+      return emitOpError("expects positive windows and strides that match the result shape");
+  }
+  if (input.getDimSize(0) != output.getDimSize(0) || input.getDimSize(3) != output.getDimSize(3))
+    return emitOpError("expects batch and channels to pass through");
   return success();
 }
 

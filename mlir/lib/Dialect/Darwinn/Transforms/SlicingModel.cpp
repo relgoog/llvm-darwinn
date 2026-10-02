@@ -481,12 +481,13 @@ SlicingModel::derive(unsigned blockId, unsigned codeId) {
   if (isa<StaticComputeOpOp, StaticUnaryComputeOpOp>(anchor)) {
     AffineMap traversal = traversalOf(anchor);
     SmallVector<Value> views(anchor->getOperands());
-    auto extents = iterationExtents(traversal.getNumDims(), views);
+    auto extents = iterationExtents(traversal.getNumDims(), anchor);
     if (failed(extents))
       return anchor->emitOpError("has views without linear traversals");
     unsigned iterationDims = traversal.getNumDims();
     SmallVector<AffineExpr> low;
     SmallVector<AffineExpr> high;
+    SmallVector<bool> full(iterationDims, true);
     for (int64_t extent : *extents) {
       low.push_back(getAffineConstantExpr(0, context));
       high.push_back(getAffineConstantExpr(extent - 1, context));
@@ -503,6 +504,12 @@ SlicingModel::derive(unsigned blockId, unsigned codeId) {
         continue;
       AffineExpr begin = code.maps.begins.getResult(index);
       AffineExpr end = code.maps.ends.getResult(index);
+      auto first = dyn_cast<AffineConstantExpr>(begin);
+      auto last = dyn_cast<AffineConstantExpr>(end);
+      bool whole = first && last && first.getValue() == 0 &&
+                   last.getValue() == shapeOf(block.key)[index] - 1;
+      for (unsigned dim : active)
+        full[dim] = whole;
       if (active.size() == 1) {
         unsigned dim = active.front();
         int64_t coefficient = form->coefficients[dim];
@@ -540,7 +547,24 @@ SlicingModel::derive(unsigned blockId, unsigned codeId) {
         result[source] = whole(source);
         continue;
       }
-      result[source] = image(traversalOf(createView), low, high);
+      AffineMap map = traversalOf(createView);
+      SliceMaps maps = image(map, low, high);
+      SmallVector<AffineExpr> begins(maps.begins.getResults());
+      SmallVector<AffineExpr> ends(maps.ends.getResults());
+      for (auto [index, expression] : llvm::enumerate(map.getResults())) {
+        bool allFull = true;
+        expression.walk([&](AffineExpr sub) {
+          if (auto dimension = dyn_cast<AffineDimExpr>(sub))
+            allFull &= full[dimension.getPosition()];
+        });
+        if (!allFull)
+          continue;
+        begins[index] = getAffineConstantExpr(0, context);
+        ends[index] =
+            getAffineConstantExpr(shapeOf(source)[index] - 1, context);
+      }
+      result[source] = {AffineMap::get(dims, 0, begins, context),
+                        AffineMap::get(dims, 0, ends, context)};
     }
   } else if (auto copy = dyn_cast<CopyOpOp>(anchor)) {
     result[copy.getInput()] =
@@ -851,13 +875,13 @@ AffineMap mlir::darwinn::slicing::traversalOf(Operation *operation) {
 }
 
 FailureOr<SmallVector<int64_t>>
-mlir::darwinn::slicing::iterationExtents(unsigned dims, ArrayRef<Value> views) {
+mlir::darwinn::slicing::iterationExtents(unsigned dims, Operation *anchor) {
   struct Equation {
     LinearForm form;
     int64_t size;
   };
   SmallVector<Equation> equations;
-  for (Value view : views) {
+  for (Value view : anchor->getOperands()) {
     Operation *producer = view.getDefiningOp();
     AffineMap traversal = producer ? traversalOf(producer) : AffineMap();
     if (!traversal)
@@ -867,6 +891,11 @@ mlir::darwinn::slicing::iterationExtents(unsigned dims, ArrayRef<Value> views) {
         equations.push_back({*form, shapeOf(view)[index]});
   }
   SmallVector<std::optional<int64_t>> extents(dims);
+  if (auto constraints = anchor->getAttrOfType<ArrayAttr>("custom_constraints"))
+    for (auto [index, constraint] : llvm::enumerate(constraints))
+      if (int64_t size = cast<IntegerAttr>(constraint).getInt();
+          size >= 0 && index < dims)
+        extents[index] = size;
   bool changed = true;
   while (changed) {
     changed = false;
