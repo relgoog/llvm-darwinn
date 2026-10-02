@@ -436,6 +436,37 @@ LogicalResult validateInterpolation(dwc::ImageInterpolationOp operation) {
   return success();
 }
 
+FloatAttr foldedExponentScale(dwc::RescalingOp operation) {
+  if (!operation || operation->getNumOperands() != 2 || operation->getNumResults() != 1)
+    return {};
+
+  auto input = dyn_cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto output = dyn_cast<RankedTensorType>(operation->getResult(0).getType());
+  auto subtraction = operation->getOperand(0).getDefiningOp<dwc::CwiseOp>();
+  auto activation = operation->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+  auto scales = operation->getAttrOfType<ArrayAttr>("output_activation_per_z_out_scales");
+  auto padding = operation->getAttrOfType<dwc::PerZOutScalePaddingAttr>("per_z_out_scales_padding");
+
+  if (!input || input != output || !input.getElementType().isBF16() || input.getRank() != 4 ||
+      !subtraction || !subtraction->hasOneUse() ||
+      subtraction->getAttrOfType<dwc::CwiseOpTypeAttr>("op_type").getValue() !=
+          dwc::CwiseOpType::Subtract ||
+      subtraction->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function").getValue() !=
+          dwc::ActivationFunction::None ||
+      !operation->getOperand(1).getDefiningOp<dwc::ConstNoneOp>() || !activation ||
+      activation.getValue() != dwc::ActivationFunction::Exp || !scales || scales.empty() ||
+      int64_t(scales.size()) != input.getShape().back() || !padding ||
+      padding.getValue() != dwc::PerZOutScalePadding::None)
+    return {};
+
+  auto scale = dyn_cast<FloatAttr>(scales[0]);
+  if (!scale || !scale.getType().isF32() || !scale.getValue().isFinite() ||
+      !llvm::all_of(scales, [&](Attribute value) { return value == scale; }))
+    return {};
+
+  return scale;
+}
+
 LogicalResult validateRescaling(dwc::RescalingOp operation) {
   if (operation->getNumOperands() != 2 || operation->getNumResults() != 1 ||
       !isSupportedTensor(operation->getOperand(0).getType()) ||
@@ -449,14 +480,18 @@ LogicalResult validateRescaling(dwc::RescalingOp operation) {
   auto scales = operation->getAttrOfType<ArrayAttr>("output_activation_per_z_out_scales");
   auto padding = operation->getAttrOfType<dwc::PerZOutScalePaddingAttr>("per_z_out_scales_padding");
 
+  if (foldedExponentScale(operation))
+    return success();
+
   bool narrowing = input.getElementType().isF32() && output.getElementType().isBF16();
   bool widening = input.getElementType().isBF16() && output.getElementType().isF32();
   if (input.getShape() != output.getShape() || !(narrowing || widening) ||
       !operation->getOperand(1).getDefiningOp<dwc::ConstNoneOp>() || !activation ||
       activation.getValue() != dwc::ActivationFunction::None || !scales || !scales.empty() ||
       !padding || padding.getValue() != dwc::PerZOutScalePadding::None)
-    return unsupported(operation, "rescaling currently supports only shape-preserving "
-                                  "f32 and bf16 conversion without bias, scale or activation");
+    return unsupported(operation, "rescaling requires f32 and bf16 conversion without bias, scale "
+                                  "or activation, or a uniformly scaled EXP after a single-use "
+                                  "bf16 subtraction");
 
   return success();
 }
@@ -831,12 +866,23 @@ public:
         continue;
       }
 
+      auto cwise = dyn_cast<dwc::CwiseOp>(operation);
+      if (cwise && cwise->hasOneUse() &&
+          foldedExponentScale(dyn_cast<dwc::RescalingOp>(*cwise->getUsers().begin())))
+        continue;
+
+      auto rescaling = dyn_cast<dwc::RescalingOp>(operation);
+      FloatAttr scale = foldedExponentScale(rescaling);
+      if (scale)
+        cwise = rescaling->getOperand(0).getDefiningOp<dwc::CwiseOp>();
+
       auto outputType = tileType(operation.getResult(0).getType());
       auto traversal = AffineMap::getMultiDimIdentityMap(outputType.getRank(), context);
       SmallVector<Value> operands;
-      unsigned count = isa<dwc::CwiseOp>(operation) ? 2 : 1;
+      Operation *source = cwise ? cwise.getOperation() : &operation;
+      unsigned count = cwise ? 2 : 1;
 
-      for (Value operand : operation.getOperands().take_front(count)) {
+      for (Value operand : source->getOperands().take_front(count)) {
         operands.push_back(view(tileOperand(values.lookup(operand)), outputType.getShape()));
       }
 
@@ -846,7 +892,7 @@ public:
       Value destination = view(empty, outputType.getShape());
       Value result;
 
-      if (auto cwise = dyn_cast<dwc::CwiseOp>(operation)) {
+      if (cwise) {
         auto kind = cwise->getAttrOfType<dwc::CwiseOpTypeAttr>("op_type").getValue();
         auto linear = kind == dwc::CwiseOpType::Multiply   ? LinearFunctionKind::Mac
                       : kind == dwc::CwiseOpType::Subtract ? LinearFunctionKind::Sub
@@ -857,15 +903,16 @@ public:
 
         // SDK stage 238 clips every softmax exponent input to this range, across four probes
         // with differing beta and shape. Its derivation in the SDK is not recovered.
-        if (activation == dwc::ActivationFunction::Exp)
+        if (activation == dwc::ActivationFunction::Exp || scale)
           options = computeOptions(InnerOperationKind::Elementwise, linear,
                                    builder.getF32FloatAttr(-12.9571848f),
-                                   builder.getF32FloatAttr(0.0f), NluFunctionKind::Exp);
+                                   builder.getF32FloatAttr(0.0f), NluFunctionKind::Exp, {}, {},
+                                   false, scale ? scale.getValueAsDouble() : 1.0f);
 
-        Value computed = StaticComputeOpOp::create(
-            builder, location, outputType, operands[0], operands[1], destination, ValueRange{},
-            options, traversal, ArrayAttr{}, CustomTilingOptionsAttr{}, DtcInfoAttr{},
-            VexInfoAttr{});
+        Value computed =
+            StaticComputeOpOp::create(builder, location, outputType, operands[0], operands[1],
+                                      destination, ValueRange{}, options, traversal, ArrayAttr{},
+                                      CustomTilingOptionsAttr{}, DtcInfoAttr{}, VexInfoAttr{});
         result = computed;
       } else {
         result = StaticUnaryComputeOpOp::create(

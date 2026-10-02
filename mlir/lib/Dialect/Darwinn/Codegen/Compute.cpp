@@ -90,7 +90,8 @@ NonLinear nonLinear(Operation *op, ActivationFunction function,
                     int64_t outputBytes) {
   NonLinear out;
   out.operation = function;
-  out.activationPipelineScale = 1.0f;
+  out.activationPipelineScale =
+      computeOptions(op).getScaleImmediate().getValueAsDouble();
   if (auto bias = immediateBias(op))
     out.immediateBias = *bias;
   auto [low, high] = clips(op);
@@ -450,8 +451,6 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
       op,
       reciprocal ? ActivationFunction::Reciprocal : ActivationFunction::Relu,
       outElem);
-  tensor.control.nonLinear.activationPipelineScale =
-      computeOptions(op).getScaleImmediate().getValueAsDouble();
   if (reciprocal) {
     tensor.control.nonLinear.symmetricFunction = true;
     tensor.control.nonLinear.evenOddFunction = true;

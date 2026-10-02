@@ -1606,7 +1606,7 @@ struct ClassifierLowering : public RewritePattern {
     auto opType = op->getAttrOfType<ClassificationTypeAttr>("op_type");
     if (!axis || !beta || !opType)
       return failure();
-    if (axis.getInt() != -1 || beta.getValueAsDouble() != 1.0 ||
+    if (axis.getInt() != -1 || !beta.getType().isF32() || !beta.getValue().isFinite() ||
         opType.getValue() != ClassificationType::Softmax)
       return failure();
     if (op->getNumResults() != 1 || op->getNumOperands() != 1)
@@ -1652,17 +1652,29 @@ struct ClassifierLowering : public RewritePattern {
     auto idMap = rewriter.getMultiDimIdentityMap(rank);
     SmallVector<utils::IteratorType> expIters(rank, utils::IteratorType::parallel);
     Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-    auto shifted = rewriter.create<linalg::GenericOp>(loc, TypeRange{dstTy}, ValueRange{input}, ValueRange{emptyExp}, SmallVector<AffineMap>{idMap, idMap}, expIters, [&](OpBuilder &nested, Location nloc, ValueRange args) {
-         SmallVector<Value> idx;
-         if (rankOne)
-            idx.push_back(zeroIdx);
-         else for (int64_t d = 0; d < last; ++d)
-            idx.push_back(nested.create<linalg::IndexOp>(nloc, d));
-         Value best = nested.create<tensor::ExtractOp>(nloc, maxOut, ValueRange{idx});
-         Value diff = nested.create<arith::SubFOp>(nloc, args[0], best);
-         Value exp = nested.create<math::ExpOp>(nloc, diff);
-         nested.create<linalg::YieldOp>(nloc, exp);
-      }).getResult(0);
+    auto shifted = rewriter
+                       .create<linalg::GenericOp>(
+                           loc, TypeRange{dstTy}, ValueRange{input}, ValueRange{emptyExp},
+                           SmallVector<AffineMap>{idMap, idMap}, expIters,
+                           [&](OpBuilder &nested, Location nloc, ValueRange args) {
+                             SmallVector<Value> idx;
+                             if (rankOne)
+                               idx.push_back(zeroIdx);
+                             else
+                               for (int64_t d = 0; d < last; ++d)
+                                 idx.push_back(nested.create<linalg::IndexOp>(nloc, d));
+                             Value best =
+                                 nested.create<tensor::ExtractOp>(nloc, maxOut, ValueRange{idx});
+                             Value diff = nested.create<arith::SubFOp>(nloc, args[0], best);
+                             if (beta.getValueAsDouble() != 1.0) {
+                               Value scale = nested.create<arith::ConstantOp>(
+                                   nloc, nested.getFloatAttr(element, beta.getValueAsDouble()));
+                               diff = nested.create<arith::MulFOp>(nloc, scale, diff);
+                             }
+                             Value exp = nested.create<math::ExpOp>(nloc, diff);
+                             nested.create<linalg::YieldOp>(nloc, exp);
+                           })
+                       .getResult(0);
     Value emptySum = rewriter.create<tensor::EmptyOp>(loc, outerShape, element);
     Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(element));
     Value initialSum = rewriter.create<linalg::FillOp>(

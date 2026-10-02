@@ -503,10 +503,12 @@ LogicalResult validateFunction(func::FuncOp function) {
       auto kind = operation.getAttrOfType<dwc::ClassificationTypeAttr>("op_type");
       if (operation.getNumOperands() != 1 || operation.getNumResults() != 1 ||
           !staticF32(operation.getOperand(0).getType()) ||
-          operation.getOperand(0).getType() != operation.getResult(0).getType() ||
-          !axis || axis.getInt() != -1 || !beta || beta.getValueAsDouble() != 1.0 ||
+          operation.getOperand(0).getType() != operation.getResult(0).getType() || !axis ||
+          axis.getInt() != -1 || !beta || !beta.getType().isF32() || !beta.getValue().isFinite() ||
           !kind || kind.getValue() != dwc::ClassificationType::Softmax)
-        return unsupported(&operation, "softmax requires matching static f32 tensors, axis -1 and beta 1");
+        return unsupported(
+            &operation,
+            "softmax requires matching static f32 tensors, axis -1 and finite f32 beta");
       continue;
     }
 

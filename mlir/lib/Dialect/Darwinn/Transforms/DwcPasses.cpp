@@ -3664,8 +3664,26 @@ struct DwcDwcPostTruncationTpuFitterPass
       };
 
       Value maximum = reduce(input, dwc::ReductionType::Max, dwc::SimpleActivationFunction::None);
+      auto beta = classifier->getAttrOfType<FloatAttr>("beta");
+      bool scaled = beta.getValueAsDouble() != 1.0;
       Value exponent =
-          cwise(input, maximum, dwc::CwiseOpType::Subtract, dwc::ActivationFunction::Exp, type);
+          cwise(input, maximum, dwc::CwiseOpType::Subtract,
+                scaled ? dwc::ActivationFunction::None : dwc::ActivationFunction::Exp, type);
+
+      if (scaled) {
+        Value absent = create(dwc::ConstNoneOp::getOperationName(), {}, builder.getNoneType(), {});
+        SmallVector<Attribute> scales(type.getShape().back(), beta);
+        exponent = create(dwc::RescalingOp::getOperationName(), {exponent, absent}, type,
+                          {builder.getNamedAttr("activation_function",
+                                                dwc::ActivationFunctionAttr::get(
+                                                    context, dwc::ActivationFunction::Exp)),
+                           builder.getNamedAttr("output_activation_per_z_out_scales",
+                                                builder.getArrayAttr(scales)),
+                           builder.getNamedAttr("per_z_out_scales_padding",
+                                                dwc::PerZOutScalePaddingAttr::get(
+                                                    context, dwc::PerZOutScalePadding::None))});
+      }
+
       Value reciprocal =
           reduce(exponent, dwc::ReductionType::Sum, dwc::SimpleActivationFunction::Reciprocal);
       Value normalized = cwise(exponent, reciprocal, dwc::CwiseOpType::Multiply,

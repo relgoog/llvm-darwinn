@@ -150,9 +150,11 @@ LogicalResult dwc::ClassifierOp::verify() {
     return (*this)->emitOpError("attribute 'op_type' expects ClassificationTypeAttr");
   if (llvm::cast<IntegerAttr>((*this)->getAttr("axis")).getInt() != -1)
     return (*this)->emitOpError("attribute 'axis' expects -1");
-  if (llvm::cast<FloatAttr>((*this)->getAttr("beta")).getValueAsDouble() != 1.0)
-    return (*this)->emitOpError("attribute 'beta' expects 1.0");
-  if (llvm::cast<ClassificationTypeAttr>((*this)->getAttr("op_type")).getValue() != ClassificationType::Softmax)
+  auto beta = llvm::cast<FloatAttr>((*this)->getAttr("beta"));
+  if (!beta.getType().isF32() || !beta.getValue().isFinite())
+    return (*this)->emitOpError("attribute 'beta' expects a finite f32 value");
+  if (llvm::cast<ClassificationTypeAttr>((*this)->getAttr("op_type")).getValue() !=
+      ClassificationType::Softmax)
     return (*this)->emitOpError("attribute 'op_type' expects SOFTMAX");
   return success();
 }
