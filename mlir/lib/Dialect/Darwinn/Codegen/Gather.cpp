@@ -633,7 +633,8 @@ void pushDim(SmallVector<Counter> &items, const Dim &dim) {
 FailureOr<SmallVector<Step>>
 localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
             const GatherPlan &p, const Order &sourceOrder,
-            const Order &destinationOrder, int64_t sourcePixelBytes = 0) {
+            const Order &destinationOrder, int64_t sourcePixelBytes = 0,
+            int64_t *requiredWideRows = nullptr) {
   if (p.vector)
     return vectorCopies(op, copies, p);
   SmallVector<std::pair<int64_t, std::map<int64_t, Copy>>> groups;
@@ -666,7 +667,6 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
   int64_t segments = free;
   while (width % segments)
     segments /= 2;
-  int64_t segmentPixels = width / segments;
   SmallVector<Step> blocks;
   for (const auto &[rows, members] : groups) {
     SmallVector<int64_t> tiles;
@@ -685,14 +685,20 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
     while (rows % rowGroups)
       rowGroups /= 2;
     int64_t groupRows = rows / rowGroups;
-    for (int64_t thread = 0; thread < granules * segments * rowGroups;
+    int64_t segmentCount = std::min(width, free / rowGroups);
+    int64_t segmentWidth = ceilDiv(width, segmentCount);
+    for (int64_t thread = 0; thread < granules * segmentCount * rowGroups;
          ++thread) {
       std::array<bool, 4> bitmap = threadBit(thread);
       int64_t granule = thread % granules,
-              segment = thread / granules % segments,
-              rowGroup = thread / (granules * segments);
-      int64_t offset = segment * segmentPixels * pixelBytes + granule * element;
-      int64_t sourceOffset = segment * segmentPixels * readPixelBytes +
+              segment = thread / granules % segmentCount,
+              rowGroup = thread / (granules * segmentCount);
+      int64_t segmentPixels =
+          std::min(segmentWidth, width - segment * segmentWidth);
+      if (segmentPixels <= 0)
+        continue;
+      int64_t offset = segment * segmentWidth * pixelBytes + granule * element;
+      int64_t sourceOffset = segment * segmentWidth * readPixelBytes +
                              granule * element +
                              rowGroup * groupRows * readRowBytes;
       int64_t destinationOffset = offset + rowGroup * groupRows * stride;
@@ -711,10 +717,12 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
                      {groupRows, readRowBytes, false}});
       int64_t run = readDims.front().count * bytes;
       int64_t accessBytes = std::min<int64_t>(
-          run, llvm::isPowerOf2_64(run) || run > 128 ? 128 : run & -run);
+          run,
+          merged || llvm::isPowerOf2_64(run) || run > 128 ? 128 : run & -run);
+      int64_t accessGranule = readDims.size() == 1 ? bytes : 4;
       if (run > 128)
-        while (accessBytes > 8 && run % accessBytes)
-          accessBytes -= 8;
+        while (accessBytes > accessGranule && run % accessBytes)
+          accessBytes -= accessGranule;
       if (!sourcePixelBytes)
         writeElement = std::min(writeElement, accessBytes & -accessBytes);
       SmallVector<Counter> readItems;
@@ -760,6 +768,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       SmallVector<int64_t> wideCounts;
       std::optional<int64_t> innerIndex;
       int64_t filled = 1;
+      int64_t tail = 0, tailLimit = 0;
       for (const Dim &dim : writeDims) {
         if (innerIndex || dim.count == 1) {
           if (innerIndex && (dim.count > 1 || dim.offset))
@@ -768,8 +777,13 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
           continue;
         }
         int64_t take = std::min(perWideRow / filled, dim.count);
-        while (dim.count % take)
+        while ((writeElement != kSlice || writeDims.size() != 1) &&
+               dim.count % take)
           --take;
+        if (dim.count % take) {
+          tail = filled * (dim.count % take);
+          tailLimit = (dim.count % take - 1) * dim.stride;
+        }
         if (take > 1)
           scatterItems.push_back(counter((take - 1) * dim.stride, dim.stride));
         filled *= take;
@@ -780,7 +794,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
                                  "whole wide rows");
         innerIndex = scatterItems.size() - 1;
         if (dim.count > take) {
-          int64_t wide = dim.count / take;
+          int64_t wide = ceilDiv(dim.count, take);
           wideCounts.push_back(wide);
           scatterItems.push_back(
               counter((wide - 1) * take * dim.stride, take * dim.stride));
@@ -790,6 +804,9 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
         innerIndex = scatterItems.size() - 1;
       if (!innerIndex)
         return unsupported(op, "a gather copy without a wide row");
+      if (tail && wideCounts.size() != 1)
+        return unsupported(
+            op, "a partial gather row with outer strided dimensions");
 
       int64_t wideRows = 1;
       for (int64_t count : wideCounts)
@@ -800,6 +817,11 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
         for (inner = 1; inner * perWideRow < 12 || wideRows % inner; ++inner)
           ;
       int64_t outer = wideRows / inner;
+      if (requiredWideRows) {
+        *requiredWideRows =
+            std::max(*requiredWideRows, inner * (outer > 1 ? 2 : 1));
+        continue;
+      }
       int64_t wideLoop = inner > 1;
       int64_t depth = wideLoop || filled <= 8;
       SmallVector<Counter> wideItems;
@@ -821,7 +843,11 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       gather.write.baseAddress = p.wide;
       gather.write.counter = padded(wideItems, 4);
       gather.write.syncProducer = {producerSync(true, depth)};
-      gather.write.byteAddressMode = access(128 * filled / perWideRow);
+      uint32_t tailMap = tail ? (1u << wideItems.size()) - 1 : 0;
+      gather.write.byteAddressMode =
+          tail ? access(128 * tail / perWideRow, 128 * filled / perWideRow,
+                        tailMap)
+               : access(128 * filled / perWideRow);
       if (outer > 1) {
         gather.write.doubleBufferLoop = wideLoop;
         gather.write.secondBufferOffset = inner;
@@ -836,6 +862,7 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
       gather.byteAddress.defaultStrideUnitGranules = 2;
       gather.byteAddress.lastStrideUnitGranules = 2;
       gather.byteAddress.cellStride = 32 * filled / perWideRow;
+      gather.byteAddress.cellStrideGroupCountLoopMap = tailMap;
       gather.byteAddress.defaultCellStrideGroupCount = 1;
       gather.byteAddress.lastCellStrideGroupCount = 1;
       llvm::append_range(out, loads);
@@ -849,6 +876,10 @@ localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
         scatter.read.secondBufferOffset = inner;
       }
       scatter.write.counter = padded(scatterItems, 6);
+      if (tail) {
+        scatter.write.alternateInnerLimit = tailLimit;
+        scatter.write.alternateLimitLoopId = *innerIndex + 1;
+      }
       scatter.write.syncProducer = {
           producerSync(true, syncLoop.value_or(scatterItems.size() - 1))};
       TileValues destinations;
@@ -959,10 +990,26 @@ int64_t codegen::gatherWideRows(Operation *op) {
     return 0;
   if (g->vector)
     return kGrid * g->rowBytes > kSlice ? 1 : 0;
-  int64_t width = g->rowBytes / (g->channels * 2);
-  SmallVector<int64_t> copies;
-  for (auto [tile, rows] : g->sources)
-    copies.push_back(rows.second - rows.first + 1);
+  GatherPlan provisional;
+  static_cast<GatherGeometry &>(provisional) = *g;
+  int64_t capacity = 0;
+  auto measure = [&](int64_t rows, int64_t stride, int64_t destination,
+                     int64_t sourcePixelBytes) {
+    if (rows <= 0)
+      return success();
+    return success(succeeded(
+        localCopies(op, {{0, Copy{0, destination, rows, stride}}}, provisional,
+                    latestFirst, latestFirst, sourcePixelBytes, &capacity)));
+  };
+  for (auto [tile, rows] : g->sources) {
+    auto staged = g->staging.find(tile);
+    if (staged == g->staging.end())
+      continue;
+    int64_t first = std::max(rows.first, staged->second.first);
+    int64_t last = std::min(rows.second, staged->second.second);
+    if (failed(measure(last - first + 1, g->rowBytes, 0, g->sourcePixelBytes)))
+      return 0;
+  }
   for (auto [d, rows] : g->destinations) {
     std::set<int64_t> moved;
     for (const auto &[key, columnRows] : g->columns)
@@ -971,15 +1018,10 @@ int64_t codegen::gatherWideRows(Operation *op) {
     int64_t local = 0;
     for (int64_t row = rows.first; row <= rows.second; ++row)
       local += !moved.count(row);
-    copies.push_back(local);
+    if (failed(measure(local, g->destinationRowBytes, g->columnOffset, 0)))
+      return 0;
   }
-  int64_t capacity = 0;
-  for (int64_t rows : copies) {
-    int64_t wideRows = rows * width * g->channels * 2 / 512;
-    if (wideRows < 16)
-      capacity = std::max(capacity, wideRows);
-  }
-  return capacity ? capacity : 8;
+  return capacity;
 }
 
 Body codegen::gatherRows(Operation *op, Context &context) {
