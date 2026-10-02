@@ -161,6 +161,15 @@ std::array<bool, 16> tileSetOf(ArrayRef<TileBox> boxes) {
 
 std::optional<ChannelUse> channel7Tiles(const Group &group) {
   Operation *op = group.op;
+  if (group.kind == GroupKind::Op && isa<TensorOpOp>(op)) {
+    std::optional<InnerOperationKind> inner = innerOperation(op);
+    std::array<bool, 16> active = activeTiles(op);
+    if ((inner == InnerOperationKind::Vmc ||
+         inner == InnerOperationKind::Stencil) &&
+        active != kAllTiles)
+      return ChannelUse{active, false, false};
+    return std::nullopt;
+  }
   if (!isa<RedistributeOp>(op))
     return std::nullopt;
   if (group.kind == GroupKind::Scatter)

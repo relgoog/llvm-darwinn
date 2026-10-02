@@ -122,10 +122,15 @@ int64_t parameterBytes(const VmcPlan &plan) {
   return (bias + weights) * plan.outBlocks;
 }
 
-SmallVector<Emitted, 0> parameterInfeed(const VmcPlan &plan) {
+std::array<bool, 8> parameterChannels(Operation *op) {
+  return activeTiles(op) == bits<16>("1111111111111111") ? bits<8>("01000000")
+                                                         : bits<8>("00000001");
+}
+
+SmallVector<Emitted, 0> parameterInfeed(Operation *op, const VmcPlan &plan) {
   int64_t total = parameterBytes(plan);
-  std::array<bool, 8> channels = bits<8>("01000000");
-  std::array<bool, 17> everyTile = targets(bits<16>("1111111111111111"), false);
+  std::array<bool, 8> channels = parameterChannels(op);
+  std::array<bool, 17> everyTile = targets(activeTiles(op), false);
   if (plan.outer == 1 || plan.single)
     return infeed(total, channels, everyTile, InputFifo::Parameter);
   auto [bias, weights] = blockBytes(plan);
@@ -253,7 +258,7 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
                      true));
   consumer.destination = RingDestination::WideMemory;
   consumer.threadMulticastBitmap = bits<4>("1111");
-  consumer.virtualChannelSubscription = bits<8>("01000000");
+  consumer.virtualChannelSubscription = parameterChannels(op);
   consumer.filter.firstDiscardByteLoopMap =
       broadcast ? (1u << items.size()) - 1 : 0;
   return dma(consumer, multicast);
@@ -675,7 +680,7 @@ FailureOr<Emitted> stencilConsumer(Operation *op, const StencilPlan &plan,
                    true));
   consumer.destination = RingDestination::WideMemory;
   consumer.threadMulticastBitmap = bits<4>("1111");
-  consumer.virtualChannelSubscription = bits<8>("01000000");
+  consumer.virtualChannelSubscription = parameterChannels(op);
   consumer.filter.firstDiscardByteLoopMap =
       broadcast ? (1u << items.size()) - 1 : 0;
   return dma(consumer, multicast);
@@ -936,7 +941,7 @@ Body codegen::vmc(Operation *op, Context &context) {
   out.push_back(hibGather(
       {total}, {total}, 1, DmaQueue::Parameter,
       context.hib(DmaQueue::Parameter, HibRoot::Parameter, 0, total, op)));
-  llvm::append_range(out, parameterInfeed(*plan));
+  llvm::append_range(out, parameterInfeed(op, *plan));
   std::array<bool, 16> active = activeTiles(op);
   SmallVector<int64_t> tiles = activeList(active);
   FailureOr<SmallVector<Emitted, 0>> loads = registers(op, context);
@@ -986,8 +991,8 @@ Body codegen::stencil(Operation *op, Context &context) {
   out.push_back(hibGather(
       {total}, {total}, 1, DmaQueue::Parameter,
       context.hib(DmaQueue::Parameter, HibRoot::Parameter, 0, total, op)));
-  llvm::append_range(out, infeed(total, bits<8>("01000000"),
-                                 targets(bits<16>("1111111111111111"), false),
+  llvm::append_range(out, infeed(total, parameterChannels(op),
+                                 targets(activeTiles(op), false),
                                  InputFifo::Parameter));
   std::array<bool, 16> active = activeTiles(op);
   SmallVector<int64_t> tiles = activeList(active);
