@@ -35,10 +35,50 @@ std::optional<Slicing> slicingOf(Operation *operation) {
   return Slicing{begins, domain, ends};
 }
 
+std::optional<Slicing> slicingOf(Value value);
+
+// A tile reshape keeps the leading dims its source shares and holds the rest
+// whole, so its slicing follows from the source's when those dims were whole.
+std::optional<Slicing> reshapedSlicing(ReshapeOpOp reshape) {
+  std::optional<Slicing> source = slicingOf(reshape.getInput());
+  if (!source)
+    return std::nullopt;
+  ArrayRef<int64_t> from =
+      cast<DistributedTensorType>(reshape.getInput().getType()).getShape();
+  ArrayRef<int64_t> to =
+      cast<DistributedTensorType>(reshape.getOutput().getType()).getShape();
+  size_t prefix = 0;
+  while (prefix < from.size() && prefix < to.size() &&
+         from[prefix] == to[prefix])
+    ++prefix;
+  AffineMap begins = source->begins.getValue(), ends = source->ends.getValue();
+  for (size_t dim = prefix; dim < from.size(); ++dim) {
+    auto begin = dyn_cast<AffineConstantExpr>(begins.getResult(dim));
+    auto end = dyn_cast<AffineConstantExpr>(ends.getResult(dim));
+    if (!begin || !end || begin.getValue() != 0 ||
+        end.getValue() != from[dim] - 1)
+      return std::nullopt;
+  }
+  MLIRContext *context = reshape.getContext();
+  SmallVector<AffineExpr> newBegins(begins.getResults().take_front(prefix));
+  SmallVector<AffineExpr> newEnds(ends.getResults().take_front(prefix));
+  for (size_t dim = prefix; dim < to.size(); ++dim) {
+    newBegins.push_back(getAffineConstantExpr(0, context));
+    newEnds.push_back(getAffineConstantExpr(to[dim] - 1, context));
+  }
+  return Slicing{AffineMapAttr::get(AffineMap::get(begins.getNumDims(), 0,
+                                                   newBegins, context)),
+                 source->domain,
+                 AffineMapAttr::get(
+                     AffineMap::get(ends.getNumDims(), 0, newEnds, context))};
+}
+
 std::optional<Slicing> slicingOf(Value value) {
   Operation *producer = value.getDefiningOp();
   if (!producer)
     return std::nullopt;
+  if (auto reshape = dyn_cast<ReshapeOpOp>(producer))
+    return reshapedSlicing(reshape);
   Value destination;
   if (auto compute = dyn_cast<StaticComputeOpOp>(producer))
     destination = compute.getDestination();
@@ -65,6 +105,75 @@ bool isNoOp(RedistributeOp redistribute) {
     return false;
   std::optional<Slicing> source = slicingOf(input);
   return source && source == slicingOf(redistribute.getOperation());
+}
+
+// A reshape that splits or merges only dims every tile holds whole, with the
+// leading dims sliced as in its source, needs no data movement.
+bool isLocalReshape(RedistributeOp redistribute) {
+  Value input = redistribute.getInput();
+  auto from = dyn_cast<DistributedTensorType>(input.getType());
+  auto to = dyn_cast<DistributedTensorType>(redistribute.getType());
+  if (!from || !to || redistribute.getMappingAttr() ||
+      redistribute.getDestination() || from.getShape() == to.getShape() ||
+      from.getNumElements() != to.getNumElements() ||
+      memorySpaceOf(input) != DistributedMemorySpace::TileMemory ||
+      to.getMemorySpace() != DistributedMemorySpace::TileMemory)
+    return false;
+  std::optional<Slicing> source = slicingOf(input);
+  std::optional<Slicing> result = slicingOf(redistribute.getOperation());
+  if (!source || !result || source->domain != result->domain ||
+      source->domain.size() != 3)
+    return false;
+  ArrayRef<int64_t> fromShape = from.getShape(), toShape = to.getShape();
+  size_t prefix = 0;
+  while (prefix < fromShape.size() && prefix < toShape.size() &&
+         fromShape[prefix] == toShape[prefix])
+    ++prefix;
+  auto whole = [](AffineMap begins, AffineMap ends, ArrayRef<int64_t> shape,
+                  size_t first) {
+    for (size_t dim = first; dim < shape.size(); ++dim) {
+      auto begin = dyn_cast<AffineConstantExpr>(begins.getResult(dim));
+      auto end = dyn_cast<AffineConstantExpr>(ends.getResult(dim));
+      if (!begin || !end || begin.getValue() != 0 ||
+          end.getValue() != shape[dim] - 1)
+        return false;
+    }
+    return true;
+  };
+  for (size_t dim = 0; dim < prefix; ++dim)
+    if (source->begins.getValue().getResult(dim) !=
+            result->begins.getValue().getResult(dim) ||
+        source->ends.getValue().getResult(dim) !=
+            result->ends.getValue().getResult(dim))
+      return false;
+  return whole(source->begins.getValue(), source->ends.getValue(), fromShape,
+               prefix) &&
+         whole(result->begins.getValue(), result->ends.getValue(), toShape,
+               prefix);
+}
+
+AffineMap reshapeMap(ArrayRef<int64_t> from, ArrayRef<int64_t> to,
+                     MLIRContext *context) {
+  size_t prefix = 0;
+  while (prefix < from.size() && prefix < to.size() &&
+         from[prefix] == to[prefix])
+    ++prefix;
+  SmallVector<AffineExpr> results;
+  for (size_t dim = 0; dim < prefix; ++dim)
+    results.push_back(from[dim] == 1 ? getAffineConstantExpr(0, context)
+                                     : getAffineDimExpr(dim, context));
+  AffineExpr linear = getAffineConstantExpr(0, context);
+  for (size_t dim = prefix; dim < from.size(); ++dim)
+    linear = linear * from[dim] + getAffineDimExpr(dim, context);
+  int64_t stride = 1;
+  SmallVector<AffineExpr> suffix;
+  for (size_t dim = to.size(); dim-- > prefix;) {
+    AffineExpr value = stride == 1 ? linear : linear.floorDiv(stride);
+    suffix.push_back(dim == prefix ? value : value % to[dim]);
+    stride *= to[dim];
+  }
+  results.append(suffix.rbegin(), suffix.rend());
+  return AffineMap::get(from.size(), 0, results, context);
 }
 
 LogicalResult mergeSharedSlicing(Operation *source) {
@@ -106,6 +215,46 @@ public:
   }
 
   void runOnOperation() final {
+    SmallVector<RedistributeOp> reshapes;
+    getOperation().walk([&](RedistributeOp redistribute) {
+      if (isLocalReshape(redistribute))
+        reshapes.push_back(redistribute);
+    });
+    for (RedistributeOp redistribute : reshapes) {
+      OpBuilder builder(redistribute);
+      MLIRContext *context = redistribute.getContext();
+      Value input = redistribute.getInput();
+      std::optional<Slicing> source = slicingOf(input);
+      auto domain =
+          llvm::to_vector(llvm::map_range(source->domain, [](Attribute extent) {
+            return static_cast<int32_t>(cast<IntegerAttr>(extent).getInt());
+          }));
+      auto tile = GetTensorOp::create(builder, redistribute.getLoc(),
+                                      input.getType(), input);
+      tile->setDiscardableAttr(
+          "slicing_begins",
+          AffineMapAttr::get(mergeThreads(source->begins.getValue(), 0)));
+      tile->setDiscardableAttr("slicing_domain",
+                               builder.getI32ArrayAttr({domain[0], domain[1]}));
+      tile->setDiscardableAttr("slicing_ends",
+                               AffineMapAttr::get(mergeThreads(
+                                   source->ends.getValue(), domain[2] - 1)));
+      ArrayRef<int64_t> from =
+          cast<DistributedTensorType>(input.getType()).getShape();
+      ArrayRef<int64_t> to =
+          cast<DistributedTensorType>(redistribute.getType()).getShape();
+      auto reshaped = ReshapeOpOp::create(
+          builder, redistribute.getLoc(), redistribute.getType(),
+          tile.getResult(), AffineMapAttr::get(reshapeMap(from, to, context)),
+          AffineMapAttr::get(reshapeMap(to, from, context)));
+      auto read = GetTensorOp::create(builder, redistribute.getLoc(),
+                                      redistribute.getType(), reshaped);
+      for (StringRef name : kSlicingAttributes)
+        read->setDiscardableAttr(name, redistribute->getAttr(name));
+      redistribute.replaceAllUsesWith(read.getResult());
+      redistribute.erase();
+    }
+
     llvm::MapVector<Value, SmallVector<RedistributeOp>> readers;
     getOperation().walk([&](RedistributeOp redistribute) {
       if (isNoOp(redistribute))

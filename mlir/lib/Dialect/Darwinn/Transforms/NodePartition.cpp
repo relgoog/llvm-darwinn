@@ -361,7 +361,11 @@ public:
   void runOnOperation() final {
     Builder builder(&getContext());
     for (auto reshape : getOperation().getOps<ReshapeOpOp>()) {
-      if (reshape->hasAttr("sharding_domain"))
+      if (reshape->hasAttr("sharding_domain") ||
+          (memorySpaceOf(reshape.getInput()) !=
+               DistributedMemorySpace::HostMemory &&
+           memorySpaceOf(reshape.getOutput()) !=
+               DistributedMemorySpace::HostMemory))
         continue;
       SmallVector<AffineExpr> begins, ends;
       for (int64_t size : shapeOf(reshape.getOutput())) {

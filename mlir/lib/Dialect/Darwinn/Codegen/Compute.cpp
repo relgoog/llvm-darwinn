@@ -142,9 +142,18 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
   TensorOp tensor;
   Linear linear;
   bool hasParameters = false;
+  int64_t mainLoops = 1;
   if (!reduced.empty()) {
     int64_t axis = reduced.front();
     bool mac = linearKind == LinearFunctionKind::Add && !floatInput;
+    SmallVector<Stream> pixels;
+    for (int64_t dim = vector - 1; dim >= 0; --dim)
+      if (!llvm::is_contained(reduced, dim))
+        pixels.push_back({size[dim], inStrides[dim], outStrides[dim], 0});
+    pixels = mergeStreams(pixels);
+    int64_t count = 1;
+    for (const Stream &loop : pixels)
+      count *= loop.count;
     SmallVector<int64_t> main{size[axis] - 1};
     SmallVector<Counter> read{
         counter((size[axis] - 1) * inStrides[axis], inStrides[axis])};
@@ -152,31 +161,44 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     SmallVector<Counter> sums{counter(size[axis] - 1, 1, false)};
     if (mac) {
       main.push_back(blocks - 1);
-      read.push_back(counter((blocks - 1) * kLanes * inElem, kLanes * inElem));
-      write.push_back(
-          counter((blocks - 1) * kLanes * outElem, kLanes * outElem));
+      read.push_back(counter((blocks - 1) * lanes * inElem, lanes * inElem));
+      write.push_back(counter((blocks - 1) * lanes * outElem, lanes * outElem));
       sums.push_back(counter(blocks - 1, 1, false));
+    }
+    int64_t writeDepth =
+        mac ? 1 : write.size() + (count > 1 ? pixels.size() : 0);
+    mainLoops = mac ? 1 : 1 + (count > 1);
+    sums.push_back(counter(count - 1, 1, false));
+    if (count > 1) {
+      main.push_back(count - 1);
+      for (const Stream &loop : pixels) {
+        read.push_back(counter((loop.count - 1) * loop.lhs, loop.lhs));
+        write.push_back(counter((loop.count - 1) * loop.out, loop.out));
+      }
     }
     tensor.mainOperation.counter = mainCounters(main);
     tensor.narrowMemoryRead.counter = padded(read, 8);
-    tensor.narrowMemoryRead.byteAddressMode = access(readBytes, 2);
+    tensor.narrowMemoryRead.byteAddressMode =
+        access(readBytes, 1u << mainLoops);
     tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
     tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
-        producerSync(true, 1)};
+        producerSync(true, writeDepth)};
     tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(writeBytes);
     if (mac) {
       SmallVector<Counter> parameters;
       for (int64_t end : main)
         parameters.push_back(counter(end, 1, false));
       tensor.wideMemoryReadForParameters.counter = padded(parameters, 8);
-      tensor.wideMemoryReadForParameters.syncProducer = {producerSync(true, 2)};
+      tensor.wideMemoryReadForParameters.syncProducer = {
+          producerSync(true, 2 + (count > 1))};
       hasParameters = true;
       tensor.wideMemoryReadForSums.baseAddress = 4;
       tensor.wideMemoryReadForSums.syncProducer = {producerSync(true, 3)};
-      if (blocks > 1) {
-        tensor.wideMemoryReadForSums.doubleBufferLoop = 1;
-        tensor.wideMemoryReadForSums.secondBufferOffset = 4;
-      }
+    }
+    if (count > 1 || (mac && blocks > 1)) {
+      tensor.wideMemoryReadForSums.doubleBufferLoop =
+          count > 1 ? main.size() - 1 : 1;
+      tensor.wideMemoryReadForSums.secondBufferOffset = 4;
     }
     tensor.wideMemoryReadForSums.counter = padded(sums, 8);
     tensor.control.partialSumReuseMap = 1;
@@ -248,7 +270,7 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     tensor.control.nonLinear.evenOddFunction = true;
   }
   tensor.control.threadMulticastBitmap = bits<4>("1111");
-  tensor.control.zOutBlockLoopDepth = 1;
+  tensor.control.zOutBlockLoopDepth = mainLoops;
   tensor.control.lastZOutBlockValidCount = lastLanes;
   tensor.control.defaultZOutBlockValidCount = lanes;
   return tensor;
@@ -278,6 +300,9 @@ FailureOr<TensorOp> elementwiseTensorOp(Operation *op, Context &context) {
     loops.push_back(
         {size[dim], lhsStrides[dim], outStrides[dim], rhsStride(dim)});
   loops = mergeStreams(loops);
+  if (blocks == 1)
+    loops.insert(loops.begin(), {1, kLanes * elem, kLanes * outElem,
+                                 rhsStride(rank - 1) ? kLanes * elem : 0});
   LinearFunctionKind linearKind = *linearFunction(op);
   bool reduce = linearKind == LinearFunctionKind::Add ||
                 linearKind == LinearFunctionKind::Sub;
@@ -285,9 +310,16 @@ FailureOr<TensorOp> elementwiseTensorOp(Operation *op, Context &context) {
   int64_t writeBytes = lanes * outElem;
 
   TensorOp tensor;
+  SmallVector<int64_t> counts{loops.front().count};
+  if (loops.size() > 1) {
+    int64_t pixels = 1;
+    for (const Stream &loop : ArrayRef(loops).drop_front())
+      pixels *= loop.count;
+    counts.push_back(pixels);
+  }
   SmallVector<int64_t> main{0};
-  for (const Stream &loop : loops)
-    main.push_back(loop.count - 1);
+  for (int64_t count : counts)
+    main.push_back(count - 1);
   tensor.mainOperation.counter = mainCounters(main);
   tensor.narrowMemoryRead.counter =
       padded(streamCounters(loops, &Stream::lhs), 8);
@@ -308,10 +340,13 @@ FailureOr<TensorOp> elementwiseTensorOp(Operation *op, Context &context) {
   SmallVector<Counter> sums;
   if (reduce)
     sums.push_back(counter(0, 1, false));
-  for (const Stream &loop : loops)
-    sums.push_back(counter(loop.count - 1, 1, false));
+  for (int64_t count : counts)
+    sums.push_back(counter(count - 1, 1, false));
   tensor.wideMemoryReadForSums.counter = padded(sums, 8);
   if (reduce)
+    tensor.wideMemoryReadForSums.doubleBufferLoop =
+        counts.front() > 1 || counts.size() == 1 ? 1 : 2;
+  else if (counts.front() == 1 && counts.size() > 1)
     tensor.wideMemoryReadForSums.doubleBufferLoop = 1;
   tensor.wideMemoryReadForSums.secondBufferOffset = 4;
   defaultProducer(tensor.narrowMemoryRead);
@@ -342,7 +377,8 @@ bool firstRowSplit(Operation *op) {
       innerOperation(op) != InnerOperationKind::Elementwise)
     return false;
   auto slicing = slicingOf(throughViews(producer(op, 2)));
-  if (!slicing || slicing->domain != SmallVector<int64_t, 3>{4, 4, 4})
+  if (!slicing || slicing->domain != SmallVector<int64_t, 3>{4, 4, 4} ||
+      resultInfo(throughViews(producer(op, 1))).shape.back() == 1)
     return false;
   size_t rank = slicing->begin({0, 0, 0}).size();
   for (size_t dim = 0; dim < rank; ++dim) {
@@ -408,7 +444,15 @@ FailureOr<int64_t> codegen::operandAddress(Operation *view, int64_t thread,
   TensorInfo info = resultInfo(owner);
   size_t rank = info.shape.size();
   Index size = tail(extent(box), rank);
-  Index start = tail(threadBox(*slicingOf(sliced), thread).lo, rank);
+  Index point = threadBox(*slicingOf(sliced), thread).lo;
+  for (Operation *node = sliced; node && node != owner;
+       node = producer(node, 0))
+    if (auto reshape = dyn_cast<ReshapeOpOp>(node)) {
+      SmallVector<int64_t> mapped =
+          reshape.getReverseIndexTransformationAttr().getValue().compose(point);
+      point.assign(mapped.begin(), mapped.end());
+    }
+  Index start = tail(point, rank);
   Index lo = tail(box.lo, rank);
   Index offset;
   for (auto [a, b] : llvm::zip(start, lo))
@@ -424,7 +468,26 @@ std::pair<Index, int64_t> codegen::operandLayout(Operation *view,
   Box box = ownerTileBox(owner);
   TensorInfo info = resultInfo(owner);
   Index size = tail(extent(box), info.shape.size());
-  return {strides(size, info.elementBytes), info.elementBytes};
+  Index layout = strides(size, info.elementBytes);
+  SmallVector<AffineMap> reverse;
+  for (Operation *node = view; node && node != owner; node = producer(node, 0))
+    if (auto reshape = dyn_cast<ReshapeOpOp>(node))
+      reverse.push_back(reshape.getReverseIndexTransformationAttr().getValue());
+  if (reverse.empty())
+    return {layout, info.elementBytes};
+  auto offset = [&](Index point) {
+    for (AffineMap map : reverse)
+      point = llvm::to_vector(map.compose(point));
+    return dot(tail(point, layout.size()), layout);
+  };
+  unsigned rank = reverse.front().getNumDims();
+  Index origin(rank, 0), viewStrides;
+  for (unsigned dim = 0; dim < rank; ++dim) {
+    Index unit(rank, 0);
+    unit[dim] = 1;
+    viewStrides.push_back(offset(unit) - offset(origin));
+  }
+  return {viewStrides, info.elementBytes};
 }
 
 std::array<bool, 16> codegen::activeTiles(Operation *op) {
@@ -505,29 +568,31 @@ Body codegen::initialization(Operation *op, Context &context) {
   FailureOr<int64_t> wide = context.wideAddress(op, Suffix::Init);
   if (failed(scratch) || failed(wide))
     return unsupported(op, "an unplaced initialization scratch");
+  int64_t bytes =
+      4 * std::min(extent(viewThreadBox(producer(op, 0), 0)).back(), kLanes);
   Mesh mesh;
   mesh.direction = MeshDirection::OutboundEastInboundWest;
   mesh.write.baseAddress = *scratch;
-  mesh.write.counter = padded({counter(16, 16)}, 5);
+  mesh.write.counter = padded({counter(bytes - 16, 16)}, 5);
   mesh.write.syncProducer = {producerSync(true, 1)};
   mesh.write.byteAddressMode = access(16);
   mesh.immediateValue = pattern;
   mesh.validBytes = 4;
   NarrowToWide copy;
   copy.read.baseAddress = *scratch;
-  copy.read.counter = padded({counter(0, 32)}, 6);
-  copy.read.byteAddressMode = access(32);
+  copy.read.counter = padded({counter(0, bytes)}, 6);
+  copy.read.byteAddressMode = access(bytes);
   copy.write.baseAddress = *wide;
   copy.write.counter = padded({counter(0, 1)}, 4);
   copy.write.syncProducer = {producerSync(true)};
-  copy.write.byteAddressMode = access(32);
-  copy.readWatchers = {
-      dmaWatcher(tileWatcher(TileSyncFlag::MeshInboundFromWest, 1, 1))};
+  copy.write.byteAddressMode = access(bytes);
+  copy.readWatchers = {dmaWatcher(tileWatcher(TileSyncFlag::MeshInboundFromWest,
+                                              1, 1, bytes == 16 ? 1 : 0))};
   copy.threadMulticastBitmap = bits<4>("1111");
   copy.byteAddress.strideUnitGranulesLoopMap = 1;
   copy.byteAddress.defaultStrideUnitGranules = 4;
   copy.byteAddress.lastStrideUnitGranules = 4;
-  copy.byteAddress.cellStride = 8;
+  copy.byteAddress.cellStride = bytes / 4;
   copy.byteAddress.defaultCellStrideGroupCount = 1;
   copy.byteAddress.lastCellStrideGroupCount = 1;
   return SmallVector<Emitted, 0>{dma(mesh, tiles), dma(copy, tiles)};
