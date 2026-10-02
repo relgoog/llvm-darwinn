@@ -55,6 +55,10 @@ bool isConvolution(Operation *operation) {
       operation);
 }
 
+bool hasParameters(Operation *operation) {
+  return isConvolution(operation) || isa<dwc::FullyConnectedOp>(operation);
+}
+
 LogicalResult validateStructure(Operation *operation) {
   if (operation->getNumOperands() != 1 || operation->getNumResults() != 1 ||
       !isSupportedTensor(operation->getOperand(0).getType()) ||
@@ -155,6 +159,41 @@ LogicalResult validateConvolution(Operation *operation) {
   if (depthwise && filter.getRank() != 3)
     return unsupported(operation, "depthwise convolution requires multiplier-one HWC filters");
 
+  return success();
+}
+
+LogicalResult validateFullyConnected(Operation *operation) {
+  if (operation->getNumOperands() != 3 || operation->getNumResults() != 1 ||
+      !llvm::all_of(operation->getOperandTypes(),
+                    [](Type type) { return isSupportedTensor(type); }) ||
+      !isSupportedTensor(operation->getResult(0).getType()))
+    return unsupported(operation,
+                       "fully connected requires three positive static inputs and one result");
+
+  auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
+  auto filter = cast<RankedTensorType>(operation->getOperand(1).getType());
+  auto bias = cast<RankedTensorType>(operation->getOperand(2).getType());
+  auto output = cast<RankedTensorType>(operation->getResult(0).getType());
+  auto activation = operation->getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+  auto cell = operation->getAttrOfType<dwc::CellOperationAttr>("cell_operation");
+  if (input.getRank() != 2 || filter.getRank() != 4 || bias.getRank() != 1 ||
+      output.getRank() != 2 || input.getDimSize(0) != output.getDimSize(0) ||
+      input.getDimSize(1) != filter.getDimSize(3) || filter.getDimSize(1) != 1 ||
+      filter.getDimSize(2) != 1 || filter.getDimSize(0) != output.getDimSize(1) ||
+      bias.getDimSize(0) != output.getDimSize(1) || !input.getElementType().isBF16() ||
+      !filter.getElementType().isBF16() || !bias.getElementType().isF32() || !activation ||
+      activation.getValue() != dwc::ActivationFunction::None || !cell ||
+      cell.getValue() != dwc::CellOperation::Mac)
+    return unsupported(operation, "fully connected requires matching bf16 input and filter, f32 "
+                                  "bias, NONE activation and MAC");
+
+  for (Value operand : operation->getOperands().drop_front()) {
+    Operation *constant = operand.getDefiningOp();
+    if (!constant || !isa<dwc::GenericConstantOp, arith::ConstantOp>(constant) ||
+        !constant->getAttrOfType<DenseFPElementsAttr>("value"))
+      return unsupported(operation,
+                         "fully connected weights and bias must be dense floating constants");
+  }
   return success();
 }
 
@@ -399,10 +438,10 @@ LogicalResult validateInterpolation(dwc::ImageInterpolationOp operation) {
 
 LogicalResult validateRescaling(dwc::RescalingOp operation) {
   if (operation->getNumOperands() != 2 || operation->getNumResults() != 1 ||
-      !isSupportedTensor(operation->getOperand(0).getType(), true) ||
-      !isSupportedTensor(operation->getResult(0).getType(), true))
+      !isSupportedTensor(operation->getOperand(0).getType()) ||
+      !isSupportedTensor(operation->getResult(0).getType()))
     return unsupported(operation, "rescaling requires an input tensor, an absent "
-                                  "bias and a positive static rank-four result");
+                                  "bias and a positive static result");
 
   auto input = cast<RankedTensorType>(operation->getOperand(0).getType());
   auto output = cast<RankedTensorType>(operation->getResult(0).getType());
@@ -427,8 +466,8 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
     return unsupported(function, "one defined block is required");
 
   for (Type type : function.getArgumentTypes()) {
-    if (!isSupportedTensor(type, true))
-      return unsupported(function, "arguments require positive static rank-four "
+    if (!isSupportedTensor(type))
+      return unsupported(function, "arguments require positive static rank-one through rank-four "
                                    "bf16 or f32 tensors");
   }
 
@@ -436,8 +475,8 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
     return unsupported(function, "at least one tensor result is required");
 
   for (Type type : function.getResultTypes()) {
-    if (!isSupportedTensor(type, true))
-      return unsupported(function, "results require positive static rank-four "
+    if (!isSupportedTensor(type))
+      return unsupported(function, "results require positive static rank-one through rank-four "
                                    "bf16 or f32 tensors");
   }
 
@@ -477,6 +516,8 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
             name == "y_stride" || name == "activation_clip_min" || name == "activation_clip_max" ||
             (isa<dwc::TransposedConvolutionOp>(operation) &&
              (name == "x_out_dim" || name == "y_out_dim")))) ||
+          (isa<dwc::FullyConnectedOp>(operation) &&
+           (name == "activation_function" || name == "cell_operation")) ||
           (isa<dwc::ConcatenationOp>(operation) && name == "mode") ||
           (isa<dwc::ImageInterpolationOp>(operation) &&
            (name == "algorithm" || name == "stride_method")) ||
@@ -503,6 +544,12 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
 
     if (isConvolution(&operation)) {
       if (failed(validateConvolution(&operation)))
+        return failure();
+      continue;
+    }
+
+    if (isa<dwc::FullyConnectedOp>(operation)) {
+      if (failed(validateFullyConnected(&operation)))
         return failure();
       continue;
     }
@@ -598,7 +645,7 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
     if (isa<InfeedOp, OutfeedOp>(operation)) {
       if (operation.getNumOperands() != 1 || operation.getNumResults() != 1 ||
           operation.getOperand(0).getType() != operation.getResult(0).getType() ||
-          !isSupportedTensor(operation.getResult(0).getType(), true))
+          !isSupportedTensor(operation.getResult(0).getType()))
         return unsupported(&operation, "host transfers must preserve one ranked tensor");
 
       if (isa<InfeedOp>(operation)) {
@@ -681,7 +728,7 @@ public:
 
         for (OpOperand &use : source.getUses()) {
           unsigned role = ordinaryRole;
-          if (isConvolution(use.getOwner()) && use.getOperandNumber() != 0)
+          if (hasParameters(use.getOwner()) && use.getOperandNumber() != 0)
             role = use.getOperandNumber();
           if (role != 2 || !isZeroConstant(source))
             roles[role] = true;
@@ -736,6 +783,11 @@ public:
 
       if (isConvolution(&operation)) {
         values.map(operation.getResult(0), lowerConvolution(&operation));
+        continue;
+      }
+
+      if (isa<dwc::FullyConnectedOp>(operation)) {
+        values.map(operation.getResult(0), lowerFullyConnected(&operation));
         continue;
       }
 
@@ -856,6 +908,29 @@ public:
   }
 
 private:
+  Value operandStorage(Operation *operation, unsigned index) {
+    Value source = operation->getOperand(index);
+    auto found = constantValues.find(source);
+    Value storage =
+        index != 0 && found != constantValues.end() ? found->second[index] : values.lookup(source);
+    return tileOperand(storage);
+  }
+
+  Value lowerFullyConnected(Operation *operation) {
+    AffineExpr batch = builder.getAffineDimExpr(0);
+    AffineExpr inputChannel = builder.getAffineDimExpr(1);
+    AffineExpr outputChannel = builder.getAffineDimExpr(2);
+    AffineExpr zero = builder.getAffineConstantExpr(0);
+    Value input =
+        view(operandStorage(operation, 0), AffineMap::get(3, 0, {batch, inputChannel}, context));
+    Value filter = view(operandStorage(operation, 1),
+                        AffineMap::get(3, 0, {zero, zero, inputChannel, outputChannel}, context));
+    Value bias = isZeroConstant(operation->getOperand(2)) ? Value{} : operandStorage(operation, 2);
+    auto traversal = AffineMap::get(3, 0, {batch, outputChannel}, context);
+    return lowerMultiplyAccumulate(operation, input, filter, bias, traversal,
+                                   InnerOperationKind::Vmc, ComputeTypeHintKind::Fc);
+  }
+
   Value lowerConcatenation(Operation *operation) {
     auto outputType = tileType(operation->getResult(0).getType());
     auto identity = AffineMapAttr::get(AffineMap::getMultiDimIdentityMap(4, context));
@@ -918,20 +993,11 @@ private:
     for (unsigned axis = 0; axis < rank; ++axis)
       dimensions.push_back(builder.getAffineDimExpr(axis));
 
-    auto operandStorage = [&](unsigned index) {
-      Value source = operation->getOperand(index);
-      auto found = constantValues.find(source);
-      Value storage = index != 0 && found != constantValues.end()
-                          ? found->second[index]
-                          : values.lookup(source);
-      return tileOperand(storage);
-    };
-
-    Value input = operandStorage(0);
-    Value filter = operandStorage(1);
+    Value input = operandStorage(operation, 0);
+    Value filter = operandStorage(operation, 1);
     // SDK stage 113 drops biases whose elements are all positive or negative zero.
     Value bias = operation->getNumOperands() == 3 && !isZeroConstant(operation->getOperand(2))
-                     ? operandStorage(2)
+                     ? operandStorage(operation, 2)
                      : Value{};
     if (isa<dwc::TransposedConvolutionOp>(operation))
       return lowerTransposedConvolution(operation, input, filter, bias);
@@ -958,8 +1024,8 @@ private:
     Location location = operation->getLoc();
     auto outputType = tileType(operation->getResult(0).getType());
     Value empty = CreateEmptyTensorOp::create(
-        builder, location, outputType, sliceBegins(4), builder.getI32ArrayAttr({1, 1}),
-        sliceEnds(outputType.getShape()));
+        builder, location, outputType, sliceBegins(outputType.getRank()),
+        builder.getI32ArrayAttr({1, 1}), sliceEnds(outputType.getShape()));
     Value destination = view(empty, traversal);
     SmallVector<Value> auxiliary;
     ArrayAttr auxiliaryKinds;
@@ -1020,8 +1086,8 @@ private:
       count *= inputType.getDimSize(axis);
     float scale = kind == dwc::ReductionType::Mean ? 1.0f / count : 1.0f;
     auto finalOptions = [&] {
-      return reductionOptions(maximum, reciprocal,
-                              builder.getF32FloatAttr(maximum ? -0.0f : 0.0f), scale);
+      return reductionOptions(maximum, reciprocal, builder.getF32FloatAttr(maximum ? -0.0f : 0.0f),
+                              scale);
     };
 
     if (axes.back() != rank - 1) {
@@ -1221,6 +1287,17 @@ private:
     auto shape = cast<ShapedType>(value.getType()).getShape();
     SmallVector<int64_t> reshaped;
     for (Operation *user : source.getUsers()) {
+      if (isa<dwc::FullyConnectedOp>(user) && user->getOperand(1) == source) {
+        auto dense = cast<DenseFPElementsAttr>(value);
+        SmallVector<APFloat> original(dense.getValues<APFloat>());
+        SmallVector<APFloat> transposed;
+        transposed.reserve(original.size());
+        for (int64_t input = 0; input < shape[3]; ++input)
+          for (int64_t output = 0; output < shape[0]; ++output)
+            transposed.push_back(original[output * shape[3] + input]);
+        auto type = RankedTensorType::get({1, 1, shape[3], shape[0]}, dense.getElementType());
+        return DenseFPElementsAttr::get(type, transposed);
+      }
       if (isa<dwc::DepthwiseConvolutionOp>(user))
         reshaped = {shape[0], shape[1], 1, 1, shape[2]};
       if (isa<dwc::TransposedConvolutionOp>(user))

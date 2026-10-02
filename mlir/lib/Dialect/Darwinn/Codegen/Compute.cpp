@@ -394,6 +394,7 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
     mainLoops = main.size() - 1;
     linear = baseLinear(LinearOperation::HighBandwidthMac, OperandType::Bfloat);
   } else {
+    bool vectorOnly = rank == 2 && size.front() == 1;
     SmallVector<Stream> pixels;
     for (int64_t dim = vector - 1; dim >= 0; --dim)
       pixels.push_back({size[dim], inStrides[dim], outStrides[dim], 0});
@@ -405,7 +406,8 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
     for (const Stream &loop : pixels) {
       count *= loop.count;
       read.push_back(counter((loop.count - 1) * loop.lhs, loop.lhs));
-      write.push_back(counter((loop.count - 1) * loop.out, loop.out));
+      if (!vectorOnly)
+        write.push_back(counter((loop.count - 1) * loop.out, loop.out));
     }
     SmallVector<int64_t> main{count - 1};
     SmallVector<Counter> sums{counter(count - 1, 1, false)};
@@ -425,13 +427,13 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context,
     }
     tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
     tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
-        producerSync(true, pixels.size() + 1)};
+        producerSync(true, vectorOnly ? 1 : pixels.size() + 1)};
     tensor.narrowMemoryWriteFromNonLinear.byteAddressMode =
         lastLanes == lanes ? access(writeBytes)
                            : access(lastLanes * outElem, writeBytes,
                                     1u << (pixels.size() + 1));
     tensor.wideMemoryReadForSums.counter = padded(sums, 8);
-    tensor.wideMemoryReadForSums.secondBufferOffset = 4;
+    tensor.wideMemoryReadForSums.secondBufferOffset = vectorOnly ? 0 : 4;
     linear = baseLinear(LinearOperation::PartialSumAdd, OperandType::Half);
   }
   if (linear.operation == LinearOperation::HighBandwidthMac)
@@ -558,12 +560,13 @@ FailureOr<TensorOp> elementwiseTensorOp(Operation *op, Context &context) {
 }
 
 bool firstRowSplit(Operation *op) {
-  if (!isa<TensorOpOp>(op) ||
-      innerOperation(op) != InnerOperationKind::Elementwise)
+  bool unary = isa<UnaryTensorOpOp>(op);
+  if (!unary && (!isa<TensorOpOp>(op) ||
+                 innerOperation(op) != InnerOperationKind::Elementwise))
     return false;
-  auto slicing = slicingOf(throughViews(producer(op, 2)));
+  auto slicing = slicingOf(throughViews(producer(op, destinationIndex(op))));
   if (!slicing || slicing->domain != SmallVector<int64_t, 3>{4, 4, 4} ||
-      resultInfo(throughViews(producer(op, 1))).shape.back() == 1)
+      (!unary && resultInfo(throughViews(producer(op, 1))).shape.back() == 1))
     return false;
   size_t rank = slicing->begin({0, 0, 0}).size();
   for (size_t dim = 0; dim < rank; ++dim) {
@@ -815,6 +818,36 @@ Body codegen::unary(Operation *op, Context &context) {
   }
   Operation *destination = producer(op, 1);
   std::array<bool, 16> active = activeTiles(op);
+  Index size = extent(viewThreadBox(destination, 0));
+  AffineMap traversal = op->getAttrOfType<AffineMapAttr>("traversal").getValue();
+  if (size.size() == 2 && product(size) == 1 && traversal.isIdentity() &&
+      firstRowSplit(op)) {
+    FailureOr<TensorOp> shared = unaryTensorOp(op, context);
+    FailureOr<int64_t> lhs = operandAddress(producer(op, 0), 0, context);
+    FailureOr<int64_t> result = operandAddress(destination, 0, context, op);
+    if (failed(shared) || failed(lhs) || failed(result))
+      return unsupported(op, "an unplaced scalar unary operand");
+
+    TensorOp single = *shared;
+    single.control.threadMulticastBitmap = threadBit(0);
+    single.narrowMemoryRead.baseAddress = *lhs;
+    single.narrowMemoryWriteFromNonLinear.baseAddress = *result;
+    TensorOp origin = single;
+    origin.control.zOutBlockLoopDepth = 0;
+    origin.narrowMemoryRead.byteAddressMode->accessBytesLoopMap = 1;
+    out.push_back(tensor(origin, tileBit(0), {}));
+
+    FailureOr<SmallVector<Emitted, 0>> loads = registers(
+        op, context, {kThreadOrder[1], kThreadOrder[2], kThreadOrder[0]});
+    if (failed(loads))
+      return failure();
+    llvm::append_range(out, *loads);
+    shared->control.threadMulticastBitmap = bits<4>("0111");
+    out.push_back(tensor(*shared, active, bits<8>("10100000")));
+    active[0] = false;
+    out.push_back(tensor(single, active, {}));
+    return out;
+  }
   SmallVector<std::pair<int64_t, std::array<bool, 16>>> groups;
   auto shape = [&](int64_t tile) {
     SmallVector<Index> out;

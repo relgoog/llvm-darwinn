@@ -324,7 +324,10 @@ LogicalResult SlicingModel::generateCodes() {
                                          ? SmallVector<int64_t, 3>{4, 4, 1}
                                          : SmallVector<int64_t, 3>{4, 4, 4};
     llvm::SmallDenseSet<unsigned> threadForbidden;
+    bool fullyConnected = false;
     if (auto compute = dyn_cast<StaticComputeOpOp>(anchor)) {
+      fullyConnected =
+          compute.getCompute().getComputeTypeHint() == ComputeTypeHintKind::Fc;
       std::optional<InnerOperationKind> kind =
           compute.getCompute().getInnerOperation();
       if (kind == InnerOperationKind::Vmc ||
@@ -340,7 +343,7 @@ LogicalResult SlicingModel::generateCodes() {
     SmallVector<unsigned> allowed;
     for (unsigned dim = 0; dim < rank; ++dim)
       if (shape[dim] > 1 &&
-          !(isa<MathJoinOp>(anchor) && dim == rank - 1))
+          !((isa<MathJoinOp>(anchor) || fullyConnected) && dim == rank - 1))
         allowed.push_back(dim);
     SmallVector<Assignment> assignments;
     bool threaded = domain[2] > 1;

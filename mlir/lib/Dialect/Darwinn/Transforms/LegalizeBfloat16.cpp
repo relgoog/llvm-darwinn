@@ -116,8 +116,8 @@ std::optional<dwc::CwiseOpType> binaryKind(linalg::GenericOp operation) {
 
 bool isCompute(Operation *operation) {
   return isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp, dwc::TransposedConvolutionOp,
-             dwc::CwiseOp, dwc::ReductionOp, dwc::PoolingOp, dwc::ConcatenationOp,
-             linalg::GenericOp>(operation);
+             dwc::CwiseOp, dwc::ReductionOp, dwc::PoolingOp, dwc::FullyConnectedOp,
+             dwc::ConcatenationOp, linalg::GenericOp>(operation);
 }
 
 std::optional<int32_t> sumAxis(linalg::GenericOp operation) {
@@ -367,6 +367,38 @@ LogicalResult validateFunction(func::FuncOp function) {
         auto bias = operation.getOperand(2).getDefiningOp<arith::ConstantOp>();
         if (!bias || !isa<DenseFPElementsAttr>(bias.getValue()))
           return unsupported(&operation, "convolution bias must be a dense f32 constant");
+      }
+      continue;
+    }
+
+    if (isa<dwc::FullyConnectedOp>(operation)) {
+      if (operation.getNumOperands() != 3 || operation.getNumResults() != 1 ||
+          !llvm::all_of(operation.getOperandTypes(), staticF32) ||
+          !staticF32(operation.getResult(0).getType()))
+        return unsupported(&operation,
+                           "fully connected requires three static f32 inputs and one result");
+
+      auto input = cast<RankedTensorType>(operation.getOperand(0).getType());
+      auto filter = cast<RankedTensorType>(operation.getOperand(1).getType());
+      auto bias = cast<RankedTensorType>(operation.getOperand(2).getType());
+      auto output = cast<RankedTensorType>(operation.getResult(0).getType());
+      auto activation = operation.getAttrOfType<dwc::ActivationFunctionAttr>("activation_function");
+      auto cell = operation.getAttrOfType<dwc::CellOperationAttr>("cell_operation");
+      if (input.getRank() != 2 || output.getRank() != 2 || filter.getRank() != 4 ||
+          bias.getRank() != 1 || input.getDimSize(0) != output.getDimSize(0) ||
+          filter.getDimSize(0) != output.getDimSize(1) || filter.getDimSize(1) != 1 ||
+          filter.getDimSize(2) != 1 || filter.getDimSize(3) != input.getDimSize(1) ||
+          bias.getDimSize(0) != output.getDimSize(1) || !activation || !cell ||
+          activation.getValue() != dwc::ActivationFunction::None ||
+          cell.getValue() != dwc::CellOperation::Mac)
+        return unsupported(&operation, "fully connected requires matching batch, input and output "
+                                       "channels with NONE activation and MAC");
+
+      for (Value operand : operation.getOperands().drop_front()) {
+        auto constant = operand.getDefiningOp<arith::ConstantOp>();
+        if (!constant || !isa<DenseFPElementsAttr>(constant.getValue()))
+          return unsupported(&operation,
+                             "fully connected weights and bias must be dense constants");
       }
       continue;
     }
@@ -623,9 +655,8 @@ public:
       }
 
       OperationState state(operation.getLoc(), operation.getName());
-      bool hasBias =
-          isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp, dwc::TransposedConvolutionOp>(
-              operation);
+      bool hasBias = isa<dwc::ConvolutionOp, dwc::DepthwiseConvolutionOp,
+                         dwc::TransposedConvolutionOp, dwc::FullyConnectedOp>(operation);
       for (auto [index, value] : llvm::enumerate(operation.getOperands()))
         state.addOperands(converted(value, hasBias && index == 2));
       state.addTypes(resultType);

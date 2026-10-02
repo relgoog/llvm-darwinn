@@ -246,7 +246,8 @@ Emitted codegen::ringConsumer(int64_t base, ArrayRef<Loop> loops, int64_t first,
   int64_t gap = loops.size() > 1 ? loops[loops.size() - 2].source -
                                        innermost.count * innermost.source
                                  : 0;
-  SmallVector<Counter> items{counter(inner - kAccess, kAccess)};
+  SmallVector<Counter> items{
+      counter(llvm::alignTo(inner, kAccess) - kAccess, kAccess)};
   for (const Loop &loop : llvm::reverse(loops.drop_back()))
     items.push_back(
         counter((loop.count - 1) * loop.destination, loop.destination));
@@ -254,7 +255,7 @@ Emitted codegen::ringConsumer(int64_t base, ArrayRef<Loop> loops, int64_t first,
   consumer.traversal.baseAddress = base;
   consumer.traversal.counter = padded(items, 4);
   consumer.traversal.syncProducer = {producerSync(true, items.size() - 1)};
-  consumer.traversal.byteAddressMode = access(kAccess);
+  consumer.traversal.byteAddressMode = access(std::min(inner, kAccess));
   consumer.virtualChannelSubscription = channels;
   consumer.destination = destination;
   consumer.threadMulticastBitmap = bits<4>("1000");
@@ -653,8 +654,9 @@ Body codegen::modelOutput(Operation *op, Context &context) {
     producer.traversal.syncProducer = {producerSync(true),
                                        producerSync(true, 1)};
     producer.traversal.byteAddressMode = access(std::min(total, kAccess));
-    producer.watchers = {
-        dmaWatcher(tileWatcher(TileSyncFlag::RingBusProducerA, order, 0))};
+    if (boxes.size() > 1)
+      producer.watchers = {
+          dmaWatcher(tileWatcher(TileSyncFlag::RingBusProducerA, order, 0))};
     producer.virtualChannelSubscription = channels;
     producer.targets = targets({}, true);
     out.push_back(dma(producer, tileBit(entry.tile)));
@@ -666,6 +668,8 @@ Body codegen::modelOutput(Operation *op, Context &context) {
     hib.traversal.byteAddressMode = access(run);
     out.push_back(tagged(hib));
     out.push_back(outfeed(total, channels));
+    if (boxes.size() == 1)
+      continue;
     ScalarFence fence;
     fence.expectedScalarSyncFlag[5] = 2 * order + 1;
     fence.waitIdle = bits<5>("00010");

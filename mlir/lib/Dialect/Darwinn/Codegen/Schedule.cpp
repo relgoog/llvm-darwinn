@@ -76,6 +76,8 @@ GroupKind movement(Operation *input, Operation *op) {
     return true;
   });
   bool padded = cast<RedistributeOp>(op).getMappingAttr() != nullptr;
+  if (operandInfo(op, 0).shape.size() == 2 && to.size() == 1 && from.size() > 1)
+    return GroupKind::Gather;
   if (from.size() != to.size() || !covers) {
     bool line = llvm::all_of(from, [&](const auto &entry) {
       return entry.first / kGrid == from.begin()->first / kGrid;

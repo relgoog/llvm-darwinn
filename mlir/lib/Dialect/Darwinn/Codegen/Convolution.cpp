@@ -22,6 +22,10 @@ bool isTransposed(Operation *op) {
          ComputeTypeHintKind::TransposedConv;
 }
 
+bool isFullyConnected(Operation *op) {
+  return computeOptions(op).getComputeTypeHint() == ComputeTypeHintKind::Fc;
+}
+
 struct Geometry {
   int64_t row;
   int64_t col;
@@ -123,6 +127,8 @@ int64_t parameterBytes(const VmcPlan &plan) {
 }
 
 std::array<bool, 8> parameterChannels(Operation *op) {
+  if (isFullyConnected(op))
+    return bits<8>("10000000");
   return activeTiles(op) == bits<16>("1111111111111111") ? bits<8>("01000000")
                                                          : bits<8>("00000001");
 }
@@ -250,14 +256,16 @@ FailureOr<Emitted> weightsConsumer(Operation *op, const VmcPlan &plan,
       prologue.loopId = loopId;
     consumer.traversal.prologue = prologue;
   }
+  bool fullyConnected = isFullyConnected(op);
   if (doubled)
-    for (uint8_t thread = 0; thread < kThreads; ++thread)
+    for (uint8_t thread = 0; thread < (fullyConnected ? 1 : kThreads); ++thread)
       consumer.watchers.push_back(
           dmaWatcher(tileWatcher(TileSyncFlag::ParameterRead, kWatcherBase, 1,
                                  rows, false, thread),
                      true));
   consumer.destination = RingDestination::WideMemory;
-  consumer.threadMulticastBitmap = bits<4>("1111");
+  consumer.threadMulticastBitmap =
+      fullyConnected ? threadBit(0) : bits<4>("1111");
   consumer.virtualChannelSubscription = parameterChannels(op);
   consumer.filter.firstDiscardByteLoopMap =
       broadcast ? (1u << items.size()) - 1 : 0;
@@ -295,7 +303,8 @@ FailureOr<Emitted> biasMove(Operation *op, const VmcPlan &plan,
   move.wideMemoryLoadStoreLoopId = 1;
   move.isScalingFactorBias = true;
   move.zInBundleValidCount = 1;
-  move.threadMulticastBitmap = bits<4>("1111");
+  move.threadMulticastBitmap =
+      isFullyConnected(op) ? threadBit(0) : bits<4>("1111");
   return dma(move, activeTiles(op));
 }
 
@@ -322,6 +331,74 @@ NonLinear reluNonLinear(Operation *op, int64_t outElem) {
   nonLinear.lowClipValue = low;
   nonLinear.outputType = outElem == 4 ? OutputType::Single : OutputType::Bfloat;
   return nonLinear;
+}
+
+FailureOr<TensorOp> fullyConnectedTensorOp(Operation *op, const VmcPlan &plan,
+                                           Context &context) {
+  FailureOr<int64_t> source = operandAddress(producer(op, 0), 0, context);
+  FailureOr<int64_t> destination =
+      operandAddress(producer(op, 2), 0, context, op);
+  FailureOr<int64_t> wide = context.wideAddress(op);
+  if (failed(source) || failed(destination) || failed(wide))
+    return unsupported(op, "an unplaced fully connected operand");
+
+  int64_t cycles = plan.chunk / 2;
+  int64_t inputBytes = operandInfo(op, 0).elementBytes;
+  int64_t outputBytes = operandInfo(op, 2).elementBytes;
+  int64_t laneBytes = plan.lanes * outputBytes;
+  int64_t chunkBytes = plan.chunk * inputBytes;
+  TensorOp tensor;
+  tensor.mainOperation.counter =
+      mainCounters({cycles, plan.chunks, plan.outBlocks});
+  Traversal &read = tensor.narrowMemoryRead;
+  read.baseAddress = *source;
+  read.counter = padded({counter((cycles - 1) * 4, 4),
+                         counter((plan.chunks - 1) * chunkBytes, chunkBytes)},
+                        8);
+  read.syncProducer = {producerSync(false)};
+  read.byteAddressMode = access(4);
+  Traversal &write = tensor.narrowMemoryWriteFromNonLinear;
+  write.baseAddress = *destination;
+  write.counter = padded({counter(0, laneBytes)}, 8);
+  write.syncProducer = {producerSync(true, 1)};
+  write.byteAddressMode = access(laneBytes);
+
+  Traversal &weights = tensor.wideMemoryReadForParameters;
+  weights.baseAddress = *wide * 4;
+  weights.counter = padded(
+      {counter((cycles - 1) * 4, 4), counter(plan.chunks - 1, 1, false)}, 8);
+  weights.syncProducer = {producerSync(true, 1)};
+  weights.doubleBufferLoop = 1;
+  weights.secondBufferOffset = cycles * 4;
+  Traversal &sums = tensor.wideMemoryReadForSums;
+  sums.baseAddress = (*wide + plan.weightsRows) * 4;
+  sums.counter = padded({counter(cycles - 1, 1, false), counter(0, 4),
+                         counter(plan.chunks - 1, 1, false)},
+                        8);
+  sums.syncProducer = {producerSync(true, 2)};
+
+  tensor.syncWatchers.push_back(
+      tileWatcher(TileSyncFlag::RingBusReadA, 1, 1, 1));
+  if (plan.biasRows)
+    tensor.syncWatchers.push_back(
+        tileWatcher(TileSyncFlag::WideToScaling, 1, 0, 3, true));
+  tensor.control.linear = macLinear(true);
+  tensor.control.nonLinear = reluNonLinear(op, outputBytes);
+  if (plan.biasRows) {
+    tensor.control.nonLinear.applyBias = true;
+  } else if (hasBias(op)) {
+    FailureOr<int32_t> bias = scalarBiasBits(op);
+    if (failed(bias))
+      return unsupported(op,
+                         "a scalar fully connected bias that is not a fill");
+    tensor.control.nonLinear.immediateBias = *bias;
+  }
+  tensor.control.threadMulticastBitmap = threadBit(0);
+  tensor.control.zOutBlockLoopDepth = 2;
+  tensor.control.lastZOutBlockValidCount = plan.lanes;
+  tensor.control.defaultZOutBlockValidCount = plan.lanes;
+  tensor.control.partialSumReuseMap = 3;
+  return tensor;
 }
 
 FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
@@ -845,6 +922,30 @@ int64_t codegen::stencilTaps(Operation *op) {
 
 FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   SmallVector<int64_t, 4> shape = resultInfo(weightsView(op)).shape;
+  bool fullyConnected = isFullyConnected(op);
+  if (fullyConnected) {
+    TensorInfo input = operandInfo(op, 0);
+    TensorInfo output = operandInfo(op, 2);
+    auto inputSlicing = slicingOf(throughViews(producer(op, 0)));
+    auto outputSlicing = slicingOf(throughViews(producer(op, 2)));
+    SmallVector<int64_t, 3> unsliced{1, 1};
+    if (input.shape.size() != 2 || output.shape.size() != 2 ||
+        input.shape[0] != 1 || output.shape[0] != 1 || shape.size() != 4 ||
+        shape[0] != 1 || shape[1] != 1 || shape[2] != input.shape[1] ||
+        shape[3] != output.shape[1] || input.shape[1] < 2 ||
+        input.shape[1] % 2 || output.shape[1] < 1 ||
+        output.shape[1] > kOutLanes || input.elementBytes != 2 ||
+        nluFunction(op) != NluFunctionKind::Linear || !inputSlicing ||
+        !outputSlicing || inputSlicing->domain != unsliced ||
+        outputSlicing->domain != unsliced)
+      return unsupported(op, "fully connected geometry outside one unsliced "
+                             "batch and output block");
+    Box inputBox = viewThreadBox(producer(op, 0), 0);
+    Box outputBox = viewThreadBox(producer(op, 2), 0);
+    if (inputBox.lo != Index{0, 0} || outputBox.lo != Index{0, 0} ||
+        extent(inputBox) != input.shape || extent(outputBox) != output.shape)
+      return unsupported(op, "fully connected operands sliced inside a tile");
+  }
   VmcPlan plan;
   if (isTransposed(op)) {
     int64_t taps = product(ArrayRef(shape).drop_back(2));
@@ -892,7 +993,9 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   int64_t cinPadded = cin + cin % 2;
   Index size = extent(viewThreadBox(producer(op, 2), 0));
   int64_t cout = size.back();
-  int64_t pixels = product(ArrayRef(size).drop_front().drop_back());
+  int64_t pixels = fullyConnected
+                       ? size.front()
+                       : product(ArrayRef(size).drop_front().drop_back());
   plan.lanes = std::min(cout, kOutLanes);
   plan.lanesPadded = std::min(ceilDiv(cout, 8) * 8, kOutLanes);
   plan.outBlocks = ceilDiv(cout, kOutLanes);
@@ -904,6 +1007,8 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   if (singleRows + plan.biasRows <= kWideRows &&
       (pixels > kPartialSumPixels ||
        cinPadded / 2 * taps + 1 + plan.biasRows <= kSingleRows)) {
+    if (fullyConnected)
+      return unsupported(op, "fully connected with a single parameter buffer");
     plan.single = true;
     plan.chunk = cinPadded;
     plan.chunks = 1;
@@ -947,6 +1052,23 @@ Body codegen::vmc(Operation *op, Context &context) {
   llvm::append_range(out, parameterInfeed(op, *plan));
   std::array<bool, 16> active = activeTiles(op);
   SmallVector<int64_t> tiles = activeList(active);
+  if (isFullyConnected(op)) {
+    FailureOr<Emitted> consumer =
+        weightsConsumer(op, *plan, context, active, false);
+    FailureOr<TensorOp> tensorOp = fullyConnectedTensorOp(op, *plan, context);
+    if (failed(consumer) || failed(tensorOp))
+      return failure();
+    out.push_back(*consumer);
+    if (plan->biasRows) {
+      FailureOr<Emitted> bias = biasMove(op, *plan, context);
+      if (failed(bias))
+        return failure();
+      out.push_back(*bias);
+    }
+    out.push_back(tensor(*tensorOp, active, {}));
+    llvm::append_range(out, groupFences());
+    return out;
+  }
   FailureOr<SmallVector<Emitted, 0>> loads = registers(op, context);
   if (failed(loads))
     return failure();

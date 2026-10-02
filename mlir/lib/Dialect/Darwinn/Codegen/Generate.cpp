@@ -162,6 +162,8 @@ std::array<bool, 16> tileSetOf(ArrayRef<TileBox> boxes) {
 std::optional<ChannelUse> channel7Tiles(const Group &group) {
   Operation *op = group.op;
   if (group.kind == GroupKind::Op && isa<TensorOpOp>(op)) {
+    if (computeOptions(op).getComputeTypeHint() == ComputeTypeHintKind::Fc)
+      return std::nullopt;
     std::optional<InnerOperationKind> inner = innerOperation(op);
     std::array<bool, 16> active = activeTiles(op);
     if ((inner == InnerOperationKind::Vmc ||
@@ -178,7 +180,8 @@ std::optional<ChannelUse> channel7Tiles(const Group &group) {
     return std::nullopt;
   DistributedMemorySpace from = sourceSpace(op), to = resultSpace(op);
   if (from == DistributedMemorySpace::TileMemory &&
-      to == DistributedMemorySpace::HostMemory && !unused(op))
+      to == DistributedMemorySpace::HostMemory && !unused(op) &&
+      tiles(*slicingOf(producer(op, 0))).size() > 1)
     return ChannelUse{tileSetOf(tiles(*slicingOf(producer(op, 0)))), false,
                       true};
   if (from == DistributedMemorySpace::HostMemory) {

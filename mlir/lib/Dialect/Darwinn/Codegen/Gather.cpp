@@ -28,6 +28,7 @@ struct GatherGeometry {
   int64_t destinationRowBytes = 0;
   int64_t columnOffset = 0;
   bool columnFirst = false;
+  bool vector = false;
   std::map<int64_t, int64_t> channelOffsets;
   std::map<int64_t, int64_t> origin;
   SmallVector<std::pair<int64_t, Rows>> sources;
@@ -52,45 +53,100 @@ const Rows &rowsOf(ArrayRef<std::pair<int64_t, Rows>> entries, int64_t tile) {
       ->second;
 }
 
+FailureOr<GatherGeometry> vectorGeometry(Operation *op) {
+  TensorInfo source = operandInfo(op, 0), info = resultInfo(op);
+  auto sourceType =
+      dyn_cast<DistributedTensorType>(op->getOperand(0).getType());
+  auto resultType = dyn_cast<DistributedTensorType>(op->getResult(0).getType());
+  if (!sourceType || !resultType || !sourceType.getElementType().isBF16() ||
+      !resultType.getElementType().isBF16() || source.shape != info.shape ||
+      source.shape.size() != 2 || source.shape[0] != 1 ||
+      source.shape[1] <= 0 || source.shape[1] % kTiles ||
+      cast<RedistributeOp>(op).getMappingAttr())
+    return unsupported(op, "a vector gather without identical unmapped "
+                           "BF16 vectors divisible across sixteen tiles");
+
+  SmallVector<TileBox> sources = clampedTiles(producer(op, 0));
+  SmallVector<TileBox> destinations = clampedTiles(op);
+  if (sources.size() != kTiles || destinations.size() != 1 ||
+      destinations.front().tile != 0 ||
+      destinations.front().box.lo != Index({0, 0}) ||
+      destinations.front().box.hi != Index({0, source.shape[1] - 1}))
+    return unsupported(op, "a vector gather without sixteen source tiles "
+                           "and one complete destination on tile zero");
+
+  GatherGeometry g;
+  g.vector = true;
+  g.channels = source.shape[1] / kTiles;
+  g.rowBytes = g.sourceRowBytes = g.destinationRowBytes = g.channels * 2;
+  if (g.rowBytes < 8 || g.rowBytes > kSlice || !llvm::isPowerOf2_64(g.rowBytes))
+    return unsupported(op, "a vector gather whose source fragments are "
+                           "not 8, 16 or 32 bytes");
+
+  llvm::sort(sources, [](const TileBox &a, const TileBox &b) {
+    return a.tile < b.tile;
+  });
+  for (auto [index, entry] : llvm::enumerate(sources)) {
+    int64_t tile = index;
+    if (entry.tile != tile || entry.box.lo != Index({0, tile * g.channels}) ||
+        entry.box.hi != Index({0, (tile + 1) * g.channels - 1}))
+      return unsupported(op, "a vector gather whose source tiles do not "
+                             "hold consecutive equal channel intervals");
+    g.sources.push_back({tile, {tile, tile}});
+  }
+  g.origin[0] = 0;
+  g.destinations.push_back({0, {0, kTiles - 1}});
+  return g;
+}
+
 FailureOr<GatherGeometry> geometry(Operation *op) {
   TensorInfo source = operandInfo(op, 0), info = resultInfo(op);
   Index shift = applyForward(op, Index(info.shape.size(), 0));
   GatherGeometry g;
-  g.rowBytes = source.shape[2] * source.shape[3] * source.elementBytes;
-  g.sourceRowBytes = g.rowBytes;
-  g.channels = source.shape[3];
-  g.destinationRowBytes = info.shape[2] * info.shape[3] * info.elementBytes;
-  g.columnOffset = shift[2] * info.shape[3] * info.elementBytes;
-  SmallVector<TileBox> destinations = clampedTiles(op);
-  int64_t heldChannels = extent(destinations.front().box).back();
-  if (heldChannels < source.shape.back()) {
-    if (info.shape != source.shape || info.elementBytes != 2 ||
-        llvm::any_of(destinations, [&](const TileBox &entry) {
-          return entry.tile / kGrid != destinations.front().tile / kGrid ||
-                 entry.box.lo[1] != 0 || entry.box.lo[2] != 0 ||
-                 entry.box.hi[1] + 1 != info.shape[1] ||
-                 entry.box.hi[2] + 1 != info.shape[2] ||
-                 extent(entry.box).back() != heldChannels;
-        }))
+  if (source.shape.size() == 2 || info.shape.size() == 2) {
+    FailureOr<GatherGeometry> vector = vectorGeometry(op);
+    if (failed(vector))
       return failure();
-    g.sourcePixelBytes = source.shape.back() * source.elementBytes;
-    g.channels = heldChannels;
-    g.rowBytes = g.destinationRowBytes = info.shape[2] * heldChannels * 2;
-    for (const TileBox &entry : destinations)
-      g.channelOffsets[entry.tile % kGrid] = entry.box.lo.back() * 2;
-  }
-  for (const TileBox &entry : clampedTiles(producer(op, 0)))
-    g.sources.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
-  g.columnFirst = llvm::all_of(g.sources, [&](const auto &entry) {
-    return entry.first / kGrid == g.sources.front().first / kGrid;
-  });
-  for (const TileBox &entry : destinations) {
-    int64_t first = entry.box.lo[1] - shift[1];
-    g.origin[entry.tile] = first;
-    g.destinations.push_back(
-        {entry.tile,
-         {std::max<int64_t>(first, 0),
-          std::min(entry.box.hi[1] - shift[1], source.shape[1] - 1)}});
+    g = std::move(*vector);
+  } else {
+    if (source.shape.size() != 4 || info.shape.size() != 4)
+      return failure();
+    g.rowBytes = source.shape[2] * source.shape[3] * source.elementBytes;
+    g.sourceRowBytes = g.rowBytes;
+    g.channels = source.shape[3];
+    g.destinationRowBytes = info.shape[2] * info.shape[3] * info.elementBytes;
+    g.columnOffset = shift[2] * info.shape[3] * info.elementBytes;
+    SmallVector<TileBox> destinations = clampedTiles(op);
+    int64_t heldChannels = extent(destinations.front().box).back();
+    if (heldChannels < source.shape.back()) {
+      if (info.shape != source.shape || info.elementBytes != 2 ||
+          llvm::any_of(destinations, [&](const TileBox &entry) {
+            return entry.tile / kGrid != destinations.front().tile / kGrid ||
+                   entry.box.lo[1] != 0 || entry.box.lo[2] != 0 ||
+                   entry.box.hi[1] + 1 != info.shape[1] ||
+                   entry.box.hi[2] + 1 != info.shape[2] ||
+                   extent(entry.box).back() != heldChannels;
+          }))
+        return failure();
+      g.sourcePixelBytes = source.shape.back() * source.elementBytes;
+      g.channels = heldChannels;
+      g.rowBytes = g.destinationRowBytes = info.shape[2] * heldChannels * 2;
+      for (const TileBox &entry : destinations)
+        g.channelOffsets[entry.tile % kGrid] = entry.box.lo.back() * 2;
+    }
+    for (const TileBox &entry : clampedTiles(producer(op, 0)))
+      g.sources.push_back({entry.tile, {entry.box.lo[1], entry.box.hi[1]}});
+    g.columnFirst = llvm::all_of(g.sources, [&](const auto &entry) {
+      return entry.first / kGrid == g.sources.front().first / kGrid;
+    });
+    for (const TileBox &entry : destinations) {
+      int64_t first = entry.box.lo[1] - shift[1];
+      g.origin[entry.tile] = first;
+      g.destinations.push_back(
+          {entry.tile,
+           {std::max<int64_t>(first, 0),
+            std::min(entry.box.hi[1] - shift[1], source.shape[1] - 1)}});
+    }
   }
   auto line = [&](int64_t tile) {
     return g.columnFirst ? tile % kGrid : tile / kGrid;
@@ -145,7 +201,7 @@ FailureOr<GatherPlan> plan(Operation *op, Context &context) {
   if (failed(g))
     return unsupported(op, "a gather whose rows are not contiguous");
   int64_t pixelBytes = g->channels * 2;
-  if ((!g->sourcePixelBytes && pixelBytes < 16) || pixelBytes % 8)
+  if ((!g->vector && !g->sourcePixelBytes && pixelBytes < 16) || pixelBytes % 8)
     return unsupported(op, "a gather whose rows do not split into thread "
                            "granules");
   SmallVector<const StorageBlock *> blocks;
@@ -432,11 +488,17 @@ SmallVector<Step> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
             padded({counter(p.rowBytes - kFlit, kFlit),
                     counter((rows - 1) * receiveStride, receiveStride)},
                    5);
-      else
-        target.counter = padded({counter(rows * p.rowBytes - kFlit, kFlit)}, 5);
+      else {
+        int64_t bytes = rows * p.rowBytes;
+        int64_t end =
+            p.vector ? (ceilDiv(bytes, kFlit) - 1) * kFlit : bytes - kFlit;
+        target.counter = padded({counter(end, kFlit)}, 5);
+      }
       target.syncProducer = {producerSync(true, strided)};
-      target.byteAddressMode =
-          access(role == Part::Send && sendPixelBytes ? p.channels * 2 : kFlit);
+      int64_t accessBytes =
+          p.vector ? std::min(kFlit, rows * p.rowBytes) : kFlit;
+      target.byteAddressMode = access(
+          role == Part::Send && sendPixelBytes ? p.channels * 2 : accessBytes);
       TileValues addresses;
       std::set<int64_t> distinct;
       for (const MeshOp *op : members) {
@@ -453,9 +515,11 @@ SmallVector<Step> meshInstructions(ArrayRef<SmallVector<MeshOp *>> merged,
     }
     if (sample->parts.count(Part::Forward)) {
       int64_t size = sample->parts.at(Part::Forward)->size * p.rowBytes;
-      mesh.write.counter = padded({counter(size / kFlit - 1, 1, false)}, 5);
+      int64_t flits = p.vector ? ceilDiv(size, kFlit) : size / kFlit;
+      mesh.write.counter = padded({counter(flits - 1, 1, false)}, 5);
       mesh.write.syncProducer = {producerSync(false)};
-      mesh.write.byteAddressMode = access(kFlit);
+      mesh.write.byteAddressMode =
+          access(p.vector ? std::min(kFlit, size) : kFlit);
       mesh.forwardingMode = true;
     }
     loads.push_back(dma(mesh, tileSet(tiles), sourced));
@@ -470,6 +534,75 @@ struct Copy {
   int64_t rows;
   int64_t stride;
 };
+
+FailureOr<SmallVector<Step>> vectorCopies(Operation *op,
+                                          const std::map<int64_t, Copy> &copies,
+                                          const GatherPlan &p) {
+  using Key = std::tuple<int64_t, int64_t, int64_t>;
+  std::map<Key, SmallVector<int64_t>> groups;
+  for (const auto &[tile, copy] : copies) {
+    if (copy.stride != p.rowBytes)
+      return unsupported(op, "a vector gather with strided local copies");
+    groups[{copy.source, copy.destination, copy.rows * p.rowBytes}].push_back(
+        tile);
+  }
+
+  SmallVector<Step> out;
+  for (const auto &[key, tiles] : groups) {
+    auto [source, destination, bytes] = key;
+    SmallVector<Emitted, 0> body;
+    if (bytes <= kSlice) {
+      int64_t accessBytes = std::min(kFlit, bytes);
+      NarrowToNarrow copy;
+      copy.read.baseAddress = source;
+      copy.write.baseAddress = destination;
+      copy.read.counter = copy.write.counter =
+          padded({counter(bytes - accessBytes, accessBytes)}, 4);
+      copy.read.byteAddressMode = copy.write.byteAddressMode =
+          access(accessBytes);
+      copy.read.syncProducer = {producerSync(false)};
+      copy.write.syncProducer = {producerSync(true)};
+      body.push_back(dma(copy, tileSet(tiles)));
+    } else {
+      if (bytes % kSlice || bytes > kThreads * kSlice || source % kSlice ||
+          destination % kSlice)
+        return unsupported(op, "a vector gather local copy that cannot "
+                               "split into four aligned 32-byte slices");
+
+      for (int64_t thread = 0; thread < bytes / kSlice; ++thread) {
+        NarrowToWide gather;
+        gather.read.baseAddress = source + thread * kSlice;
+        gather.read.counter = padded({counter(0, kSlice)}, 6);
+        gather.read.byteAddressMode = access(kSlice);
+        gather.write.baseAddress = p.wide;
+        gather.write.counter = padded({counter(0, 1)}, 4);
+        gather.write.byteAddressMode = access(kSlice);
+        gather.write.syncProducer = {producerSync(true, 1)};
+        gather.threadMulticastBitmap = threadBit(thread);
+        gather.byteAddress.strideUnitGranulesLoopMap = 1;
+        gather.byteAddress.defaultStrideUnitGranules = 2;
+        gather.byteAddress.lastStrideUnitGranules = 2;
+        gather.byteAddress.cellStride = kSlice / 4;
+        body.push_back(dma(gather, tileSet(tiles)));
+
+        WideToNarrow scatter;
+        scatter.read.baseAddress = p.wide;
+        scatter.read.counter = padded({counter(0, 1)}, 4);
+        scatter.write.baseAddress = (destination + thread * kSlice) / 4;
+        scatter.write.counter = padded({counter(0, kSlice / 4)}, 6);
+        scatter.write.syncProducer = {producerSync(true)};
+        scatter.readWatchers = {dmaWatcher(
+            tileWatcher(TileSyncFlag::NarrowToWideWrite, 1, 1, 1, true))};
+        scatter.wideMemoryLoadStoreLoopId = 1;
+        scatter.zInBundleValidCount = kSlice / 4;
+        scatter.threadMulticastBitmap = threadBit(thread);
+        body.push_back(dma(scatter, tileSet(tiles)));
+      }
+    }
+    out.push_back({tiles.front() / kGrid, std::move(body)});
+  }
+  return out;
+}
 
 struct Dim {
   int64_t count;
@@ -501,6 +634,8 @@ FailureOr<SmallVector<Step>>
 localCopies(Operation *op, const std::map<int64_t, Copy> &copies,
             const GatherPlan &p, const Order &sourceOrder,
             const Order &destinationOrder, int64_t sourcePixelBytes = 0) {
+  if (p.vector)
+    return vectorCopies(op, copies, p);
   SmallVector<std::pair<int64_t, std::map<int64_t, Copy>>> groups;
   for (const auto &item : copies) {
     const auto &[tile, copy] = item;
@@ -822,6 +957,8 @@ int64_t codegen::gatherWideRows(Operation *op) {
   FailureOr<GatherGeometry> g = geometry(op);
   if (failed(g))
     return 0;
+  if (g->vector)
+    return kGrid * g->rowBytes > kSlice ? 1 : 0;
   int64_t width = g->rowBytes / (g->channels * 2);
   SmallVector<int64_t> copies;
   for (auto [tile, rows] : g->sources)
