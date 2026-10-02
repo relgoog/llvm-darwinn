@@ -359,8 +359,8 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   };
   std::optional<int64_t> tapIndex;
   if (pairs) {
-    loop(1, true);
-    loop(cycles, true);
+    loop(plan.cin <= 4 ? cycles : 1, true);
+    loop(plan.cin <= 4 ? 1 : cycles, true);
     if (group > 1)
       loop(group, true);
     loop(inner, false);
@@ -379,7 +379,7 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
 
   TensorOp tensor;
   tensor.mainOperation.counter = mainCounters(main);
-  bool unitCycles = !single && !pairs && cycles * group == 1;
+  bool unitCycles = !pairs && cycles * group == 1;
   SmallVector<std::pair<int64_t, int64_t>> read;
   if (!unitCycles)
     read.push_back({cycles, 4});
@@ -445,8 +445,8 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   }
   Traversal &weights = tensor.wideMemoryReadForParameters;
   weights.counter = padded(masked(parameters), 8);
-  weights.syncProducer = {
-      producerSync(true, 2 + (single && !merged && taps > 1) - unitCycles)};
+  weights.syncProducer = {producerSync(
+      true, 2 + (single && !merged && taps > 1) - (unitCycles && !single))};
   weights.baseAddress = *wide * 4;
   if (!single || plan.outBlocks > 1) {
     weights.doubleBufferLoop = single ? parameters.size() - 1 : 2 - unitCycles;
@@ -881,7 +881,7 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
   }
   int64_t taps = product(ArrayRef(shape).drop_back(2));
   int64_t cin = shape[shape.size() - 2];
-  int64_t cinPadded = std::max<int64_t>(cin + cin % 2, 4);
+  int64_t cinPadded = cin + cin % 2;
   Index size = extent(viewThreadBox(producer(op, 2), 0));
   int64_t cout = size.back();
   int64_t pixels = product(ArrayRef(size).drop_front().drop_back());
