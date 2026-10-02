@@ -494,7 +494,10 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
   while (pixelBytes <= 128 ? kThreads % granules : granules > kThreads)
     granules = llvm::divideCeil(pixelBytes, element *= 2);
   element = std::min(pixelBytes, element);
-  int64_t segments = pixelBytes <= 128 ? kThreads / granules : 1;
+  int64_t free = pixelBytes <= 128 ? kThreads / granules : 1;
+  int64_t segments = free;
+  while (width % segments)
+    segments /= 2;
   int64_t segmentPixels = width / segments;
   SmallVector<Step> blocks;
   for (const auto &[rows, members] : groups) {
@@ -510,10 +513,19 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
         stride % kSlice == 0 && llvm::all_of(members, [](const auto &entry) {
           return entry.second.destination % kSlice == 0;
         });
-    for (int64_t thread = 0; thread < granules * segments; ++thread) {
+    int64_t rowGroups = free / segments;
+    while (rows % rowGroups)
+      rowGroups /= 2;
+    int64_t groupRows = rows / rowGroups;
+    for (int64_t thread = 0; thread < granules * segments * rowGroups;
+         ++thread) {
       std::array<bool, 4> bitmap = threadBit(thread);
-      int64_t granule = thread % granules, segment = thread / granules;
+      int64_t granule = thread % granules,
+              segment = thread / granules % segments,
+              rowGroup = thread / (granules * segments);
       int64_t offset = segment * segmentPixels * pixelBytes + granule * element;
+      int64_t sourceOffset = offset + rowGroup * groupRows * p.rowBytes;
+      int64_t destinationOffset = offset + rowGroup * groupRows * stride;
       int64_t bytes = std::min(element, pixelBytes - granule * element);
       bool merged = bytes == pixelBytes;
       int64_t writeElement = aligned && (merged || pixelBytes % kSlice == 0)
@@ -523,10 +535,14 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       SmallVector<Dim> readDims =
           mergeDims({{1, bytes, granule != 0},
                      {segmentPixels, pixelBytes, segment != 0},
-                     {rows, p.rowBytes, false}});
+                     {groupRows, p.rowBytes, false}});
       int64_t run = readDims.front().count * bytes;
       int64_t accessBytes = std::min<int64_t>(
           run, llvm::isPowerOf2_64(run) || run > 128 ? 128 : run & -run);
+      if (run > 128)
+        while (accessBytes > 8 && run % accessBytes)
+          accessBytes -= 8;
+      writeElement = std::min(writeElement, accessBytes & -accessBytes);
       SmallVector<Counter> readItems;
       pushDim(readItems,
               {run / accessBytes, accessBytes, readDims.front().offset});
@@ -541,8 +557,8 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       TileValues sources;
       std::set<int64_t> distinctSources;
       for (const auto &[tile, copy] : members) {
-        sources.push_back({tile, copy.source + offset});
-        distinctSources.insert(copy.source + offset);
+        sources.push_back({tile, copy.source + sourceOffset});
+        distinctSources.insert(copy.source + sourceOffset);
       }
       std::array<bool, 8> gatherRegisters{};
       SmallVector<Emitted, 0> loads;
@@ -556,7 +572,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       SmallVector<Dim> writeDims =
           mergeDims({{1, bytes, granule != 0},
                      {segmentPixels, pixelBytes, segment != 0},
-                     {rows, stride, false}});
+                     {groupRows, stride, false}});
       int64_t perWideRow = 4;
       if (writeDims.front().stride == bytes) {
         Dim &run = writeDims.front();
@@ -664,7 +680,7 @@ FailureOr<SmallVector<Step>> localCopies(Operation *op,
       TileValues destinations;
       std::set<int64_t> distinctDestinations;
       for (const auto &[tile, copy] : members) {
-        int64_t address = (copy.destination + offset) / 4;
+        int64_t address = (copy.destination + destinationOffset) / 4;
         destinations.push_back({tile, address});
         distinctDestinations.insert(address);
       }
