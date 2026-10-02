@@ -118,8 +118,8 @@ llvm::Expected<llvm::SmallVector<uint8_t>> mlir::darwinn::packConvolution(
                                       shape.getOutputChannels());
   if (!validatedBias)
     return validatedBias.takeError();
-  llvm::Expected<size_t> paddedOutputs =
-      alignedCount(shape.getOutputChannels(), 8);
+  llvm::Expected<size_t> paddedOutputs = alignedCount(
+      shape.getOutputChannels(), shape.getOutputChannels() > 32 ? 32 : 8);
   if (!paddedOutputs)
     return paddedOutputs.takeError();
   llvm::Expected<size_t> paddedInputs =

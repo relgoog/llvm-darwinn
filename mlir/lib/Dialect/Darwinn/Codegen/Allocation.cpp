@@ -350,9 +350,11 @@ codegen::wideProblem(ArrayRef<Group> groups) {
     }
     case InnerOperationKind::Stencil: {
       int64_t taps = stencilTaps(op);
+      bool blocks = stencilBlocks(op) > 1;
       if (hasBias(op))
-        add(op, Suffix::Bias, step, step, 2);
-      add(op, Suffix::None, step, step, taps + 2);
+        add(op, Suffix::Bias, step, step, 1 + blocks);
+      add(op, Suffix::None, step, step,
+          blocks ? taps + 2 : (taps + taps % 2) / 2 + 1);
       break;
     }
     default:

@@ -408,7 +408,11 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
   tensor.narrowMemoryWriteFromNonLinear.syncProducer = {
       producerSync(true, 1 + writePixels.size())};
-  tensor.narrowMemoryWriteFromNonLinear.byteAddressMode = access(laneBytes);
+  int64_t lastLanes = shape.back() - plan.lanes * (plan.outBlocks - 1);
+  tensor.narrowMemoryWriteFromNonLinear.byteAddressMode =
+      lastLanes != plan.lanes
+          ? access(lastLanes * outElem, laneBytes, 1u << (write.size() - 1))
+          : access(laneBytes);
 
   FailureOr<int64_t> wide = context.wideAddress(op);
   if (failed(wide))
@@ -512,7 +516,7 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   }
   tensor.control.threadMulticastBitmap = bits<4>("1111");
   tensor.control.zOutBlockLoopDepth = outIndex;
-  tensor.control.lastZOutBlockValidCount = plan.lanes;
+  tensor.control.lastZOutBlockValidCount = lastLanes;
   tensor.control.defaultZOutBlockValidCount = plan.lanes;
   uint8_t reuse = 0;
   for (auto [index, reduces] : llvm::enumerate(reduction))
@@ -642,6 +646,9 @@ FailureOr<Emitted> stencilConsumer(Operation *op, const StencilPlan &plan,
     items = {counter(plan.blocks - 1, 1, false)};
     consumer.traversal.syncProducer = {producerSync(true)};
     consumer.traversal.secondBufferOffset = 1;
+  } else if (plan.blocks == 1) {
+    items = {counter(plan.rows - 1, 1)};
+    consumer.traversal.syncProducer = {producerSync(true, 1)};
   } else {
     items = {counter(plan.rows - 1, 1), counter(plan.blocks - 1, 1, false)};
     consumer.traversal.syncProducer = {producerSync(true, 1)};
@@ -656,12 +663,12 @@ FailureOr<Emitted> stencilConsumer(Operation *op, const StencilPlan &plan,
       return unsupported(op, "an unplaced stencil bias");
     Prologue prologue;
     prologue.baseAddress = *bias;
-    prologue.outerLimit = *bias + 1;
+    prologue.outerLimit = *bias + (plan.blocks > 1);
     prologue.outerStride = 1;
     prologue.accessBytes = row;
     consumer.traversal.prologue = prologue;
   }
-  for (uint8_t thread = 0; thread < kThreads; ++thread)
+  for (uint8_t thread = 0; plan.blocks > 1 && thread < kThreads; ++thread)
     consumer.watchers.push_back(
         dmaWatcher(tileWatcher(TileSyncFlag::ParameterRead, kWatcherBase, 1,
                                plan.taps > 1 ? 1 : 0, false, thread),
@@ -689,13 +696,15 @@ FailureOr<TensorOp> stencilTensorOp(Operation *op, const StencilPlan &plan,
       mainCounters({plan.taps, cols * rows, plan.blocks});
   auto read = mergeStream(tapLoops, &Strided::lhs);
   llvm::append_range(read, mergeStream(pixels, &Strided::lhs));
-  read.push_back({plan.blocks, blockIn});
+  if (plan.blocks > 1)
+    read.push_back({plan.blocks, blockIn});
   tensor.narrowMemoryRead.counter = padded(masked(read), 8);
   tensor.narrowMemoryRead.byteAddressMode = access(blockIn, 4);
   tensor.narrowMemoryRead.syncProducer = {producerSync(false)};
   auto writePixels = mergeStream(pixels, &Strided::out);
   SmallVector<std::pair<int64_t, int64_t>> writeLoops(writePixels);
-  writeLoops.push_back({plan.blocks, laneBytes});
+  if (plan.blocks > 1)
+    writeLoops.push_back({plan.blocks, laneBytes});
   SmallVector<Counter> write{counter(0, laneBytes)};
   llvm::append_range(write, masked(writeLoops));
   tensor.narrowMemoryWriteFromNonLinear.counter = padded(write, 8);
@@ -715,6 +724,12 @@ FailureOr<TensorOp> stencilTensorOp(Operation *op, const StencilPlan &plan,
     weights.doubleBufferLoop = 1;
     weights.secondBufferOffset = 4;
     sumsBase = (*wide + 2) * 4;
+  } else if (plan.blocks == 1) {
+    weights.counter = padded(
+        {counter((plan.taps - 1) * 2, 2), counter(cols * rows - 1, 1, false)},
+        8);
+    weights.syncProducer = {producerSync(true, 2)};
+    sumsBase = (*wide + plan.rows) * 4;
   } else {
     weights.counter = padded({counter((plan.taps - 1) * 2, 2),
                               counter(cols * rows - 1, 1, false),
@@ -728,18 +743,20 @@ FailureOr<TensorOp> stencilTensorOp(Operation *op, const StencilPlan &plan,
   weights.baseAddress = *wide * 4;
   Traversal &sums = tensor.wideMemoryReadForSums;
   sums.baseAddress = sumsBase;
-  sums.counter = padded({counter(plan.taps - 1, 1, false),
-                         counter(cols * rows - 1, 1, false),
-                         counter(plan.blocks - 1, 1, false)},
-                        8);
+  SmallVector<Counter> sumItems{counter(plan.taps - 1, 1, false),
+                                counter(cols * rows - 1, 1, false)};
+  if (plan.blocks > 1)
+    sumItems.push_back(counter(plan.blocks - 1, 1, false));
+  sums.counter = padded(sumItems, 8);
   sums.syncProducer = {producerSync(true, 2)};
   sums.doubleBufferLoop = 1;
   sums.secondBufferOffset = 4;
+  bool blocks = plan.blocks > 1;
   tensor.syncWatchers.push_back(
-      tileWatcher(TileSyncFlag::RingBusReadA, 1, 1, 2));
+      tileWatcher(TileSyncFlag::RingBusReadA, 1, blocks, blocks ? 2 : 3));
   if (plan.bias)
-    tensor.syncWatchers.push_back(
-        tileWatcher(TileSyncFlag::WideToScaling, 1, 1, 2, true));
+    tensor.syncWatchers.push_back(tileWatcher(TileSyncFlag::WideToScaling, 1,
+                                              blocks, blocks ? 2 : 3, true));
   Linear linear;
   linear.operation = LinearOperation::HighBandwidthMac;
   linear.activationType = OperandType::Bfloat;
@@ -807,6 +824,11 @@ Operation *codegen::weightsView(Operation *op) {
 
 bool codegen::hasBias(Operation *op) {
   return hasAuxiliary(op, AuxTensorKind::Bias);
+}
+
+int64_t codegen::stencilBlocks(Operation *op) {
+  return ceilDiv(extent(viewThreadBox(producer(op, 2), 0)).back(),
+                 kStencilLanes);
 }
 
 int64_t codegen::stencilTaps(Operation *op) {
@@ -990,6 +1012,7 @@ Body codegen::stencil(Operation *op, Context &context) {
   biasPlan.lanesPadded = kStencilLanes;
   biasPlan.lanes = kStencilLanes;
   biasPlan.outBlocks = plan.blocks;
+  biasPlan.single = true;
   biasPlan.chunks = 1;
   biasPlan.taps = 1;
   biasPlan.outer = 1;
