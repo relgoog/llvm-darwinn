@@ -81,14 +81,10 @@ GroupKind movement(Operation *input, Operation *op) {
     });
     return padded && line ? GroupKind::Gather : GroupKind::Scatter;
   }
-  const Box &first = from.at(0);
-  int64_t rows = first.hi[1] - first.lo[1] + 1;
-  if (padded)
-    return product(extent(first)) * operandInfo(op, 0).elementBytes >=
-                   kBroadcastBytes
-               ? GroupKind::RingReshapeIdentity
-               : GroupKind::Gather;
-  return rows >= 4 ? GroupKind::RingReshapeIdentity : GroupKind::Gather;
+  return product(extent(from.at(0))) * operandInfo(op, 0).elementBytes >=
+                 kBroadcastBytes
+             ? GroupKind::RingReshapeIdentity
+             : GroupKind::Gather;
 }
 
 bool isPadded(Operation *op) {

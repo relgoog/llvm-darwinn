@@ -336,14 +336,17 @@ Body codegen::interpolate(Operation *op, Context &context) {
       narrowRead.push_back(counter(xCount - 1, 1, false));
     if (yCount > 1)
       narrowRead.push_back(counter(yCount - 1, 1, false));
-    narrowRead.push_back(counter((blocks - 1) * kLanes * 2, kLanes * 2));
+    if (blocks > 1)
+      narrowRead.push_back(counter((blocks - 1) * kLanes * 2, kLanes * 2));
     int64_t outRow = width * sizeZ;
     SmallVector<Counter> narrowWrite{counter(0, kLanes * 2)};
     if (hasX)
       narrowWrite.push_back(counter((xCount - 1) * sizeZ, sizeZ));
     if (yCount > 1)
       narrowWrite.push_back(counter((yCount - 1) * outRow, outRow));
-    narrowWrite.push_back(counter((blocks - 1) * kLanes * 2, kLanes * 2));
+    int64_t writeSync = narrowWrite.size();
+    if (blocks > 1)
+      narrowWrite.push_back(counter((blocks - 1) * kLanes * 2, kLanes * 2));
     int64_t depth = main.size() - 1;
     int64_t yIndex = depth - 1;
     int64_t loopX, loopY;
@@ -362,7 +365,7 @@ Body codegen::interpolate(Operation *op, Context &context) {
         access(kLanes * 2, 1u << (3 + hasX));
     tensorOp.narrowMemoryWriteFromNonLinear.counter = padded(narrowWrite, 8);
     tensorOp.narrowMemoryWriteFromNonLinear.syncProducer = {
-        producerSync(true, narrowWrite.size() - 1)};
+        producerSync(true, writeSync)};
     tensorOp.narrowMemoryWriteFromNonLinear.byteAddressMode =
         access(kLanes * 2);
     tensorOp.wideMemoryReadForSums.counter = padded(
@@ -371,9 +374,11 @@ Body codegen::interpolate(Operation *op, Context &context) {
          counter(0, 1, false), counter(blocks - 1, 1, false)},
         8);
     tensorOp.wideMemoryReadForSums.syncProducer = {producerSync(false)};
-    tensorOp.wideMemoryReadForSums.doubleBufferLoop =
-        hasX ? 2 : (yCount > 1 ? 3 : 5);
-    tensorOp.wideMemoryReadForSums.secondBufferOffset = 4;
+    if (hasX || yCount > 1 || blocks > 1) {
+      tensorOp.wideMemoryReadForSums.doubleBufferLoop =
+          hasX ? 2 : (yCount > 1 ? 3 : 5);
+      tensorOp.wideMemoryReadForSums.secondBufferOffset = 4;
+    }
     for (int64_t thread : planOp.threads)
       tensorOp.control.threadMulticastBitmap[thread] = true;
     Linear &linear = tensorOp.control.linear;

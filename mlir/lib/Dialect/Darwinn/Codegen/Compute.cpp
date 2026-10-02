@@ -256,8 +256,10 @@ FailureOr<TensorOp> unaryTensorOp(Operation *op, Context &context) {
     if (run > 1)
       main.push_back(run - 1);
     main.push_back(blocks - 1);
-    read.push_back(counter((blocks - 1) * readBytes, readBytes));
-    write.push_back(counter((blocks - 1) * writeBytes, writeBytes));
+    if (blocks > 1) {
+      read.push_back(counter((blocks - 1) * readBytes, readBytes));
+      write.push_back(counter((blocks - 1) * writeBytes, writeBytes));
+    }
     SmallVector<Counter> loops;
     for (int64_t end : main)
       loops.push_back(counter(end, 1, false));
