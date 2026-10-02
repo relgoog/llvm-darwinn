@@ -590,29 +590,32 @@ Body codegen::padding(Operation *op, Context &context) {
   constexpr int rows = 1, cols = 2;
   SmallVector<Emitted, 0> out;
   for (bool low_side : {true, false}) {
-    int64_t column = low_side ? low[cols] - 1 : high[cols] + 1;
-    if (0 <= column && column < destination[cols] &&
-        (!low_side || low[cols] > 0))
-      out.push_back(zeroFill(*base + column * stride[cols], stride[cols],
+    int64_t first = low_side ? 0 : high[cols] + 1;
+    int64_t last = low_side ? low[cols] - 1 : destination[cols] - 1;
+    if (first <= last)
+      out.push_back(zeroFill(*base + first * stride[cols],
+                             (last - first + 1) * stride[cols],
                              {{size[rows], stride[rows]}},
                              padDirection(cols, low_side), every, elem, true));
   }
   int64_t run = (high[cols] - low[cols] + 1) * stride[cols];
   for (bool low_side : {true, false}) {
+    int64_t first = low_side ? 0 : high[rows] + 1;
+    int64_t last = low_side ? low[rows] - 1 : destination[rows] - 1;
     for (const auto &[tile, box] : boxes) {
-      int64_t row = low_side ? low[rows] - 1 : high[rows] + 1;
-      if (low_side && low[rows] <= 0)
-        continue;
       Index lo = tail(box.lo, destination.size());
       Index hi = tail(box.hi, destination.size());
-      if (!(lo[rows] <= row && row <= hi[rows]) || row >= destination[rows])
+      int64_t from = std::max(first, lo[rows]), to = std::min(last, hi[rows]);
+      if (from > to)
         continue;
-      int64_t local = row - lo[rows];
       MeshDirection direction = low[rows] > 0 ? padDirection(rows, low_side)
                                               : padDirection(cols, true);
-      out.push_back(
-          zeroFill(*base + local * stride[rows] + low[cols] * stride[cols], run,
-                   {}, direction, tileBit(tile), elem, false));
+      SmallVector<std::pair<int64_t, int64_t>> outer;
+      if (to > from)
+        outer.push_back({to - from + 1, stride[rows]});
+      out.push_back(zeroFill(
+          *base + (from - lo[rows]) * stride[rows] + low[cols] * stride[cols],
+          run, outer, direction, tileBit(tile), elem, to > from));
     }
   }
   return out;
