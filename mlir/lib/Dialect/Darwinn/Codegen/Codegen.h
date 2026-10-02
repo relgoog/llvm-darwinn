@@ -46,7 +46,7 @@ struct Box {
 };
 
 Box unionBox(const Slicing &slicing, int64_t row, int64_t column);
-Box threadBox(const Slicing &slicing, int64_t thread);
+Box threadBox(const Slicing &slicing, int64_t thread, int64_t tile = 0);
 Index extent(const Box &box);
 
 struct TileBox {

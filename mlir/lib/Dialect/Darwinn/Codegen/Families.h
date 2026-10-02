@@ -52,15 +52,18 @@ Body ringReshape(Operation *op, Context &context);
 
 Operation *throughViews(Operation *op);
 Operation *storage(Operation *op);
-Box ownerTileBox(Operation *owner);
-Box viewThreadBox(Operation *view, int64_t thread);
+Box ownerTileBox(Operation *owner, int64_t tile = 0);
+Box viewThreadBox(Operation *view, int64_t thread, int64_t tile = 0);
 FailureOr<int64_t> operandAddress(Operation *view, int64_t thread,
                                   Context &context, Operation *owner = nullptr);
-std::pair<Index, int64_t> operandLayout(Operation *view,
-                                        Operation *owner = nullptr);
+std::pair<Index, int64_t>
+operandLayout(Operation *view, Operation *owner = nullptr, int64_t tile = 0);
 std::array<bool, 16> activeTiles(Operation *op);
 FailureOr<SmallVector<Emitted, 0>> registers(Operation *op, Context &context,
                                              ArrayRef<int64_t> threads);
+FailureOr<SmallVector<Emitted, 0>> registers(Operation *op, Context &context,
+                                             ArrayRef<int64_t> threads,
+                                             const std::array<bool, 16> &tiles);
 FailureOr<SmallVector<Emitted, 0>> registers(Operation *op, Context &context);
 std::pair<float, float> clips(Operation *op);
 std::optional<int32_t> immediateBias(Operation *op);

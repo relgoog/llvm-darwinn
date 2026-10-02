@@ -34,7 +34,7 @@ RedistributeOp unslicedRedistribute(OpBuilder &builder, Location location,
   return RedistributeOp::create(
       builder, location, type, input, Value{}, MappingAttr{},
       AffineMap::get(2, 0, begins, context), builder.getI32ArrayAttr({1, 1}),
-      AffineMap::get(2, 0, ends, context));
+      AffineMap::get(2, 0, ends, context), IntegerAttr{});
 }
 
 void addIdentityTransformations(DistributedCreateViewOp view) {
@@ -324,7 +324,8 @@ LogicalResult partitionShardedGroup(affine::AffineParallelOp group) {
             DistributedMemorySpace::HostMemory);
         auto store = RedistributeOp::create(
             builder, location, filledType, clone->getResult(0), write,
-            MappingAttr{}, AffineMapAttr{}, ArrayAttr{}, AffineMapAttr{});
+            MappingAttr{}, AffineMapAttr{}, ArrayAttr{}, AffineMapAttr{},
+            IntegerAttr{});
         setUnsliced(store, shape, /*discardable=*/false);
         filled.push_back(store);
       }

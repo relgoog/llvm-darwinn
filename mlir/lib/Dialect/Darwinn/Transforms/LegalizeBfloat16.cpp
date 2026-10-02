@@ -497,7 +497,7 @@ LogicalResult validateFunction(func::FuncOp function) {
         if (!value.getDefiningOp() ||
             (!isCompute(value.getDefiningOp()) &&
              !isa<dwc::ReshapeOp, dwc::TransposeOp, dwc::ClassifierOp,
-                  dwc::ImageInterpolationOp>(value.getDefiningOp())))
+                  dwc::ImageInterpolationOp, tensor::PadOp>(value.getDefiningOp())))
           return unsupported(returned, "each return must have a supported tensor producer");
       }
       continue;
@@ -556,7 +556,11 @@ public:
         Value input = converted(pad.getSource(), false);
         auto output = tensor::PadOp::create(builder, operation.getLoc(), type, input,
             pad.getMixedLowPad(), pad.getMixedHighPad(), zero, pad.getNofold());
-        values.map(pad.getResult(), output.getResult());
+        output->setDiscardableAttrs(pad->getDiscardableAttrDictionary());
+        bool returned = llvm::any_of(pad->getUsers(), llvm::IsaPred<func::ReturnOp>);
+        values.map(pad.getResult(),
+                   returned ? widen(output.getResult(), pad.getType(), noBias)
+                            : output.getResult());
         continue;
       }
 
@@ -587,22 +591,25 @@ public:
       state.addTypes(resultType);
       state.addAttributes(operation.getAttrs());
       Value result = builder.create(state)->getResult(0);
-      if (boundaryCast) {
-        OperationState cast(operation.getLoc(), dwc::RescalingOp::getOperationName());
-        cast.addOperands({result, noBias});
-        cast.addTypes(operation.getResult(0).getType());
-        cast.addAttribute("activation_function", noneActivation());
-        cast.addAttribute("output_activation_per_z_out_scales", builder.getArrayAttr({}));
-        cast.addAttribute("per_z_out_scales_padding", dwc::PerZOutScalePaddingAttr::get(
-            builder.getContext(), dwc::PerZOutScalePadding::None));
-        result = builder.create(cast)->getResult(0);
-      }
+      if (boundaryCast)
+        result = widen(result, operation.getResult(0).getType(), noBias);
       values.map(operation.getResult(0), result);
     }
 
   }
 
 private:
+  Value widen(Value value, Type type, Value noBias) {
+    OperationState cast(value.getLoc(), dwc::RescalingOp::getOperationName());
+    cast.addOperands({value, noBias});
+    cast.addTypes(type);
+    cast.addAttribute("activation_function", noneActivation());
+    cast.addAttribute("output_activation_per_z_out_scales", builder.getArrayAttr({}));
+    cast.addAttribute("per_z_out_scales_padding", dwc::PerZOutScalePaddingAttr::get(
+        builder.getContext(), dwc::PerZOutScalePadding::None));
+    return builder.create(cast)->getResult(0);
+  }
+
   Type bfloatType(Type type) {
     auto tensor = cast<RankedTensorType>(type);
     return RankedTensorType::get(tensor.getShape(), builder.getBF16Type(), tensor.getEncoding());

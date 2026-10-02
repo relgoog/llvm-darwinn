@@ -69,8 +69,9 @@ Box codegen::unionBox(const Slicing &slicing, int64_t row, int64_t column) {
   return box;
 }
 
-Box codegen::threadBox(const Slicing &slicing, int64_t thread) {
-  Index point = slicing.hasThreads() ? Index{0, 0, thread} : Index{0, 0};
+Box codegen::threadBox(const Slicing &slicing, int64_t thread, int64_t tile) {
+  Index point = slicing.hasThreads() ? Index{tile / kGrid, tile % kGrid, thread}
+                                     : Index{tile / kGrid, tile % kGrid};
   return Box{slicing.begin(point), slicing.end(point)};
 }
 

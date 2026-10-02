@@ -104,7 +104,7 @@ void moveToHost(RedistributeOp redistribute) {
         identityMapping(context, sourceType.getRank()),
         AffineMap::get(domainRank, 0, begins, context),
         builder.getI32ArrayAttr(SmallVector<int32_t>(domainRank, 1)),
-        AffineMap::get(domainRank, 0, ends, context));
+        AffineMap::get(domainRank, 0, ends, context), IntegerAttr{});
   }
 
   Value reshaped =
@@ -117,7 +117,8 @@ void moveToHost(RedistributeOp redistribute) {
     reshaped = RedistributeOp::create(
         builder, location, resultType, reshaped, Value{}, mapping,
         redistribute.getSlicingBeginsAttr(),
-        redistribute.getSlicingDomainAttr(), redistribute.getSlicingEndsAttr());
+        redistribute.getSlicingDomainAttr(), redistribute.getSlicingEndsAttr(),
+        IntegerAttr{});
   }
   redistribute.replaceAllUsesWith(reshaped);
   redistribute.erase();

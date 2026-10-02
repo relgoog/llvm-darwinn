@@ -446,7 +446,7 @@ FailureOr<bool> validateFunction(func::FuncOp function) {
             name == "x_stride" || name == "y_stride")) ||
           (isa<tensor::PadOp>(operation) &&
            (name == "static_low" || name == "static_high" || name == "operandSegmentSizes" ||
-            name == "nofold")) ||
+            name == "nofold" || name == "pad_value")) ||
           (isa<dwc::TransposeOp>(operation) && name == "permutation") ||
           (isa<dwc::GenericConstantOp, arith::ConstantOp>(operation) &&
            (name == "value" || name == "darwinn.is_parameter"));
@@ -601,7 +601,7 @@ public:
         if (isa<dwc::ReshapeOp>(operation)) {
           result = RedistributeOp::create(
               builder, location, type, input, Value{}, MappingAttr{}, sliceBegins(type.getRank()),
-              builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()));
+              builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()), IntegerAttr{});
         } else {
           auto permutation = operation.getAttrOfType<DenseIntElementsAttr>("permutation");
           SmallVector<AffineExpr> forward(type.getRank());
@@ -681,7 +681,8 @@ public:
         auto type = tileType(padding.getResultType());
         Value padded = RedistributeOp::create(
             builder, location, type, values.lookup(padding.getSource()), Value{}, mapping,
-            sliceBegins(4), builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()));
+            sliceBegins(4), builder.getI32ArrayAttr({1, 1}), sliceEnds(type.getShape()),
+            padding->getAttrOfType<IntegerAttr>("pad_value"));
         values.map(padding.getResult(), padded);
         continue;
       }
@@ -995,7 +996,7 @@ private:
       split = RedistributeOp::create(builder, operation->getLoc(), splitType, source, Value{},
                                      MappingAttr{}, sliceBegins(rank + 1),
                                      builder.getI32ArrayAttr({1, 1}),
-                                     sliceEnds(splitType.getShape()));
+                                     sliceEnds(splitType.getShape()), IntegerAttr{});
       Type partial = maximum ? inputType.getElementType() : builder.getF32Type();
       Value lanesFirst = reduce(view(split, identity), shapeWith({1, lanes}, partial), traversal,
                                 reductionOptions(maximum, false, builder.getF32FloatAttr(-0.0f)));
@@ -1165,7 +1166,8 @@ private:
                                                  inputType.getElementType(), memory);
     return RedistributeOp::create(builder, input.getLoc(), outputType, input, Value{},
                                   MappingAttr{}, sliceBegins(inputType.getRank()),
-                                  builder.getI32ArrayAttr({1, 1}), sliceEnds(inputType.getShape()));
+                                  builder.getI32ArrayAttr({1, 1}), sliceEnds(inputType.getShape()),
+                                  IntegerAttr{});
   }
 
   Value view(Value storage, AffineMap traversal) {

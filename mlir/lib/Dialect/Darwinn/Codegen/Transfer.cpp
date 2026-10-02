@@ -483,6 +483,19 @@ Body codegen::transferStore(Operation *op, Context &context) {
   return out;
 }
 
+namespace {
+
+SmallVector<TileBox> heldTiles(Operation *op) {
+  SmallVector<TileBox> out = clampedTiles(op);
+  llvm::erase_if(out, [](const TileBox &entry) {
+    return llvm::any_of(extent(entry.box),
+                        [](int64_t count) { return count <= 0; });
+  });
+  return out;
+}
+
+} // namespace
+
 Body codegen::modelOutput(Operation *op, Context &context) {
   Operation *source = producer(op, 0);
   FailureOr<int64_t> base = context.storageAddress(source);
@@ -496,12 +509,7 @@ Body codegen::modelOutput(Operation *op, Context &context) {
     strides[dim] = strides[dim + 1] * full[dim + 1];
   std::array<bool, 8> channels = bits<8>("10000000");
   int64_t elem = resultInfo(op).elementBytes;
-  SmallVector<int64_t, 4> held = resultInfo(source).shape;
-  SmallVector<TileBox> boxes;
-  for (const TileBox &entry : tiles(*slicingOf(source)))
-    if (llvm::all_of_zip(tail(entry.box.lo, held.size()), held,
-                         [](int64_t low, int64_t size) { return low < size; }))
-      boxes.push_back(entry);
+  SmallVector<TileBox> boxes = heldTiles(source);
   SmallVector<Emitted, 0> out;
   for (auto [order, entry] : llvm::enumerate(boxes)) {
     Index size = extent(entry.box);
@@ -587,23 +595,35 @@ Body codegen::padding(Operation *op, Context &context) {
           : context.narrowAddress(op);
   if (failed(base))
     return unsupported(op, "padding of an unplaced narrow block");
-  SmallVector<TileBox> boxes = tiles(*slicingOf(op));
-  Box first{tail(boxes.front().box.lo, destination.size()),
-            tail(boxes.front().box.hi, destination.size())};
-  Index size = extent(first);
+  SmallVector<TileBox> boxes = heldTiles(op);
+  Index size = extent(boxes.front().box);
   Index stride = strides(size, elem);
-  std::array<bool, 16> every = tilesOf(boxes);
+  SmallVector<std::pair<Index, std::array<bool, 16>>> shapes;
   constexpr int rows = 1, cols = 2;
-  SmallVector<Emitted, 0> out;
-  for (bool low_side : {true, false}) {
-    int64_t first = low_side ? 0 : high[cols] + 1;
-    int64_t last = low_side ? low[cols] - 1 : destination[cols] - 1;
-    if (first <= last)
-      out.push_back(zeroFill(*base + first * stride[cols],
-                             (last - first + 1) * stride[cols],
-                             {{size[rows], stride[rows]}},
-                             padDirection(cols, low_side), every, elem, true));
+  auto padOnly = [&](const Box &box) {
+    return box.hi[rows] < low[rows] || box.lo[rows] > high[rows];
+  };
+  for (const auto &[tile, box] : boxes) {
+    if (padOnly(box))
+      continue;
+    Index held = extent(box);
+    auto *same = llvm::find_if(
+        shapes, [&](const auto &entry) { return entry.first == held; });
+    if (same == shapes.end())
+      same = &shapes.emplace_back(held, std::array<bool, 16>{});
+    same->second[tile] = true;
   }
+  SmallVector<Emitted, 0> out;
+  for (const auto &[held, group] : shapes)
+    for (bool low_side : {true, false}) {
+      int64_t first = low_side ? 0 : high[cols] + 1;
+      int64_t last = low_side ? low[cols] - 1 : destination[cols] - 1;
+      if (first <= last)
+        out.push_back(zeroFill(
+            *base + first * stride[cols], (last - first + 1) * stride[cols],
+            {{held[rows], stride[rows]}}, padDirection(cols, low_side), group,
+            elem, true));
+    }
   int64_t run = (high[cols] - low[cols] + 1) * stride[cols];
   for (bool low_side : {true, false}) {
     int64_t first = low_side ? 0 : high[rows] + 1;
@@ -614,14 +634,17 @@ Body codegen::padding(Operation *op, Context &context) {
       int64_t from = std::max(first, lo[rows]), to = std::min(last, hi[rows]);
       if (from > to)
         continue;
-      MeshDirection direction = low[rows] > 0 ? padDirection(rows, low_side)
-                                              : padDirection(cols, true);
+      bool whole = padOnly(box);
+      MeshDirection direction = low[rows] > 0 && !whole
+                                    ? padDirection(rows, low_side)
+                                    : padDirection(cols, true);
       SmallVector<std::pair<int64_t, int64_t>> outer;
       if (to > from)
         outer.push_back({to - from + 1, stride[rows]});
-      out.push_back(zeroFill(
-          *base + (from - lo[rows]) * stride[rows] + low[cols] * stride[cols],
-          run, outer, direction, tileBit(tile), elem, to > from));
+      out.push_back(zeroFill(*base + (from - lo[rows]) * stride[rows] +
+                                 (whole ? 0 : low[cols] * stride[cols]),
+                             whole ? stride[rows] : run, outer, direction,
+                             tileBit(tile), elem, to > from));
     }
   }
   return out;

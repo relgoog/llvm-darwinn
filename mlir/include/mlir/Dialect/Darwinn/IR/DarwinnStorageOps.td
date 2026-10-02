@@ -64,7 +64,8 @@ def Darwinn_RedistributeOp : Darwinn_StorageOp<"redistribute"> {
                                   Darwinn_DistributedView]>:$input,
       Optional<Darwinn_WriteView>:$destination,
       OptionalAttr<Darwinn_MappingAttr>:$mapping, AffineMapAttr:$slicing_begins,
-      I32ArrayAttr:$slicing_domain, AffineMapAttr:$slicing_ends);
+      I32ArrayAttr:$slicing_domain, AffineMapAttr:$slicing_ends,
+      OptionalAttr<I32Attr>:$pad_value);
   let results =
       (outs AnyTypeOf<[Darwinn_DistributedTensor, Darwinn_FilledView]>:$output);
 }
