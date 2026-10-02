@@ -106,7 +106,17 @@ struct Group {
 
 SmallVector<Group> deriveSchedule(func::FuncOp function);
 
-enum class Suffix { None, Init, Dest, Gather, Permute, Bias };
+enum class Suffix {
+  None,
+  Init,
+  Dest,
+  Gather,
+  Permute,
+  Bias,
+  StageA,
+  StageB,
+  Relay
+};
 
 struct StorageBlock {
   Operation *value = nullptr;

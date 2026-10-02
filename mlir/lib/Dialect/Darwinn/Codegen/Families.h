@@ -6,6 +6,9 @@
 namespace mlir::darwinn::codegen {
 
 using Body = FailureOr<SmallVector<Emitted, 0>>;
+using TileValues = SmallVector<std::pair<int64_t, int64_t>>;
+using Groups = SmallVector<std::pair<int64_t, SmallVector<int64_t>>>;
+using Order = std::function<Groups(Groups)>;
 
 constexpr int64_t kAccess = 32;
 
@@ -39,6 +42,12 @@ Body padding(Operation *op, Context &context);
 
 SmallVector<TileBox> clampedTiles(Operation *op);
 Body scatter(Operation *op, Context &context);
+int64_t scatterStagingWords(Operation *op);
+int64_t scatterRelayWords(Operation *op);
+SmallVector<Emitted, 0> registerLoads(const TileValues &values, uint8_t reg,
+                                      const Order &order,
+                                      std::optional<int64_t> thread);
+Groups latestFirst(Groups groups);
 Body ringReshape(Operation *op, Context &context);
 
 Operation *throughViews(Operation *op);

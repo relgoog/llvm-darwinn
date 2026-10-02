@@ -299,6 +299,12 @@ FailureOr<StorageProblems> codegen::storageProblems(ArrayRef<Group> groups) {
                                narrowBytes(op, !moved),
                                {},
                                0});
+    if (group.kind != GroupKind::Scatter)
+      continue;
+    if (int64_t words = scatterStagingWords(op))
+      for (Suffix suffix : {Suffix::StageA, Suffix::StageB})
+        problems.narrow.push_back(
+            {op, suffix, group.step, group.step, words, {}, 0});
   }
   return problems;
 }
@@ -322,6 +328,10 @@ codegen::wideProblem(ArrayRef<Group> groups) {
       continue;
     case GroupKind::Permute:
       add(op, Suffix::Permute, step, step, permuteWideRows(op));
+      continue;
+    case GroupKind::Scatter:
+      if (int64_t words = scatterRelayWords(op))
+        add(op, Suffix::Relay, step, step, words);
       continue;
     case GroupKind::Op:
       break;

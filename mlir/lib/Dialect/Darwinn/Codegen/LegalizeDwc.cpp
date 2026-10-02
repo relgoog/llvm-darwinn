@@ -173,6 +173,12 @@ StringRef suffixName(Suffix suffix) {
     return "permute";
   case Suffix::Bias:
     return "bias";
+  case Suffix::StageA:
+    return "stage_a";
+  case Suffix::StageB:
+    return "stage_b";
+  case Suffix::Relay:
+    return "relay";
   }
   llvm_unreachable("unknown block suffix");
 }

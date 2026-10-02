@@ -305,13 +305,11 @@ mergeLines(ArrayRef<SmallVector<Route>> lines) {
   return merged;
 }
 
-using TileValues = SmallVector<std::pair<int64_t, int64_t>>;
-using Groups = SmallVector<std::pair<int64_t, SmallVector<int64_t>>>;
-using Order = std::function<Groups(Groups)>;
+} // namespace
 
-SmallVector<Emitted, 0> registerLoads(const TileValues &values, uint8_t reg,
-                                      const Order &order,
-                                      std::optional<int64_t> thread) {
+SmallVector<Emitted, 0> codegen::registerLoads(const TileValues &values,
+                                               uint8_t reg, const Order &order,
+                                               std::optional<int64_t> thread) {
   Groups groups;
   for (const auto &item : values) {
     auto [tile, value] = item;
@@ -330,14 +328,14 @@ SmallVector<Emitted, 0> registerLoads(const TileValues &values, uint8_t reg,
   return out;
 }
 
-int64_t maxOf(ArrayRef<int64_t> values) { return *llvm::max_element(values); }
-
-Groups latestFirst(Groups groups) {
+Groups codegen::latestFirst(Groups groups) {
   llvm::stable_sort(groups, [](const auto &a, const auto &b) {
-    return maxOf(a.second) > maxOf(b.second);
+    return *llvm::max_element(a.second) > *llvm::max_element(b.second);
   });
   return groups;
 }
+
+namespace {
 
 Groups byRotatedColumn(Groups groups) {
   SmallVector<int64_t> tiles = llvm::to_vector(llvm::seq<int64_t>(0, kTiles));

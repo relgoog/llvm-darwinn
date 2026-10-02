@@ -59,50 +59,376 @@ SmallVector<TileBox> codegen::clampedTiles(Operation *op) {
   return out;
 }
 
-Body codegen::scatter(Operation *op, Context &context) {
+namespace {
+
+struct ScatterGeometry {
+  SmallVector<TileBox> sources;
+  SmallVector<TileBox> destinations;
+  Index sourceExtent;
+  Index sourceStrides;
+  Index destinationStrides;
+  int64_t elem;
+  int64_t total;
+};
+
+ScatterGeometry scatterGeometry(Operation *op) {
   Operation *owner = storage(producer(op, 0));
   TensorInfo info = resultInfo(op);
-  int64_t elem = info.elementBytes;
   size_t rank = info.shape.size();
-  SmallVector<TileBox> sources = clampedTiles(owner);
-  for (TileBox &source : sources) {
+  ScatterGeometry g;
+  g.elem = info.elementBytes;
+  g.sources = clampedTiles(owner);
+  for (TileBox &source : g.sources) {
     source.box.lo = applyForward(op, source.box.lo);
     source.box.hi = applyForward(op, source.box.hi);
   }
-  SmallVector<TileBox> destinations = clampedTiles(op);
-  Index sourceExtent = tail(extent(ownerTileBox(owner)), rank);
-  Index destinationExtent = tail(extent(unionBox(*slicingOf(op), 0, 0)), rank);
-  Index sourceStrides = strides(sourceExtent, elem);
-  Index destinationStrides = strides(destinationExtent, elem);
-  FailureOr<int64_t> sourceBase = context.storageAddress(owner);
+  g.destinations = clampedTiles(op);
+  g.sourceExtent = tail(extent(ownerTileBox(owner)), rank);
+  g.sourceStrides = strides(g.sourceExtent, g.elem);
+  g.destinationStrides =
+      strides(tail(extent(unionBox(*slicingOf(op), 0, 0)), rank), g.elem);
+  g.total = product(g.sourceExtent) * g.elem;
+  auto byTile = [](const TileBox &a, const TileBox &b) {
+    return a.tile < b.tile;
+  };
+  llvm::sort(g.sources, byTile);
+  llvm::sort(g.destinations, byTile);
+  return g;
+}
+
+constexpr int64_t kRelayBytes = 1024;
+
+struct Relay {
+  int64_t tile;
+  int64_t source;
+  int64_t destination;
+  int64_t rows;
+  int64_t rowWide;
+  int64_t rowStride;
+};
+
+FailureOr<SmallVector<Relay>> relays(const ScatterGeometry &g,
+                                     const TileBox &source) {
+  size_t rank = g.sourceExtent.size();
+  if (rank < 3)
+    return failure();
+  size_t rowDim = rank - 3;
+  int64_t rowBytes =
+      product(ArrayRef(g.sourceExtent).drop_front(rowDim + 1)) * g.elem;
+  if (rowBytes % 128)
+    return failure();
+  SmallVector<Relay> out;
+  for (const TileBox &destination : g.destinations) {
+    Index lo, hi, sourceOffset, destinationOffset;
+    bool empty = false;
+    for (size_t dim = 0; dim < rank; ++dim) {
+      lo.push_back(std::max(source.box.lo[dim], destination.box.lo[dim]));
+      hi.push_back(std::min(source.box.hi[dim], destination.box.hi[dim]));
+      empty |= hi.back() < lo.back();
+      sourceOffset.push_back(lo[dim] - source.box.lo[dim]);
+      destinationOffset.push_back(lo[dim] - destination.box.lo[dim]);
+    }
+    if (empty)
+      continue;
+    for (size_t dim = 0; dim < rank; ++dim)
+      if (dim != rowDim && (hi[dim] - lo[dim] + 1 != g.sourceExtent[dim] ||
+                            (dim > rowDim + 1 && g.destinationStrides[dim] !=
+                                                     g.sourceStrides[dim])))
+        return failure();
+    out.push_back({destination.tile, dot(sourceOffset, g.sourceStrides),
+                   dot(destinationOffset, g.destinationStrides),
+                   hi[rowDim] - lo[rowDim] + 1, rowBytes / 128,
+                   g.destinationStrides[rowDim]});
+  }
+  return out;
+}
+
+int64_t bundleBytes(const ScatterGeometry &g) {
+  return g.sourceExtent.back() * g.elem >= 32 ? 32 : 16;
+}
+
+std::pair<int64_t, int64_t> widePlan(int64_t wideRows, int64_t bundle) {
+  int64_t perWideRow = 128 / bundle;
+  if (wideRows < std::min<int64_t>(16, bundle * bundle / 32))
+    return {wideRows, 1};
+  int64_t inner = 1;
+  while (inner * perWideRow < 12 || wideRows % inner)
+    ++inner;
+  return {inner, wideRows / inner};
+}
+
+Emitted ringProducer(size_t order, int64_t tile, int64_t base, int64_t total) {
+  bool ringA = order % 2 == 0;
+  RingProducer producer;
+  producer.traversal.baseAddress = base;
+  producer.traversal.counter = padded({counter(total - kAccess, kAccess)}, 4);
+  producer.traversal.syncProducer = {producerSync(true), producerSync(true, 1)};
+  producer.traversal.byteAddressMode = access(kAccess);
+  producer.watchers = {dmaWatcher(tileWatcher(
+      ringA ? TileSyncFlag::RingBusProducerA : TileSyncFlag::RingBusProducerB,
+      order / 2, 0))};
+  producer.virtualChannelSubscription =
+      ringA ? bits<8>("01000000") : bits<8>("00000001");
+  producer.targets = targets(bits<16>("1111111111111111"), false);
+  return dma(producer, tileBit(tile));
+}
+
+Body relayScatter(Operation *op, Context &context, const ScatterGeometry &g) {
+  FailureOr<int64_t> sourceBase =
+      context.storageAddress(storage(producer(op, 0)));
+  FailureOr<int64_t> destinationBase = context.narrowAddress(op, Suffix::Dest);
+  FailureOr<int64_t> stageA = context.narrowAddress(op, Suffix::StageA);
+  FailureOr<int64_t> stageB = context.narrowAddress(op, Suffix::StageB);
+  FailureOr<int64_t> wide = context.wideAddress(op, Suffix::Relay);
+  if (failed(sourceBase) || failed(destinationBase) || failed(stageA) ||
+      failed(stageB) || failed(wide))
+    return unsupported(op, "a relayed scatter between unplaced blocks");
+  int64_t bundle = bundleBytes(g);
+  int64_t perWideRow = 128 / bundle;
+  std::map<std::pair<int64_t, bool>, int64_t> wideWrites, narrowWrites;
+  SmallVector<Emitted, 0> out;
+  for (auto [order, source] : llvm::enumerate(g.sources)) {
+    bool ringA = order % 2 == 0;
+    out.push_back(ringProducer(order, source.tile, *sourceBase, g.total));
+    FailureOr<SmallVector<Relay>> copies = relays(g, source);
+    if (failed(copies))
+      return unsupported(op, "a relayed scatter that splits source rows");
+    int64_t staging = ringA ? *stageA : *stageB;
+    int64_t thread = ringA ? 0 : 1;
+
+    auto consumerFor = [&](int64_t written) {
+      RingConsumer consumer;
+      consumer.consumer =
+          ringA ? RingConsumerId::ConsumerA : RingConsumerId::ConsumerB;
+      consumer.virtualChannelSubscription =
+          ringA ? bits<8>("01000000") : bits<8>("00000001");
+      consumer.threadMulticastBitmap = bits<4>("1000");
+      consumer.traversal.baseAddress = staging;
+      consumer.traversal.counter =
+          padded({counter(g.total - kAccess, kAccess)}, 4);
+      consumer.traversal.syncProducer = {producerSync(true, written ? 2 : 1)};
+      consumer.traversal.byteAddressMode = access(kAccess);
+      consumer.filter.firstDiscardByteLoopMap = 1;
+      if (written)
+        consumer.watchers = {
+            dmaWatcher(tileWatcher(TileSyncFlag::WideToNarrowWrite, written, 0,
+                                   1, false, thread),
+                       true)};
+      return consumer;
+    };
+
+    using Key = std::tuple<int64_t, int64_t, int64_t, int64_t, int64_t>;
+    struct Group {
+      Key key;
+      SmallVector<Relay> members;
+      SmallVector<int64_t> attached;
+    };
+    SmallVector<Group> groups;
+    std::map<int64_t, size_t> memberGroup;
+    for (const Relay &copy : *copies) {
+      Key key{narrowWrites[{copy.tile, ringA}], copy.rows, copy.rowWide,
+              copy.rowStride, wideWrites[{copy.tile, ringA}]};
+      auto found = llvm::find_if(
+          groups, [&](const Group &group) { return group.key == key; });
+      if (found == groups.end())
+        found = groups.insert(groups.end(), Group{key, {}, {}});
+      found->members.push_back(copy);
+      memberGroup[copy.tile] = found - groups.begin();
+    }
+    SmallVector<std::pair<int64_t, SmallVector<int64_t>>> lone;
+    for (int64_t tile = 0; tile < kTiles; ++tile) {
+      if (memberGroup.count(tile))
+        continue;
+      int64_t written = narrowWrites[{tile, ringA}];
+      auto previous = memberGroup.lower_bound(tile);
+      if (previous != memberGroup.begin()) {
+        Group &group = groups[std::prev(previous)->second];
+        if (std::get<0>(group.key) == written) {
+          group.attached.push_back(tile);
+          continue;
+        }
+      }
+      auto found = llvm::find_if(
+          lone, [&](const auto &entry) { return entry.first == written; });
+      if (found == lone.end())
+        lone.push_back({written, {tile}});
+      else
+        found->second.push_back(tile);
+    }
+
+    SmallVector<std::pair<int64_t, SmallVector<Emitted, 0>>> emitted;
+    for (const auto &[written, tiles] : lone)
+      emitted.push_back(
+          {tiles.front(), {dma(consumerFor(written), tileSet(tiles))}});
+    for (Group &group : groups) {
+      auto [written, rows, rowWide, rowStride, wideBefore] = group.key;
+      SmallVector<int64_t> receivers;
+      for (const Relay &copy : group.members)
+        receivers.push_back(copy.tile);
+      llvm::append_range(receivers, group.attached);
+      SmallVector<Emitted, 0> body{
+          dma(consumerFor(written), tileSet(receivers))};
+      receivers.resize(group.members.size());
+
+      int64_t wideRows = rows * rowWide;
+      auto [inner, outer] = widePlan(wideRows, bundle);
+      bool wideLoop = inner > 1;
+      SmallVector<Counter> wideItems;
+      if (wideLoop || outer == 1)
+        wideItems.push_back(counter(inner - 1, 1));
+      if (outer > 1)
+        wideItems.push_back(counter(outer - 1, 1, false));
+      int64_t step = bundle / 4;
+      SmallVector<Counter> writeItems{counter((perWideRow - 1) * step, step)};
+      SmallVector<int64_t> counts{perWideRow};
+      auto push = [&](int64_t count, int64_t words) {
+        if (count == 1)
+          return;
+        writeItems.push_back(counter((count - 1) * words, words));
+        counts.push_back(count);
+      };
+      if (rowStride == rowWide * 128) {
+        push(wideRows, 32);
+      } else {
+        push(rowWide, 32);
+        push(rows, rowStride / 4);
+      }
+      int64_t depth = writeItems.size() - 1;
+      int64_t perIncrement = counts.size() > 2 ? rowWide : 1;
+
+      NarrowToWide gather;
+      gather.read.counter = padded({counter((wideRows - 1) * 128, 128)}, 6);
+      gather.read.byteAddressMode = access(128);
+      gather.readWatchers = {dmaWatcher(tileWatcher(
+          ringA ? TileSyncFlag::RingBusReadA : TileSyncFlag::RingBusReadB,
+          order / 2 + 1, 1, 1))};
+      gather.write.baseAddress = *wide;
+      gather.write.counter = padded(wideItems, 4);
+      gather.write.syncProducer = {producerSync(true, 1)};
+      gather.write.byteAddressMode = access(128);
+      if (outer > 1) {
+        gather.write.doubleBufferLoop = wideLoop;
+        gather.write.secondBufferOffset = inner;
+        gather.writeWatchers = {
+            dmaWatcher(tileWatcher(TileSyncFlag::WideToNarrowWrite,
+                                   (int32_t(1) << 25) - inner / perIncrement,
+                                   inner / perIncrement, 1, true),
+                       true)};
+      }
+      gather.threadMulticastBitmap = threadBit(thread);
+      gather.byteAddress.strideUnitGranulesLoopMap = 1;
+      gather.byteAddress.defaultStrideUnitGranules = 2;
+      gather.byteAddress.lastStrideUnitGranules = 2;
+      gather.byteAddress.cellStride = 32;
+      gather.byteAddress.defaultCellStrideGroupCount = 1;
+      gather.byteAddress.lastCellStrideGroupCount = 1;
+
+      WideToNarrow scatter;
+      scatter.read.baseAddress = *wide;
+      scatter.read.counter = padded(wideItems, 4);
+      if (outer > 1) {
+        scatter.read.doubleBufferLoop = wideLoop;
+        scatter.read.secondBufferOffset = inner;
+      }
+      scatter.write.counter = padded(writeItems, 6);
+      scatter.write.syncProducer = {producerSync(true, depth)};
+      scatter.readWatchers = {dmaWatcher(tileWatcher(
+          TileSyncFlag::NarrowToWideWrite, wideBefore + 1, 1, 1, true))};
+      scatter.wideMemoryLoadStoreLoopId = 1;
+      scatter.zInBundleValidCount = bundle / 4;
+      scatter.threadMulticastBitmap = threadBit(thread);
+
+      TileValues reads, writes;
+      for (const Relay &copy : group.members) {
+        reads.push_back({copy.tile, staging + copy.source});
+        writes.push_back(
+            {copy.tile, (*destinationBase + copy.destination) / 4});
+      }
+      auto sourced = [&](const TileValues &values, uint8_t reg,
+                         uint64_t &base) -> SmallVector<Emitted, 0> {
+        bool same = llvm::all_of(values, [&](const auto &value) {
+          return value.second == values.front().second;
+        });
+        if (same) {
+          base = values.front().second;
+          return {};
+        }
+        return registerLoads(values, reg, latestFirst, thread);
+      };
+      SmallVector<Emitted, 0> loads =
+          sourced(reads, 0, gather.read.baseAddress);
+      std::array<bool, 8> registers{};
+      registers[0] = !loads.empty();
+      llvm::append_range(body, loads);
+      body.push_back(dma(gather, tileSet(receivers), registers));
+      loads = sourced(writes, 1, scatter.write.baseAddress);
+      registers = {};
+      registers[1] = !loads.empty();
+      llvm::append_range(body, loads);
+      body.push_back(dma(scatter, tileSet(receivers), registers));
+      emitted.push_back({group.members.front().tile, std::move(body)});
+
+      for (const Relay &copy : group.members) {
+        wideWrites[{copy.tile, ringA}] += outer;
+        narrowWrites[{copy.tile, ringA}] += depth ? counts.back() : perWideRow;
+      }
+    }
+    llvm::stable_sort(emitted, [](const auto &a, const auto &b) {
+      return a.first < b.first;
+    });
+    for (auto &[tile, body] : emitted)
+      llvm::append_range(out, body);
+  }
+  llvm::append_range(out, groupFences());
+  return out;
+}
+
+} // namespace
+
+int64_t codegen::scatterStagingWords(Operation *op) {
+  int64_t total = scatterGeometry(op).total;
+  return total <= kRelayBytes ? total / 4 : 0;
+}
+
+int64_t codegen::scatterRelayWords(Operation *op) {
+  ScatterGeometry g = scatterGeometry(op);
+  if (g.total > kRelayBytes)
+    return 0;
+  int64_t words = 0;
+  for (const TileBox &source : g.sources) {
+    FailureOr<SmallVector<Relay>> copies = relays(g, source);
+    if (failed(copies))
+      return 0;
+    for (const Relay &copy : *copies) {
+      auto [inner, outer] = widePlan(copy.rows * copy.rowWide, bundleBytes(g));
+      words = std::max(words, outer > 1 ? 2 * inner : inner);
+    }
+  }
+  return words;
+}
+
+Body codegen::scatter(Operation *op, Context &context) {
+  ScatterGeometry g = scatterGeometry(op);
+  if (g.total <= kRelayBytes)
+    return relayScatter(op, context, g);
+  size_t rank = g.sourceExtent.size();
+  const Index &sourceStrides = g.sourceStrides;
+  const Index &destinationStrides = g.destinationStrides;
+  int64_t elem = g.elem, total = g.total;
+  const SmallVector<TileBox> &sources = g.sources;
+  const SmallVector<TileBox> &destinations = g.destinations;
+  FailureOr<int64_t> sourceBase =
+      context.storageAddress(storage(producer(op, 0)));
   FailureOr<int64_t> destinationBase = context.narrowAddress(op, Suffix::Dest);
   if (failed(sourceBase) || failed(destinationBase))
     return unsupported(op, "a scatter between unplaced narrow blocks");
-  int64_t total = product(sourceExtent) * elem;
-  llvm::sort(sources, [](const TileBox &a, const TileBox &b) {
-    return a.tile < b.tile;
-  });
-  llvm::sort(destinations, [](const TileBox &a, const TileBox &b) {
-    return a.tile < b.tile;
-  });
 
   SmallVector<Emitted, 0> out;
   for (auto [order, source] : llvm::enumerate(sources)) {
     bool ringA = order % 2 == 0;
     std::array<bool, 8> channels =
         ringA ? bits<8>("01000000") : bits<8>("00000001");
-    RingProducer producer;
-    producer.traversal.baseAddress = *sourceBase;
-    producer.traversal.counter = padded({counter(total - kAccess, kAccess)}, 4);
-    producer.traversal.syncProducer = {producerSync(true),
-                                       producerSync(true, 1)};
-    producer.traversal.byteAddressMode = access(kAccess);
-    producer.watchers = {dmaWatcher(tileWatcher(
-        ringA ? TileSyncFlag::RingBusProducerA : TileSyncFlag::RingBusProducerB,
-        order / 2, 0))};
-    producer.virtualChannelSubscription = channels;
-    producer.targets = targets(bits<16>("1111111111111111"), false);
-    out.push_back(dma(producer, tileBit(source.tile)));
+    out.push_back(ringProducer(order, source.tile, *sourceBase, total));
 
     struct Member {
       int64_t tile;
