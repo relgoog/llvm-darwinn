@@ -89,6 +89,7 @@ struct VmcPlan {
   int64_t cols = 0;
   int64_t pixels = 0;
   int64_t inner = 0;
+  int64_t innerCols = 0;
   int64_t outer = 0;
   int64_t lanes = 0;
   int64_t outBlocks = 0;

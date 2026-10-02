@@ -2,6 +2,8 @@
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "llvm/ADT/bit.h"
+#include <numeric>
+#include <tuple>
 
 using namespace mlir;
 using namespace mlir::darwinn;
@@ -14,6 +16,7 @@ constexpr int64_t kOutLanes = 32;
 constexpr int64_t kPartialSumPixels = 32;
 constexpr int64_t kSingleRows = 32;
 constexpr int64_t kGroupedPairs = 8;
+constexpr int64_t kMaxChannelChunks = 4096;
 constexpr int64_t kStencilLanes = 8;
 constexpr int32_t kWatcherBase = (int32_t(1) << 25) - 1;
 
@@ -416,7 +419,15 @@ FailureOr<TensorOp> vmcTensorOp(Operation *op, const VmcPlan &plan,
   Strided colStep{cols, g.stride * g.col, outStrides[2]};
   Strided rowStep{rows, g.stride * g.row, outStrides[1]};
   SmallVector<Strided> pixelInner, pixelOuter;
-  if (cols >= plan.inner && !single) {
+  if (plan.innerCols) {
+    int64_t innerRows = plan.inner / plan.innerCols;
+    pixelInner = {{plan.innerCols, colStep.lhs, colStep.out},
+                  {innerRows, rowStep.lhs, rowStep.out}};
+    pixelOuter = {
+        {cols / plan.innerCols, plan.innerCols * colStep.lhs,
+         plan.innerCols * colStep.out},
+        {rows / innerRows, innerRows * rowStep.lhs, innerRows * rowStep.out}};
+  } else if (cols >= plan.inner && !single) {
     pixelInner = {{plan.inner, g.stride * g.col, outStrides[2]}};
     pixelOuter = {{cols / plan.inner, plan.inner * g.stride * g.col,
                    plan.inner * outStrides[2]},
@@ -869,29 +880,56 @@ SmallVector<int64_t> activeList(const std::array<bool, 16> &tiles) {
   return out;
 }
 
-// Fitted to SDK probes: the partial sum block is the largest divisor of a
-// thread's columns that leaves wide rows for 7 channel pairs, or for one pair
-// when there are at most 8.
-FailureOr<VmcPlan> tiledPlan(Operation *op, VmcPlan plan, int64_t cols) {
+// SDK 0x4E23CF0's first search cap uses hardware slot 320 with captured
+// value 6.
+FailureOr<VmcPlan> tiledPlan(Operation *op, VmcPlan plan, int64_t rows,
+                             int64_t cols) {
   int64_t pairs = plan.cin / 2;
-  int64_t inner = std::min(cols, kWideRows - plan.biasRows -
-                                     (pairs <= kGroupedPairs ? 2 : 14));
-  if (inner < 1)
+  int64_t auxiliaryCount = plan.biasRows != 0;
+  int64_t reserved = 2 * auxiliaryCount;
+  int64_t available = kWideRows - reserved - 2;
+  int64_t budget = std::min(available, kWideRows - 2 * (6 + auxiliaryCount));
+  if (budget < 1)
     return unsupported(op, "a convolution whose partial sums exceed wide "
                            "memory");
-  while (cols % inner)
-    --inner;
-  int64_t most = (kWideRows - inner - plan.biasRows) / 2;
-  int64_t per = most;
-  if (pairs <= 2 * most)
-    per = ceilDiv(pairs, 2);
-  else if (most >= kGroupedPairs)
-    while (pairs % per)
-      --per;
+  auto divisor = [](int64_t extent, int64_t limit) {
+    int64_t factor = std::min(extent, limit);
+    while (extent % factor)
+      --factor;
+    return factor;
+  };
+  int64_t rowBegin = viewThreadBox(producer(op, 2), 0).lo[1];
+  auto pixelTile = [&](int64_t limit) {
+    int64_t innerCols = divisor(cols, limit);
+    int64_t innerRows = rows;
+    int64_t remaining = limit - innerCols;
+    if (remaining > 0 && rows > remaining) {
+      int64_t candidate = divisor(std::gcd(rowBegin, rows), remaining);
+      if (candidate > 1)
+        innerRows = candidate;
+    }
+    if (innerRows > limit / innerCols)
+      innerRows = 1;
+    return std::pair(innerCols, innerRows);
+  };
+  auto [innerCols, innerRows] = pixelTile(budget);
+  int64_t outerCols = cols / innerCols;
+  int64_t outerRows = rows / innerRows;
+  if (outerCols >= 2 && outerRows >= 2 && outerCols != outerRows)
+    std::tie(innerCols, innerRows) = pixelTile(available);
+
+  int64_t inner = innerCols * innerRows;
+  int64_t most = (kWideRows - reserved - inner) / 2;
+  int64_t lower = ceilDiv(pairs, kMaxChannelChunks);
+  int64_t upper = std::max(lower, std::min(ceilDiv(pairs, 2), kGroupedPairs));
+  int64_t per = std::max(int64_t(1), std::min(pairs - 1, most));
+  while (pairs % per && (per < lower || per > upper))
+    --per;
   plan.chunk = 2 * per;
   plan.chunks = ceilDiv(pairs, per);
   plan.lastChunk = plan.cin - plan.chunk * (plan.chunks - 1);
   plan.inner = inner;
+  plan.innerCols = innerCols;
   plan.outer = plan.pixels / inner;
   plan.weightsRows = plan.chunk;
   plan.sumsRows = inner;
@@ -1019,7 +1057,7 @@ FailureOr<VmcPlan> codegen::vmcPlan(Operation *op) {
     return plan;
   }
   if (pixels > kPartialSumPixels)
-    return tiledPlan(op, plan, size[2]);
+    return tiledPlan(op, plan, size[1], size[2]);
   int64_t chunk = 0;
   for (int64_t c = 2; c <= cinPadded; c += 2)
     if (cinPadded % c == 0 && c + pixels + plan.biasRows <= kWideRows)
