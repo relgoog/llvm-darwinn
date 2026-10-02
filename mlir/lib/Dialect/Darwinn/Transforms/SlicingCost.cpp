@@ -289,6 +289,8 @@ FailureOr<Transfers> ringTransfers(ArrayRef<int64_t> shape,
       for (unsigned dim = 0; dim < shape.size(); ++dim)
         extent.push_back(std::min(high[dim], shape[dim] - 1) -
                          std::max<int64_t>(low[dim], 0) + 1);
+      if (llvm::any_of(extent, [](int64_t size) { return size <= 0; }))
+        continue;
       DmaShape dma = dmaLevels(shape, extent);
       if (dma.levels.size() > 2)
         return failure();
